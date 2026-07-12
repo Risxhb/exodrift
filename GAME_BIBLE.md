@@ -31,7 +31,7 @@ The defining experience is moving continuously between two forms of command:
 
 ### Carrier control `[LOCKED]`
 
-- Third-person mouse-look steering with assisted leveling. The chase camera centers the carrier rather than an action crosshair; weapon aim follows the hull's forward axis. Middle-mouse drag independently orbits without changing carrier heading, and wheel zoom remains available. `[LOCKED]`
+- Third-person carrier control with an independent mouse-look combat director. The chase camera remains centered on the carrier, mouse movement never rotates the hull, manual flak follows the camera/cursor director, and wheel zoom remains available. `[LOCKED]`
 - Heavy inertia and slow rotation communicate scale; braking assist and practical lateral/vertical thrust prevent sluggish controls from becoming frustrating.
 - Keyboard thrust: fore/aft, lateral, vertical, boost, and brake.
 - The vertical combat volume is capped at ±1,400 meters on the Godot Y axis for every capital ship and craft; outward velocity is canceled at the boundary. `[PROVISIONAL]`
@@ -267,7 +267,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - Assigned Command, Flight, Gunnery, Engineering, and Sensors leads modify command range, servicing time, carrier weapon damage, carrier hull, and sensor range. Medical skill reduces injuries sustained during rescue operations.
 - Escape-pod source IDs map endangered craft and ships to appropriate named personnel. The after-action report identifies recovered and adrift officers before the rescue/salvage/departure decision.
 - Rescued officers suffer persistent injuries and recover across completed nodes. Abandoned officers die permanently; bonded survivors gain a Grieving trait that reduces effective skill.
-- Direct combat supports independent middle-drag camera orbit, and every combat ship is held inside the ±1,400-meter vertical battlespace.
+- Direct combat uses independent mouse free-look with a camera/cursor-directed flak solution; the hull retains its helm attitude, and every combat ship is held inside the ±1,400-meter vertical battlespace.
 
 ### M12 — Personnel progression and operational events `[IMPLEMENTED]`
 
@@ -290,6 +290,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 
 - The carrier uses an original modular industrial hull with tapered bow armor, dorsal command mass, textured plating, readable flak mounts and missile cells, housed engine banks, retractable lit galleries, split bay doors, approach markers, and state feedback. Escorts, hostiles, and fighters use role/faction visual profiles without changing combat definitions.
 - GL-compatible shared projectile meshes/materials, bounded reusable impact slots, missile exhaust, flak tracers, muzzle flashes, shield/hull impacts, optional debris, nebula cards, parallax dust, and tiered backdrop visibility replace per-shot mesh/material construction.
+- A shared command-interface style provides consistent bordered panels, typography, focus/hover states, compact durability bars, and accent colors across the combat HUD, tactical map, campaign, fleet, personnel, logistics, event, and after-action screens. Combat information is grouped by telemetry, air group, fire control, target solution, radar, notifications, and control context.
 - Saved Low, Medium, and High profiles apply immediately. Windows defaults to High and Web to Medium; cosmetic density, impact budget, trail length, debris, and backdrop layers never alter simulation damage or collision behavior.
 - A maintained weak-reference combat registry replaces repeated scene-wide projectile/entity scans in projectile collision, point defense, sensors, and target resolution. Radar contact reconstruction runs at 10 Hz while pulse and sweep motion remain smooth.
 - The 1920×1080 normal gate passes at 144.9 FPS with p95 7.20 ms/p99 7.29 ms. The sustained stress gate passes at 144.9 FPS with p95 9.72 ms/p99 10.02 ms, projectile-adjusted bounded post-warmup node growth, and zero dropped effects in the measured run.
@@ -310,7 +311,7 @@ M14 tests cover ship visual profiles, immediate quality switching, backdrop tier
 
 Presentation tests cover menu-first startup, continuous background battle motion, accessibility settings, title-to-campaign fades, manual-save Continue, and return-to-title state preservation.
 
-Carrier-combat integration tests cover carrier-centered camera framing, hull-forward weapon aim, seven-round manual flak, four-missile long-range salvos, pulsing contact radar, layered deep-space backdrop, flight-operation locks, emergency sealing, pursuit exposure, and the closed-bay jump interlock.
+Carrier-combat integration tests cover carrier-centered independent camera framing, mouse-directed flak without hull rotation, seven-round manual flak, four-missile long-range salvos, pulsing contact radar, layered deep-space backdrop, flight-operation locks, emergency sealing, pursuit exposure, and the closed-bay jump interlock.
 
 Verbose headless integration exits without leaked ObjectDB instances; procedural tones are skipped only under the headless display driver so desktop and Web audio remain unchanged.
 
@@ -341,7 +342,7 @@ Each `/goal` owns exactly one milestone. Before work begins, read this bible and
 - **2026-07-11:** `[PROVISIONAL]` Adopted the first-playable dimensions, ranges, timings, and force counts listed in this bible pending playtest.
 - **2026-07-11:** `[PROVISIONAL]` Selected GL Compatibility for the greybox build so testing does not require Vulkan; renderer choice will be revisited with final art targets.
 - **2026-07-11:** Implemented and packaged the complete greybox first playable. Automated contract/integration suites and the 1080p performance gate pass; the stabilized development-PC measurement was 165 FPS.
-- **2026-07-11:** `[PROVISIONAL]` Added Web as a secondary distribution target using cursor-offset flight steering and single-threaded export for static GitHub Pages hosting.
+- **2026-07-11:** `[PROVISIONAL]` Added Web as a secondary distribution target using cursor-offset camera/flak direction and single-threaded export for static GitHub Pages hosting.
 - **2026-07-11:** Implemented M7 run-layer foundation: three-sector graph, resources, forecasts, threat-scaled combat transitions, manual saves, browser build, and Pages deployment workflow.
 - **2026-07-11:** `[PROVISIONAL]` Adopted `EXODRIFT: Carrier Command` as the public title while retaining `Project Sidebay` as the internal codename.
 - **2026-07-11:** Implemented M8 fleet persistence and buildcraft: battle condition carries across nodes and saves, supply service restores losses, and victories unlock authored module sidegrades.

@@ -1,6 +1,8 @@
 class_name ExodriftLogisticsScreen
 extends Control
 
+const UIStyle := preload("res://scripts/ui/ui_style.gd")
+
 signal closed
 signal logistics_changed(message: String)
 
@@ -84,8 +86,7 @@ func _label(parent: Control, position_value: Vector2, size_value: Vector2, font_
 	var label := Label.new()
 	label.position = position_value
 	label.size = size_value
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", Color(0.82, 0.94, 1.0))
+	UIStyle.apply_label(label, font_size)
 	parent.add_child(label)
 	return label
 
@@ -95,6 +96,6 @@ func _button(parent: Control, position_value: Vector2, size_value: Vector2) -> B
 	button.size = size_value
 	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	button.add_theme_font_size_override("font_size", 14)
+	UIStyle.apply_button(button, 14, UIStyle.AMBER)
 	parent.add_child(button)
 	return button

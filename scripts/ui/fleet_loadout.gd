@@ -5,6 +5,7 @@ signal closed
 signal fleet_changed(message: String)
 
 const SLOT_ORDER := ["weapon", "defense", "sensor", "support", "hangar"]
+const UIStyle := preload("res://scripts/ui/ui_style.gd")
 
 var run_state: SidebayRunState
 var condition_label: Label
@@ -200,8 +201,7 @@ func _label(parent: Control, position_value: Vector2, size_value: Vector2, font_
 	var label := Label.new()
 	label.position = position_value
 	label.size = size_value
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", Color(0.75, 0.92, 1.0))
+	UIStyle.apply_label(label, font_size)
 	parent.add_child(label)
 	return label
 
@@ -210,6 +210,6 @@ func _button(parent: Control, text_value: String, position_value: Vector2, size_
 	button.text = text_value
 	button.position = position_value
 	button.size = size_value
-	button.add_theme_font_size_override("font_size", 14)
+	UIStyle.apply_button(button, 14)
 	parent.add_child(button)
 	return button

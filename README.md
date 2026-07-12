@@ -13,6 +13,7 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 ## Current playable
 
 - Carrier-centered third-person flight with assisted movement, seven-round flak curtains, four-missile long-range salvos, visible automated defense, and shields → armor → hull damage.
+- A unified command-interface style groups carrier telemetry, air-group state, fire control, target data, radar, notifications, and controls into compact scalable panels across combat and campaign screens.
 - A four-craft Raptor interceptor wing, three Watcher scout drones, and the commandable missile frigate `ISS Resolute`.
 - Visible launch, engagement, recall, side-bay recovery, servicing, relaunch, and armored bay-retraction cycles with a closed-bay jump interlock.
 - Layered deep-space scenery and a pulsing tactical radar plotting uncertain and identified sensor contacts.
@@ -44,7 +45,7 @@ The packaged Windows build is generated at `build/ProjectSidebay.exe`. The GitHu
 
 - `W/S`, `A/D`, `Space/C`: fore/aft, lateral, and vertical thrust
 - `Shift`, `Ctrl`: boost and brake
-- Mouse: steer; wheel: zoom carrier-centered camera; middle-drag: independently orbit combat camera; left mouse: flak barrage; right mouse: identified-target missile salvo
+- Mouse: move the carrier-centered camera and flak director without rotating the hull; wheel: zoom; left mouse: directed flak barrage; right mouse: identified-target missile salvo
 - `P`: active sensor ping
 - `Z`, `X`: launch/recall interceptor and scout wings
 - `Tab`: live tactical map

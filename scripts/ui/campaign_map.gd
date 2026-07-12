@@ -1,6 +1,8 @@
 class_name SidebayCampaignMap
 extends Control
 
+const UIStyle := preload("res://scripts/ui/ui_style.gd")
+
 signal node_selected(node_id: StringName)
 signal new_run_requested
 signal save_requested
@@ -32,7 +34,7 @@ func _build_shell() -> void:
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(background)
-	var title := _label(Vector2(24, 18), Vector2(520, 42), 28)
+	var title := _label(Vector2(24, 18), Vector2(420, 38), 22)
 	title.text = "EXODRIFT // OPERATION DEEP STRIKE"
 	resource_label = _label(Vector2(24, 62), Vector2(760, 34), 19)
 	run_label = _label(Vector2(24, 96), Vector2(1000, 30), 14)
@@ -46,13 +48,13 @@ func _build_shell() -> void:
 	var forecast_button := _button("SPEND 1 INTEL: DEEP FORECAST", Vector2(720, 66), Vector2(320, 36))
 	forecast_button.name = "ForecastButton"
 	forecast_button.pressed.connect(func() -> void: forecast_requested.emit())
-	var logistics_button := _button("LOGISTICS", Vector2(450, 20), Vector2(140, 38))
+	var logistics_button := _button("LOGISTICS", Vector2(460, 20), Vector2(130, 38))
 	logistics_button.pressed.connect(func() -> void: logistics_requested.emit())
-	var fleet_button := _button("FLEET", Vector2(600, 20), Vector2(140, 38))
+	var fleet_button := _button("FLEET", Vector2(600, 20), Vector2(130, 38))
 	fleet_button.pressed.connect(func() -> void: fleet_requested.emit())
-	var personnel_button := _button("PERSONNEL", Vector2(750, 20), Vector2(140, 38))
+	var personnel_button := _button("PERSONNEL", Vector2(740, 20), Vector2(140, 38))
 	personnel_button.pressed.connect(func() -> void: personnel_requested.emit())
-	var title_button := _button("TITLE", Vector2(900, 20), Vector2(140, 38))
+	var title_button := _button("TITLE", Vector2(890, 20), Vector2(140, 38))
 	title_button.pressed.connect(func() -> void: title_requested.emit())
 	for sector in 3:
 		var label := _label(Vector2(90 + sector * 410, 132), Vector2(360, 34), 18)
@@ -167,8 +169,7 @@ func _label(position_value: Vector2, size_value: Vector2, font_size: int) -> Lab
 	var label := Label.new()
 	label.position = position_value
 	label.size = size_value
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", Color(0.72, 0.9, 1.0))
+	UIStyle.apply_label(label, font_size)
 	add_child(label)
 	return label
 
@@ -177,6 +178,6 @@ func _button(text_value: String, position_value: Vector2, size_value: Vector2) -
 	button.text = text_value
 	button.position = position_value
 	button.size = size_value
-	button.add_theme_font_size_override("font_size", 13)
+	UIStyle.apply_button(button, 13)
 	add_child(button)
 	return button

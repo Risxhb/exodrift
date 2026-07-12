@@ -24,6 +24,9 @@ var chase_target_distance_m: float = 125.0
 var camera_orbit_yaw: float = 0.0
 var camera_orbit_pitch: float = 0.0
 var camera_orbiting: bool = false
+var flak_aim_screen_position: Vector2 = Vector2.ZERO
+var flak_aim_uses_pointer: bool = false
+var flak_mounts: Array[Node3D] = []
 var bay_closure: float = 0.0
 var bay_target_closure: float = 0.0
 var bay_transition_seconds: float = 2.2
@@ -63,6 +66,7 @@ func _build_visual() -> void:
 			turret.position = Vector3(side * 23.0, 11.0, z)
 			turret.material_override = _make_material(Color(0.24, 0.3, 0.35))
 			add_child(turret)
+			flak_mounts.append(turret)
 			var barrel := _mesh_block(Vector3(2.0, 1.2, 8.0), Color(0.12, 0.18, 0.23))
 			barrel.position = Vector3(0.0, 2.0, -4.0)
 			turret.add_child(barrel)
@@ -222,8 +226,8 @@ func _physics_process(delta: float) -> void:
 
 func _process_player_flight(delta: float) -> void:
 	if OS.has_feature("web"):
-		look_yaw -= web_cursor_steer.x * 1.15 * delta
-		look_pitch = clampf(look_pitch - web_cursor_steer.y * 0.85 * delta, -0.75, 0.75)
+		camera_orbit_yaw = wrapf(camera_orbit_yaw - web_cursor_steer.x * 1.15 * delta, -PI, PI)
+		camera_orbit_pitch = clampf(camera_orbit_pitch - web_cursor_steer.y * 0.85 * delta, -0.85, 0.65)
 	rotation = Vector3(look_pitch, look_yaw, 0.0)
 	var input := Vector3(
 		Input.get_axis("move_left", "move_right"),
@@ -259,8 +263,7 @@ func _process_autopilot(delta: float) -> void:
 func apply_mouse_look(relative_motion: Vector2) -> void:
 	if not control_enabled:
 		return
-	look_yaw -= relative_motion.x * mouse_sensitivity
-	look_pitch = clampf(look_pitch - relative_motion.y * mouse_sensitivity, -0.75, 0.75)
+	apply_camera_orbit(relative_motion)
 
 func set_camera_orbiting(enabled: bool) -> void:
 	camera_orbiting = enabled
@@ -276,7 +279,10 @@ func reset_camera_orbit() -> void:
 func set_web_cursor_steering(cursor_position: Vector2, viewport_size: Vector2) -> void:
 	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
 		web_cursor_steer = Vector2.ZERO
+		flak_aim_uses_pointer = false
 		return
+	flak_aim_screen_position = cursor_position
+	flak_aim_uses_pointer = true
 	var normalized := Vector2(cursor_position.x / viewport_size.x, cursor_position.y / viewport_size.y) * 2.0 - Vector2.ONE
 	var deadzone := 0.12
 	web_cursor_steer.x = signf(normalized.x) * maxf(0.0, absf(normalized.x) - deadzone) / (1.0 - deadzone)
@@ -293,7 +299,18 @@ func _update_camera() -> void:
 	camera_offset = camera_offset.rotated(Vector3.UP, camera_orbit_yaw)
 	chase_camera.position = camera_offset
 	chase_camera.look_at(global_position + global_transform.basis.y * 3.0, Vector3.UP)
-	aim_direction = -global_transform.basis.z.normalized()
+	var viewport_size := get_viewport().get_visible_rect().size
+	var director_position := flak_aim_screen_position if flak_aim_uses_pointer else viewport_size * 0.5
+	director_position.x = clampf(director_position.x, 0.0, viewport_size.x)
+	director_position.y = clampf(director_position.y, 0.0, viewport_size.y)
+	aim_direction = chase_camera.project_ray_normal(director_position).normalized()
+	_update_flak_mounts()
+
+func _update_flak_mounts() -> void:
+	var turret_up := Vector3.FORWARD if absf(aim_direction.dot(Vector3.UP)) > 0.98 else Vector3.UP
+	for mount in flak_mounts:
+		if is_instance_valid(mount):
+			mount.look_at(mount.global_position + aim_direction, turret_up)
 
 func adjust_chase_zoom(wheel_steps: float) -> void:
 	chase_target_distance_m = clampf(chase_target_distance_m * pow(0.86, wheel_steps), 70.0, 260.0)
@@ -331,7 +348,11 @@ func _spawn_flak_barrage(direction_value: Vector3, count: int, damage_scale: flo
 		var pattern_index := flak_sequence + index
 		var yaw := (float(pattern_index % 5) - 2.0) * 0.018
 		var pitch := (float((pattern_index * 3) % 5) - 2.0) * 0.014
-		var shot_direction := base_direction.rotated(Vector3.UP, yaw).rotated(global_transform.basis.x.normalized(), pitch).normalized()
+		var yaw_direction := base_direction.rotated(Vector3.UP, yaw).normalized()
+		var director_right := yaw_direction.cross(Vector3.UP).normalized()
+		if director_right.length_squared() < 0.01:
+			director_right = global_transform.basis.x.normalized()
+		var shot_direction := yaw_direction.rotated(director_right, pitch).normalized()
 		var side := -1.0 if pattern_index % 2 == 0 else 1.0
 		var local_start := Vector3(side * 23.0, 11.0, -30.0 + float(pattern_index % 3) * 30.0)
 		var projectile := spawn_projectile(flak_weapon, global_transform * local_start, shot_direction)

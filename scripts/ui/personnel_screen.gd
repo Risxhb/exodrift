@@ -1,6 +1,8 @@
 class_name ExodriftPersonnelScreen
 extends Control
 
+const UIStyle := preload("res://scripts/ui/ui_style.gd")
+
 signal closed
 signal personnel_changed(message: String)
 
@@ -157,8 +159,7 @@ func _label(parent: Control, position_value: Vector2, size_value: Vector2, font_
 	var label := Label.new()
 	label.position = position_value
 	label.size = size_value
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", Color(0.75, 0.92, 1.0))
+	UIStyle.apply_label(label, font_size)
 	parent.add_child(label)
 	return label
 
@@ -166,7 +167,7 @@ func _button(parent: Control, position_value: Vector2, size_value: Vector2) -> B
 	var button := Button.new()
 	button.position = position_value
 	button.size = size_value
-	button.add_theme_font_size_override("font_size", 13)
+	UIStyle.apply_button(button, 13)
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	parent.add_child(button)
 	return button
