@@ -11,6 +11,7 @@ run/main_scene="res://scenes/app.tscn"
 GraphicsQualityManager="*res://scripts/systems/graphics_quality.gd"
 CombatRegistry="*res://scripts/systems/combat_registry.gd"
 CombatVFX="*res://scripts/systems/combat_vfx.gd"
+PlaytestRecorder="*res://scripts/systems/playtest_recorder.gd"
 
 [display]
 

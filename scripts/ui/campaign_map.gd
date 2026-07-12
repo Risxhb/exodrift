@@ -11,6 +11,7 @@ signal forecast_requested
 signal fleet_requested
 signal logistics_requested
 signal personnel_requested
+signal playtest_requested
 signal title_requested
 
 var run_state: SidebayRunState
@@ -39,7 +40,7 @@ func _build_shell() -> void:
 	resource_label = _label(Vector2(24, 62), Vector2(760, 34), 19)
 	run_label = _label(Vector2(24, 96), Vector2(1000, 30), 14)
 	status_label = _label(Vector2(24, 650), Vector2(920, 42), 17)
-	var new_button := _button("NEW RUN", Vector2(1060, 20), Vector2(190, 38))
+	var new_button := _button("NEW RUN", Vector2(1090, 20), Vector2(160, 38))
 	new_button.pressed.connect(func() -> void: new_run_requested.emit())
 	var save_button := _button("SAVE RUN", Vector2(1060, 66), Vector2(92, 36))
 	save_button.pressed.connect(func() -> void: save_requested.emit())
@@ -54,7 +55,9 @@ func _build_shell() -> void:
 	fleet_button.pressed.connect(func() -> void: fleet_requested.emit())
 	var personnel_button := _button("PERSONNEL", Vector2(740, 20), Vector2(140, 38))
 	personnel_button.pressed.connect(func() -> void: personnel_requested.emit())
-	var title_button := _button("TITLE", Vector2(890, 20), Vector2(140, 38))
+	var playtest_button := _button("DEBRIEF", Vector2(890, 20), Vector2(100, 38))
+	playtest_button.pressed.connect(func() -> void: playtest_requested.emit())
+	var title_button := _button("TITLE", Vector2(1000, 20), Vector2(80, 38))
 	title_button.pressed.connect(func() -> void: title_requested.emit())
 	for sector in 3:
 		var label := _label(Vector2(90 + sector * 410, 132), Vector2(360, 34), 18)

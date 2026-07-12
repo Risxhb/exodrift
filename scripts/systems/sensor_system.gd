@@ -9,6 +9,8 @@ var contacts: Dictionary = {}
 var elapsed_seconds: float = 0.0
 var scan_accumulator: float = 0.0
 var scan_interval_seconds: float = 0.35
+var passive_range_multiplier: float = 1.0
+var uncertainty_multiplier: float = 1.0
 
 func configure(player_carrier: PlayerCarrier) -> void:
 	carrier = player_carrier
@@ -32,7 +34,7 @@ func perform_passive_scan() -> void:
 		for observer in observers:
 			best_distance = minf(best_distance, observer.distance_to(target_position))
 		var target_signature: float = target_data.signature
-		var effective_range := carrier.definition.passive_sensor_range_m * clampf(target_signature, 0.55, 1.5)
+		var effective_range := carrier.definition.passive_sensor_range_m * passive_range_multiplier * clampf(target_signature, 0.55, 1.5)
 		if best_distance <= effective_range:
 			var quality := clampf(1.0 - best_distance / effective_range, 0.04, 1.0)
 			_update_contact(target_data, 0.08 + quality * 0.16, best_distance <= 1200.0)
@@ -56,7 +58,7 @@ func _update_contact(target_data: Dictionary, confidence_gain: float, force_iden
 	contact.classification = target_data.classification
 	contact.estimated_velocity = target_data.velocity
 	contact.confidence = 1.0 if force_identified else clampf(contact.confidence + confidence_gain, 0.0, 1.0)
-	var uncertainty_target := lerpf(900.0, 35.0, contact.confidence)
+	var uncertainty_target := lerpf(900.0, 35.0, contact.confidence) * uncertainty_multiplier
 	contact.uncertainty_radius_m = lerpf(contact.uncertainty_radius_m, uncertainty_target, 0.45)
 	var noise_seed := float(String(entity_id).hash() % 997) + elapsed_seconds * 0.2
 	var noise := Vector3(sin(noise_seed), sin(noise_seed * 1.71) * 0.35, cos(noise_seed * 0.83)) * contact.uncertainty_radius_m * 0.3

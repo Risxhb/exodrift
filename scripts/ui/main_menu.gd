@@ -14,9 +14,13 @@ var interface: Control
 var main_panel: Control
 var settings_panel: Control
 var credits_panel: Control
+var controls_panel: Control
+var confirmation_panel: Control
 var continue_button: Button
 var status_label: Label
 var volume_slider: HSlider
+var music_slider: HSlider
+var sfx_slider: HSlider
 var fullscreen_toggle: CheckButton
 var flash_toggle: CheckButton
 var quality_selector: OptionButton
@@ -27,12 +31,16 @@ var explosions: Array[Dictionary] = []
 var elapsed: float = 0.0
 var reduced_flashes: bool = false
 var departing: bool = false
+var can_continue_available: bool = false
+var binding_buttons: Dictionary = {}
+var listening_action: String = ""
 
 func _graphics_quality() -> Node:
 	return get_node_or_null("/root/GraphicsQualityManager")
 
 func configure(can_continue: bool) -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	can_continue_available = can_continue
 	_load_settings()
 	_build_world()
 	_build_interface(can_continue)
@@ -293,6 +301,8 @@ func _build_interface(can_continue: bool) -> void:
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_build_settings_panel()
 	_build_credits_panel()
+	_build_controls_panel()
+	_build_confirmation_panel()
 	new_button.grab_focus()
 
 func _menu_panel() -> Panel:
@@ -311,20 +321,38 @@ func _build_settings_panel() -> void:
 	settings_panel.visible = false
 	var title := _label(settings_panel, Vector2(28, 28), Vector2(384, 44), 28)
 	title.text = "SYSTEM SETTINGS"
-	var volume_label := _label(settings_panel, Vector2(38, 88), Vector2(364, 28), 16)
+	var volume_label := _label(settings_panel, Vector2(38, 74), Vector2(364, 24), 14)
 	volume_label.text = "MASTER VOLUME"
 	volume_slider = HSlider.new()
-	volume_slider.position = Vector2(38, 120)
-	volume_slider.size = Vector2(364, 34)
+	volume_slider.position = Vector2(38, 96)
+	volume_slider.size = Vector2(364, 28)
 	volume_slider.min_value = 0.0
 	volume_slider.max_value = 1.0
 	volume_slider.step = 0.05
 	settings_panel.add_child(volume_slider)
-	var quality_label := _label(settings_panel, Vector2(38, 174), Vector2(170, 28), 16)
+	var music_label := _label(settings_panel, Vector2(38, 124), Vector2(364, 24), 14)
+	music_label.text = "MUSIC VOLUME"
+	music_slider = HSlider.new()
+	music_slider.position = Vector2(38, 146)
+	music_slider.size = Vector2(364, 28)
+	music_slider.min_value = 0.0
+	music_slider.max_value = 1.0
+	music_slider.step = 0.05
+	settings_panel.add_child(music_slider)
+	var sfx_label := _label(settings_panel, Vector2(38, 174), Vector2(364, 24), 14)
+	sfx_label.text = "SFX + RADIO VOLUME"
+	sfx_slider = HSlider.new()
+	sfx_slider.position = Vector2(38, 196)
+	sfx_slider.size = Vector2(364, 28)
+	sfx_slider.min_value = 0.0
+	sfx_slider.max_value = 1.0
+	sfx_slider.step = 0.05
+	settings_panel.add_child(sfx_slider)
+	var quality_label := _label(settings_panel, Vector2(38, 236), Vector2(170, 28), 14)
 	quality_label.text = "GRAPHICS PROFILE"
 	quality_selector = OptionButton.new()
-	quality_selector.position = Vector2(218, 168)
-	quality_selector.size = Vector2(184, 40)
+	quality_selector.position = Vector2(218, 230)
+	quality_selector.size = Vector2(184, 36)
 	UIStyle.apply_option_button(quality_selector, 15)
 	var graphics := _graphics_quality()
 	var profile_order: Array = graphics.PROFILE_ORDER if graphics != null else [&"low", &"medium", &"high"]
@@ -333,22 +361,23 @@ func _build_settings_panel() -> void:
 	settings_panel.add_child(quality_selector)
 	fullscreen_toggle = CheckButton.new()
 	fullscreen_toggle.text = "FULLSCREEN"
-	fullscreen_toggle.position = Vector2(38, 232)
-	fullscreen_toggle.size = Vector2(364, 44)
+	fullscreen_toggle.position = Vector2(38, 274)
+	fullscreen_toggle.size = Vector2(364, 38)
 	UIStyle.apply_check_button(fullscreen_toggle, 16)
 	settings_panel.add_child(fullscreen_toggle)
 	flash_toggle = CheckButton.new()
 	flash_toggle.text = "REDUCED COMBAT FLASHES"
-	flash_toggle.position = Vector2(38, 286)
-	flash_toggle.size = Vector2(364, 44)
+	flash_toggle.position = Vector2(38, 314)
+	flash_toggle.size = Vector2(364, 38)
 	UIStyle.apply_check_button(flash_toggle, 16)
 	settings_panel.add_child(flash_toggle)
-	var note := _label(settings_panel, Vector2(38, 348), Vector2(364, 72), 13)
-	note.text = "Graphics, audio, and accessibility changes apply immediately. Web defaults to Medium; Windows defaults to High."
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	var back := _button(settings_panel, "RETURN", Vector2(54, 452), Vector2(332, 48))
+	var controls := _button(settings_panel, "REMAP CONTROLS", Vector2(54, 368), Vector2(332, 42))
+	controls.pressed.connect(_show_controls)
+	var back := _button(settings_panel, "RETURN", Vector2(54, 430), Vector2(332, 48))
 	back.pressed.connect(_show_main)
 	volume_slider.value_changed.connect(_on_volume_changed)
+	music_slider.value_changed.connect(_on_music_volume_changed)
+	sfx_slider.value_changed.connect(_on_sfx_volume_changed)
 	quality_selector.item_selected.connect(_on_quality_selected)
 	fullscreen_toggle.toggled.connect(_on_fullscreen_toggled)
 	flash_toggle.toggled.connect(_on_flash_toggled)
@@ -359,18 +388,80 @@ func _build_credits_panel() -> void:
 	var title := _label(credits_panel, Vector2(28, 28), Vector2(384, 44), 28)
 	title.text = "CREDITS // ALPHA"
 	var copy := _label(credits_panel, Vector2(38, 100), Vector2(364, 300), 16)
-	copy.text = "EXODRIFT: CARRIER COMMAND\n\nDesign & Direction\nRisxhb Games\n\nEngineering & Production\nBuilt collaboratively with Codex\n\nEngine\nGodot 4\n\nMusic & final art\nIn development\n\nProject Sidebay remains the internal codename."
+	copy.text = "EXODRIFT: CARRIER COMMAND\n\nDesign & Direction\nRisxhb Games\n\nEngineering & Production\nBuilt collaboratively with Codex\n\nEngine\nGodot 4\n\nAdaptive score & combat audio\nProcedurally synthesized in-engine\n\nProject Sidebay remains the internal codename."
 	copy.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	var back := _button(credits_panel, "RETURN", Vector2(54, 452), Vector2(332, 48))
 	back.pressed.connect(_show_main)
 
+func _build_controls_panel() -> void:
+	controls_panel = _menu_panel()
+	controls_panel.visible = false
+	var title := _label(controls_panel, Vector2(28, 24), Vector2(384, 40), 27)
+	title.text = "COMMAND BINDINGS"
+	var hint := _label(controls_panel, Vector2(30, 64), Vector2(380, 36), 12)
+	hint.text = "SELECT A CONTROL, THEN PRESS A KEY"
+	var scroll := ScrollContainer.new()
+	scroll.position = Vector2(28, 102)
+	scroll.size = Vector2(384, 338)
+	controls_panel.add_child(scroll)
+	var rows := VBoxContainer.new()
+	rows.custom_minimum_size = Vector2(360, 0)
+	rows.add_theme_constant_override("separation", 5)
+	scroll.add_child(rows)
+	for action in ExodriftInputSettings.ACTION_LABELS:
+		var row := HBoxContainer.new()
+		row.custom_minimum_size = Vector2(360, 38)
+		rows.add_child(row)
+		var label := Label.new()
+		label.text = String(ExodriftInputSettings.ACTION_LABELS[action]).to_upper()
+		label.custom_minimum_size = Vector2(190, 38)
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		UIStyle.apply_label(label, 13)
+		row.add_child(label)
+		var binding := Button.new()
+		binding.text = ExodriftInputSettings.key_label(action)
+		binding.custom_minimum_size = Vector2(150, 38)
+		UIStyle.apply_button(binding, 13)
+		binding.pressed.connect(_begin_binding.bind(String(action)))
+		row.add_child(binding)
+		binding_buttons[String(action)] = binding
+	var back := _button(controls_panel, "RETURN TO SETTINGS", Vector2(54, 468), Vector2(332, 48))
+	back.pressed.connect(_show_settings)
+
+func _build_confirmation_panel() -> void:
+	confirmation_panel = _menu_panel()
+	confirmation_panel.visible = false
+	var title := _label(confirmation_panel, Vector2(34, 76), Vector2(372, 50), 26)
+	title.text = "BEGIN NEW OPERATION?"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var warning := _label(confirmation_panel, Vector2(48, 150), Vector2(344, 150), 15)
+	warning.text = "A checkpoint already exists.\n\nStarting over replaces the current operation after preserving one automatic backup."
+	warning.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	warning.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var confirm := _button(confirmation_panel, "CONFIRM NEW OPERATION", Vector2(54, 336), Vector2(332, 48))
+	confirm.pressed.connect(_confirm_new_run)
+	var cancel := _button(confirmation_panel, "CANCEL", Vector2(54, 402), Vector2(332, 48))
+	cancel.pressed.connect(_show_main)
+
 func _show_settings() -> void:
 	main_panel.visible = false
 	credits_panel.visible = false
+	controls_panel.visible = false
+	confirmation_panel.visible = false
 	settings_panel.visible = true
 	volume_slider.grab_focus()
 
 func _request_new_run() -> void:
+	if departing:
+		return
+	if can_continue_available:
+		main_panel.visible = false
+		confirmation_panel.visible = true
+		return
+	new_run_requested.emit()
+
+func _confirm_new_run() -> void:
 	if not departing:
 		new_run_requested.emit()
 
@@ -381,13 +472,53 @@ func _request_continue() -> void:
 func _show_credits() -> void:
 	main_panel.visible = false
 	settings_panel.visible = false
+	controls_panel.visible = false
+	confirmation_panel.visible = false
 	credits_panel.visible = true
+
+func _show_controls() -> void:
+	main_panel.visible = false
+	settings_panel.visible = false
+	credits_panel.visible = false
+	confirmation_panel.visible = false
+	controls_panel.visible = true
+	for action in binding_buttons:
+		binding_buttons[action].text = ExodriftInputSettings.key_label(action)
+	if not binding_buttons.is_empty():
+		binding_buttons.values()[0].grab_focus()
 
 func _show_main() -> void:
 	main_panel.visible = true
 	settings_panel.visible = false
 	credits_panel.visible = false
+	controls_panel.visible = false
+	confirmation_panel.visible = false
+	listening_action = ""
 	menu_buttons[0].grab_focus()
+
+func _begin_binding(action: String) -> void:
+	listening_action = action
+	for mapped_action in binding_buttons:
+		binding_buttons[mapped_action].text = ExodriftInputSettings.key_label(mapped_action)
+	binding_buttons[action].text = "PRESS KEY..."
+
+func _unhandled_input(event: InputEvent) -> void:
+	if listening_action.is_empty() or not event is InputEventKey:
+		return
+	var key_event := event as InputEventKey
+	if not key_event.pressed or key_event.echo:
+		return
+	var keycode := int(key_event.physical_keycode if key_event.physical_keycode != 0 else key_event.keycode)
+	if keycode == KEY_ESCAPE:
+		binding_buttons[listening_action].text = ExodriftInputSettings.key_label(listening_action)
+		listening_action = ""
+		get_viewport().set_input_as_handled()
+		return
+	ExodriftInputSettings.rebind(listening_action, keycode)
+	binding_buttons[listening_action].text = ExodriftInputSettings.key_label(listening_action)
+	listening_action = ""
+	_save_settings()
+	get_viewport().set_input_as_handled()
 
 func _load_settings() -> void:
 	var graphics := _graphics_quality()
@@ -399,13 +530,20 @@ func _apply_settings() -> void:
 	var config := ConfigFile.new()
 	config.load(SETTINGS_PATH)
 	var volume := clampf(float(config.get_value("audio", "master_volume", 0.8)), 0.0, 1.0)
+	var music_volume := clampf(float(config.get_value("audio", "music_volume", 0.72)), 0.0, 1.0)
+	var sfx_volume := clampf(float(config.get_value("audio", "sfx_volume", 0.85)), 0.0, 1.0)
 	var fullscreen := bool(config.get_value("display", "fullscreen", false))
 	volume_slider.set_value_no_signal(volume)
+	music_slider.set_value_no_signal(music_volume)
+	sfx_slider.set_value_no_signal(sfx_volume)
+	ExodriftInputSettings.load_bindings(config)
 	var graphics := _graphics_quality()
 	quality_selector.select(graphics.profile_index() if graphics != null else (1 if OS.has_feature("web") else 2))
 	fullscreen_toggle.set_pressed_no_signal(fullscreen)
 	flash_toggle.set_pressed_no_signal(reduced_flashes)
-	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), linear_to_db(maxf(volume, 0.001)))
+	_set_bus_volume("Master", volume)
+	_set_bus_volume("Music", music_volume)
+	_set_bus_volume("SFX", sfx_volume)
 	if not OS.has_feature("web"):
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
 
@@ -413,15 +551,31 @@ func _save_settings() -> void:
 	var config := ConfigFile.new()
 	config.load(SETTINGS_PATH)
 	config.set_value("audio", "master_volume", volume_slider.value)
+	config.set_value("audio", "music_volume", music_slider.value)
+	config.set_value("audio", "sfx_volume", sfx_slider.value)
 	config.set_value("display", "fullscreen", fullscreen_toggle.button_pressed)
 	var graphics := _graphics_quality()
 	config.set_value("display", "graphics_quality", String(graphics.current_quality) if graphics != null else ("medium" if OS.has_feature("web") else "high"))
 	config.set_value("accessibility", "reduced_flashes", flash_toggle.button_pressed)
+	ExodriftInputSettings.save_bindings(config)
 	config.save(SETTINGS_PATH)
 
 func _on_volume_changed(value: float) -> void:
-	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), linear_to_db(maxf(value, 0.001)))
+	_set_bus_volume("Master", value)
 	_save_settings()
+
+func _on_music_volume_changed(value: float) -> void:
+	_set_bus_volume("Music", value)
+	_save_settings()
+
+func _on_sfx_volume_changed(value: float) -> void:
+	_set_bus_volume("SFX", value)
+	_save_settings()
+
+func _set_bus_volume(bus_name: String, value: float) -> void:
+	var bus_index := AudioServer.get_bus_index(bus_name)
+	if bus_index >= 0:
+		AudioServer.set_bus_volume_db(bus_index, linear_to_db(maxf(value, 0.001)))
 
 func _on_fullscreen_toggled(enabled: bool) -> void:
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if enabled else DisplayServer.WINDOW_MODE_WINDOWED)

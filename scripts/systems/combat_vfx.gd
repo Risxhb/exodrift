@@ -10,6 +10,8 @@ var flak_material: StandardMaterial3D
 var missile_material: StandardMaterial3D
 var missile_trail_material: StandardMaterial3D
 var materials: Dictionary = {}
+var projectile_materials: Dictionary = {}
+var projectile_trail_materials: Dictionary = {}
 var impact_slots: Array[Dictionary] = []
 var active_impact_budget: int = 48
 var spawned_effects: int = 0
@@ -41,18 +43,19 @@ func _process(delta: float) -> void:
 			slot.active = false
 			node.visible = false
 
-func create_projectile_visual(role: String, is_missile: bool) -> Node3D:
+func create_projectile_visual(role: String, is_missile: bool, team: StringName = &"neutral", visual_id: StringName = &"") -> Node3D:
 	var root := Node3D.new()
 	root.name = "MissileVisual" if is_missile else "FlakVisual"
+	var palette_key := _projectile_palette_key(team, visual_id)
 	var core := MeshInstance3D.new()
 	core.mesh = missile_mesh if is_missile else flak_mesh
-	core.material_override = missile_material if is_missile else flak_material
+	core.material_override = projectile_materials.get("%s_%s" % [palette_key, "missile" if is_missile else "flak"], missile_material if is_missile else flak_material)
 	root.add_child(core)
 	if is_missile:
 		var trail := MeshInstance3D.new()
 		trail.name = "ExhaustTrail"
 		trail.mesh = trail_mesh
-		trail.material_override = missile_trail_material
+		trail.material_override = projectile_trail_materials.get(palette_key, missile_trail_material)
 		trail.position.z = 5.5
 		trail.scale.z = float(quality_manager.profile().get("trail_scale", 0.78)) if quality_manager != null else 0.78
 		root.add_child(trail)
@@ -60,11 +63,16 @@ func create_projectile_visual(role: String, is_missile: bool) -> Node3D:
 		var tracer := MeshInstance3D.new()
 		tracer.name = "TracerTail"
 		tracer.mesh = trail_mesh
-		tracer.material_override = flak_material
+		tracer.material_override = projectile_materials.get("%s_flak" % palette_key, flak_material)
 		tracer.position.z = 3.8
 		tracer.scale = Vector3(0.38, 0.38, 0.62)
 		root.add_child(tracer)
 	return root
+
+func spawn_faction_burst(role: String, world_position: Vector3, team: StringName, visual_id: StringName) -> bool:
+	var palette_key := _projectile_palette_key(team, visual_id)
+	var faction_role := "%s_impact" % palette_key
+	return spawn_burst(faction_role if materials.has(faction_role) else role, world_position)
 
 func spawn_burst(role: String, world_position: Vector3, magnitude: float = 1.0) -> bool:
 	var used := 0
@@ -124,6 +132,18 @@ func _build_shared_resources() -> void:
 	flak_material = _emissive_material(Color(0.22, 0.78, 1.0), 5.0)
 	missile_material = _emissive_material(Color(1.0, 0.28, 0.045), 4.8)
 	missile_trail_material = _emissive_material(Color(1.0, 0.58, 0.14, 0.82), 3.5, true)
+	projectile_materials["navy_flak"] = _emissive_material(Color(0.18, 0.82, 1.0), 5.1)
+	projectile_materials["navy_missile"] = _emissive_material(Color(0.58, 0.9, 1.0), 5.0)
+	projectile_materials["acheron_flak"] = _emissive_material(Color(1.0, 0.3, 0.035), 5.0)
+	projectile_materials["acheron_missile"] = _emissive_material(Color(1.0, 0.12, 0.02), 5.3)
+	projectile_materials["vesper_flak"] = _emissive_material(Color(1.0, 0.18, 0.92), 5.2)
+	projectile_materials["vesper_missile"] = _emissive_material(Color(0.82, 0.22, 1.0), 5.5)
+	projectile_materials["crucible_flak"] = _emissive_material(Color(0.86, 0.38, 1.0), 5.3)
+	projectile_materials["crucible_missile"] = _emissive_material(Color(0.66, 0.16, 1.0), 5.7)
+	projectile_trail_materials["navy"] = _emissive_material(Color(0.22, 0.72, 1.0, 0.76), 3.4, true)
+	projectile_trail_materials["acheron"] = _emissive_material(Color(1.0, 0.32, 0.04, 0.8), 3.6, true)
+	projectile_trail_materials["vesper"] = _emissive_material(Color(0.92, 0.18, 1.0, 0.78), 3.8, true)
+	projectile_trail_materials["crucible"] = _emissive_material(Color(0.62, 0.14, 1.0, 0.82), 4.0, true)
 	materials["flak"] = _emissive_material(Color(0.32, 0.82, 1.0, 0.9), 4.4, true)
 	materials["missile"] = _emissive_material(Color(1.0, 0.26, 0.035, 0.92), 5.0, true)
 	materials["muzzle"] = _emissive_material(Color(0.72, 0.93, 1.0, 0.94), 5.4, true)
@@ -131,6 +151,10 @@ func _build_shared_resources() -> void:
 	materials["hull"] = _emissive_material(Color(1.0, 0.48, 0.08, 0.9), 4.7, true)
 	materials["spark"] = _emissive_material(Color(1.0, 0.76, 0.26, 0.94), 4.2, true)
 	materials["bay"] = _emissive_material(Color(0.18, 0.92, 1.0, 0.72), 3.8, true)
+	materials["navy_impact"] = _emissive_material(Color(0.18, 0.82, 1.0, 0.88), 4.5, true)
+	materials["acheron_impact"] = _emissive_material(Color(1.0, 0.24, 0.025, 0.9), 4.8, true)
+	materials["vesper_impact"] = _emissive_material(Color(1.0, 0.18, 0.88, 0.88), 4.9, true)
+	materials["crucible_impact"] = _emissive_material(Color(0.68, 0.18, 1.0, 0.92), 5.1, true)
 	for key in materials:
 		var burst_material: StandardMaterial3D = materials[key]
 		burst_material.albedo_texture = burst_texture
@@ -182,6 +206,16 @@ func _emissive_material(color: Color, energy: float, transparent: bool = false) 
 	material.emission = Color(color.r, color.g, color.b)
 	material.emission_energy_multiplier = energy * (0.48 if quality_manager != null and bool(quality_manager.reduced_flashes) else 1.0)
 	return material
+
+func _projectile_palette_key(team: StringName, visual_id: StringName) -> String:
+	var identity := String(visual_id)
+	if identity.begins_with("vesper_"):
+		return "vesper"
+	if identity.begins_with("crucible_"):
+		return "crucible"
+	if team == &"hostile":
+		return "acheron"
+	return "navy"
 
 func _duration_for(role: String) -> float:
 	match role:

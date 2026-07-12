@@ -29,6 +29,11 @@ var formation_name: StringName = &"wedge"
 var weapon_cooldown: float = 0.0
 var hold_position: Vector3 = Vector3.ZERO
 var visual_color: Color = Color(0.35, 0.55, 0.7)
+var incoming_damage_multiplier: float = 1.0
+var outgoing_damage_multiplier: float = 1.0
+var damage_visual_stage: int = 0
+var damage_indicator_nodes: Array[MeshInstance3D] = []
+var damage_effect_cooldown: float = 0.0
 
 func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: StringName, color: Color) -> void:
 	definition = ship_definition
@@ -45,6 +50,7 @@ func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: 
 	if registry != null:
 		registry.register_combat_entity(self)
 	_build_visual()
+	_build_damage_indicators()
 
 func _exit_tree() -> void:
 	var registry := _combat_registry()
@@ -137,6 +143,21 @@ func _build_navy_details(hull_dimensions: Vector3, profile: ShipVisualProfile) -
 	for side in [-1.0, 1.0]:
 		_add_visual_block("MissionPod", Vector3(side * hull_dimensions.x * 0.5, -hull_dimensions.y * 0.12, -hull_dimensions.z * 0.02), Vector3(hull_dimensions.x * 0.14, hull_dimensions.y * 0.34, hull_dimensions.z * 0.32), visual_color.darkened(0.12), 0.0, profile.hull_texture_path)
 		_add_visual_block("RegistryStripe", Vector3(side * hull_dimensions.x * 0.575, hull_dimensions.y * 0.03, -hull_dimensions.z * 0.08), Vector3(hull_dimensions.x * 0.012, hull_dimensions.y * 0.08, hull_dimensions.z * 0.18), profile.accent_color, 0.18)
+	match definition.ship_id:
+		&"iss_resolute":
+			for side in [-1.0, 1.0]:
+				_add_visual_block("ResoluteMissileRack", Vector3(side * hull_dimensions.x * 0.22, hull_dimensions.y * 0.65, -hull_dimensions.z * 0.08), Vector3(hull_dimensions.x * 0.16, hull_dimensions.y * 0.12, hull_dimensions.z * 0.26), Color(0.18, 0.28, 0.34), 0.0, profile.hull_texture_path)
+				_add_visual_block("ResoluteCellLight", Vector3(side * hull_dimensions.x * 0.22, hull_dimensions.y * 0.72, -hull_dimensions.z * 0.2), Vector3(hull_dimensions.x * 0.09, hull_dimensions.y * 0.03, hull_dimensions.z * 0.025), Color(0.18, 0.78, 1.0), 1.4)
+		&"iss_harrier":
+			for side in [-1.0, 1.0]:
+				var vane := _add_visual_block("HarrierInterceptVane", Vector3(side * hull_dimensions.x * 0.58, 0.0, -hull_dimensions.z * 0.24), Vector3(hull_dimensions.x * 0.34, hull_dimensions.y * 0.09, hull_dimensions.z * 0.38), visual_color.lightened(0.05), 0.0, profile.hull_texture_path)
+				vane.rotation_degrees.y = side * 14.0
+			_add_visual_block("HarrierGunSpine", Vector3(0.0, -hull_dimensions.y * 0.5, -hull_dimensions.z * 0.18), Vector3(hull_dimensions.x * 0.16, hull_dimensions.y * 0.18, hull_dimensions.z * 0.52), Color(0.1, 0.2, 0.26), 0.0, profile.hull_texture_path)
+		&"iss_bulwark":
+			for side in [-1.0, 1.0]:
+				_add_visual_block("BulwarkCitadelPlate", Vector3(side * hull_dimensions.x * 0.54, 0.0, hull_dimensions.z * 0.02), Vector3(hull_dimensions.x * 0.2, hull_dimensions.y * 0.82, hull_dimensions.z * 0.64), visual_color.lightened(0.02), 0.0, profile.hull_texture_path)
+				var shield_vane := _add_visual_block("BulwarkShieldVane", Vector3(side * hull_dimensions.x * 0.46, hull_dimensions.y * 0.2, -hull_dimensions.z * 0.45), Vector3(hull_dimensions.x * 0.22, hull_dimensions.y * 0.18, hull_dimensions.z * 0.22), profile.accent_color, 0.12, profile.hull_texture_path)
+				shield_vane.rotation_degrees.y = side * 24.0
 
 func _build_hostile_fins(hull_dimensions: Vector3, profile: ShipVisualProfile) -> void:
 	for side in [-1.0, 1.0]:
@@ -181,6 +202,57 @@ func _add_engine_nacelle(side: float, hull_dimensions: Vector3, profile: ShipVis
 	emitter.rotation.x = PI * 0.5
 	emitter.material_override = _make_material(profile.engine_color, profile.engine_emission)
 	add_child(emitter)
+	var plume := MeshInstance3D.new()
+	plume.name = "EnginePlume"
+	var plume_mesh := PrismMesh.new()
+	plume_mesh.size = Vector3(hull_dimensions.x * 0.1, hull_dimensions.y * 0.16, hull_dimensions.z * 0.26)
+	plume.mesh = plume_mesh
+	plume.position = engine_position + Vector3(0.0, 0.0, hull_dimensions.z * 0.32)
+	plume.rotation.y = PI
+	var plume_color := Color(profile.engine_color.r, profile.engine_color.g, profile.engine_color.b, 0.42)
+	var plume_material := _make_material(plume_color, profile.engine_emission * 0.72)
+	plume_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	plume.material_override = plume_material
+	add_child(plume)
+
+func _build_damage_indicators() -> void:
+	if definition == null or String(definition.role) in ["fighter", "drone", "interceptor", "scout"]:
+		return
+	var dimensions := definition.dimensions_m
+	var positions := [
+		Vector3(-dimensions.x * 0.31, dimensions.y * 0.34, -dimensions.z * 0.12),
+		Vector3(dimensions.x * 0.27, dimensions.y * 0.4, dimensions.z * 0.18),
+		Vector3(-dimensions.x * 0.18, -dimensions.y * 0.38, dimensions.z * 0.04),
+		Vector3(dimensions.x * 0.12, dimensions.y * 0.28, -dimensions.z * 0.34)
+	]
+	for index in positions.size():
+		var breach := MeshInstance3D.new()
+		breach.name = "DamageBreach%02d" % index
+		var breach_mesh := BoxMesh.new()
+		breach_mesh.size = Vector3(dimensions.x * 0.16, dimensions.y * 0.045, dimensions.z * 0.11)
+		breach.mesh = breach_mesh
+		breach.position = positions[index]
+		breach.material_override = _make_material(Color(0.9, 0.15 + index * 0.04, 0.025), 0.55 + index * 0.15)
+		breach.visible = false
+		add_child(breach)
+		damage_indicator_nodes.append(breach)
+
+func _update_damage_presentation() -> void:
+	if damage_state == null or damage_indicator_nodes.is_empty():
+		return
+	var layers := damage_state.normalized_layers()
+	var next_stage := 0
+	if layers.y < 0.68:
+		next_stage = 1
+	if layers.y < 0.28:
+		next_stage = 2
+	if layers.z < 0.7:
+		next_stage = 3
+	if layers.z < 0.35:
+		next_stage = 4
+	damage_visual_stage = next_stage
+	for index in damage_indicator_nodes.size():
+		damage_indicator_nodes[index].visible = index < damage_visual_stage
 
 func _add_visual_block(node_name: String, position_value: Vector3, size_value: Vector3, color: Color, emission_energy: float = 0.0, texture_path: String = "") -> MeshInstance3D:
 	var block := MeshInstance3D.new()
@@ -218,6 +290,12 @@ func _physics_process(delta: float) -> void:
 	if is_destroyed or definition == null:
 		return
 	damage_state.tick(delta)
+	damage_effect_cooldown = maxf(0.0, damage_effect_cooldown - delta)
+	if damage_visual_stage >= 3 and damage_effect_cooldown <= 0.0:
+		damage_effect_cooldown = 1.35 if damage_visual_stage == 3 else 0.72
+		var damage_vfx := _combat_vfx()
+		if damage_vfx != null:
+			damage_vfx.spawn_burst("spark", global_position + Vector3(sin(float(Time.get_ticks_msec())) * collision_radius_m * 0.35, collision_radius_m * 0.18, cos(float(Time.get_ticks_msec()) * 0.7) * collision_radius_m * 0.32), 0.5)
 	weapon_cooldown = maxf(0.0, weapon_cooldown - delta)
 	if ai_enabled:
 		_process_ai(delta)
@@ -324,12 +402,13 @@ func spawn_projectile(weapon: WeaponDefinition, start: Vector3, fire_direction: 
 		start,
 		fire_direction,
 		weapon.projectile_speed_mps,
-		weapon.damage,
+		weapon.damage * outgoing_damage_multiplier,
 		weapon.range_m * 1.15,
 		tracked_target,
 		2.5 if weapon.tracks_target else 0.0,
 		weapon.role == "missile",
-		weapon.role
+		weapon.role,
+		definition.ship_id
 	)
 	var vfx := _combat_vfx()
 	if vfx != null:
@@ -339,12 +418,19 @@ func spawn_projectile(weapon: WeaponDefinition, start: Vector3, fire_direction: 
 func receive_damage(amount: float, source_entity_id: StringName = &"") -> void:
 	if is_destroyed:
 		return
+	var resolved_amount := maxf(0.0, amount * incoming_damage_multiplier)
+	if resolved_amount <= 0.0:
+		var blocked_vfx := _combat_vfx()
+		if blocked_vfx != null:
+			blocked_vfx.spawn_damage_effect(global_position, true, 0.45)
+		return
 	var shielded := damage_state.shields > 0.0
-	damage_state.apply_damage(amount)
+	damage_state.apply_damage(resolved_amount)
+	_update_damage_presentation()
 	var vfx := _combat_vfx()
 	if vfx != null:
-		vfx.spawn_damage_effect(global_position, shielded, clampf(amount / 24.0, 0.55, 1.8))
-	damage_received.emit(stable_entity_id, source_entity_id, amount)
+		vfx.spawn_damage_effect(global_position, shielded, clampf(resolved_amount / 24.0, 0.55, 1.8))
+	damage_received.emit(stable_entity_id, source_entity_id, resolved_amount)
 
 func resolve_entity(entity_id: StringName) -> CombatShip:
 	var registry := _combat_registry()

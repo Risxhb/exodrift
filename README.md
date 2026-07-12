@@ -30,9 +30,13 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 - A centered main menu over a continuously simulated carrier battle, with New Operation, Continue, persistent settings, credits, and return-to-title navigation.
 - A six-step first-operation orientation that teaches helm translation, active sensors, flight operations, the live tactical map, and intent-level orders without pausing combat.
 - Three sector-specific hostile fleets—Acheron, Vesper, and Crucible—with different capital roles, fighter complements, opening formations, weapons, pursuit identities, and battlefield palettes.
+- Three deterministic layouts per sector plus bespoke command battles: Acheron command-net screening, Vesper shield-break pincers, and the Crucible's anchored multi-phase strategic core.
 - Textured, layered capital ships with faction hull plating, tapered armor, command towers, bridge windows, sensor masts, visible turrets, housed engines, and navy/raider/alien silhouette language.
+- Named escorts and fighter classes use role-specific geometry, faction projectile palettes, engine trails, progressive breach indicators, damage sparks, and brighter fleet lighting for at-a-glance combat identification.
 - Twelve persistent named officers across six departments, with assignments, tactical effects, traits, bonds, injuries, rescue, recovery, succession, and permanent death.
-- Supply-funded treatment, earned promotions, requisition recruitment, rare officer unlocks, and deterministic operational events with authored radio and relationship outcomes.
+- Supply-funded treatment, earned promotions, requisition recruitment, rare officer unlocks, and ten deterministic operational events with authored radio and relationship outcomes.
+- Adaptive three-sector procedural music, combat-pressure layering, faction-aware effects, and encounter-phase radio stingers with independent Master/Music/SFX controls.
+- Atomic autosaves with a recoverable backup, corrupt-save fallback, New Operation confirmation, persistent keyboard remapping, and an in-game playtest debrief that exports structured telemetry and tester prompts.
 
 ## Run locally
 
@@ -45,6 +49,8 @@ godot --path .
 The packaged Windows build is generated at `build/ProjectSidebay.exe`. The GitHub Pages artifact lives in `web/`; the playable Godot export is nested under `web/play/` so the repository can present a full showcase page first.
 
 ## Controls
+
+All listed keyboard actions can be remapped from **Settings → Remap Controls**.
 
 - `W/S`, `A/D`, `Space/C`: fore/aft, lateral, and vertical thrust
 - `Shift`, `Ctrl`: boost and brake
@@ -62,16 +68,21 @@ The packaged Windows build is generated at `build/ProjectSidebay.exe`. The GitHu
 godot --headless --path . --script tests/run_tests.gd
 godot --headless --path . --script tests/run_integration.gd
 godot --headless --path . --script tests/run_campaign_tests.gd
+godot --headless --path . --script tests/run_m15_encounter_tests.gd
+godot --headless --path . --script tests/run_playtest_tests.gd
+godot --headless --path . --script tests/run_save_settings_tests.gd
+godot --headless --path . --script tests/run_ship_readability_tests.gd
+godot --headless --path . --script tests/run_audio_narrative_tests.gd
 godot --headless --path . --script tests/profile_combat_stress.gd
 godot --path . --script tests/profile_menu.gd
 godot --headless --path . --export-release "Web"
 godot --headless --path . --export-release "Windows Desktop"
 ```
 
-The post-graphics automated 600-frame combat gate measures 144.9 FPS at 1920×1080. The sustained all-wings/flak/missile/point-defense stress gate measures 144.9 FPS with p95 9.72 ms and p99 10.02 ms on the development RTX 3060. See [GAME_BIBLE.md](GAME_BIBLE.md) for acceptance evidence and hardware-target caveats.
+The M15 automated 600-frame combat gate measures 144.9 FPS at 1920×1080 with p95 7.25 ms and p99 7.32 ms. The sustained all-wings/flak/missile/point-defense stress gate measures 144.9 FPS with p95 9.78 ms and p99 10.57 ms on the development RTX 3060. See [GAME_BIBLE.md](GAME_BIBLE.md) for acceptance evidence and hardware-target caveats.
 
 ## GitHub Pages
 
 The checked-in workflow at `.github/workflows/deploy-pages.yml` publishes `web/` when the site changes. In the repository’s **Settings → Pages**, select **GitHub Actions** as the source, then run the workflow or push to `main`.
 
-All currently defined milestones M1–M14 are implemented. M14 establishes the GL-compatible combat graphics, quality-profile, VFX-pooling, registry, and stress-performance foundation.
+All currently defined milestones M1–M15 are implemented. M15 adds authored encounter layouts and boss phases, playtest reporting, stronger ship readability, release-safe saves/settings, adaptive audio, and a broader campaign narrative pool. External first-time-player sessions remain the evidence-gathering step for subsequent balance tuning.

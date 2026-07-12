@@ -399,6 +399,66 @@ static func operational_event_catalog() -> Array[Dictionary]:
 				{"id": &"take_aboard", "label": "BRING KAINE ABOARD", "summary": "Spend 15 supplies; unlock a rare Command recruit.", "supplies": 15},
 				{"id": &"secure_archive", "label": "SECURE THE ARCHIVE", "summary": "Leave the capsule with rescue services; gain 2 intel."}
 			]
+		},
+		{
+			"event_id": &"ghost_convoy",
+			"title": "THE GHOST CONVOY",
+			"body": "Sen has found a convoy transponder repeating from inside the Vesper interference veil. The signal may hide refugees—or a hunter's lure.",
+			"radio": "SEN: The dead do not repeat their registry every eleven seconds.",
+			"choices": [
+				{"id": &"trace_ghost", "label": "TRACE THE SIGNAL", "summary": "Sensors cracks the pattern; gain 2 intel."},
+				{"id": &"mask_and_pass", "label": "MASK AND PASS", "summary": "Protect the fleet signature; gain 2 fuel."}
+			]
+		},
+		{
+			"event_id": &"reactor_hymn",
+			"title": "THE REACTOR HYMN",
+			"body": "Okafor hears a harmonic fracture in the carrier's drive before the instruments register it. A cold shutdown is safe; riding the resonance could recharge the reserve cells.",
+			"radio": "OKAFOR: The core is singing in a key I did not teach it.",
+			"choices": [
+				{"id": &"cold_shutdown", "label": "ORDER COLD SHUTDOWN", "summary": "Spend 10 supplies; restore 15% carrier armor.", "supplies": 10},
+				{"id": &"ride_resonance", "label": "RIDE THE RESONANCE", "summary": "Gain 2 fuel; Engineering becomes Tested."}
+			]
+		},
+		{
+			"event_id": &"deserter_shuttle",
+			"title": "A SHUTTLE WITHOUT COLORS",
+			"body": "An unmarked Acheron shuttle requests asylum. Its pilot knows the command-net rotations, but accepting a deserter will strain already-thin stores.",
+			"radio": "CHEN: They know enough to be valuable—or enough to sound valuable.",
+			"choices": [
+				{"id": &"grant_asylum", "label": "GRANT ASYLUM", "summary": "Spend 8 supplies; gain 2 intel and Command earns Merciful.", "supplies": 8},
+				{"id": &"trade_coordinates", "label": "TRADE COORDINATES", "summary": "Keep distance; gain 1 intel and 1 requisition."}
+			]
+		},
+		{
+			"event_id": &"black_box_garden",
+			"title": "THE BLACK-BOX GARDEN",
+			"body": "Rook has lined the hangar bulkhead with recovered flight recorders. Vale wants them decoded; Ward wants the memorial left undisturbed.",
+			"radio": "ROOK: Every light on that wall belonged to a cockpit.",
+			"choices": [
+				{"id": &"decode_recorders", "label": "DECODE THE RECORDERS", "summary": "Flight studies the final sorties; gain 2 intel and the Veteran trait."},
+				{"id": &"keep_memorial", "label": "KEEP THE MEMORIAL", "summary": "The crew holds vigil; gain 1 requisition and a Flight-Medical bond."}
+			]
+		},
+		{
+			"event_id": &"silent_vote",
+			"title": "THE SILENT VOTE",
+			"body": "A petition asking whether Sidebay should turn back reaches Voss without a signature. Chen recommends naming the fear; Kessler recommends answering it at battle stations.",
+			"radio": "VOSS: Courage is not the absence of a vote to go home.",
+			"choices": [
+				{"id": &"open_assembly", "label": "ADDRESS THE CREW", "summary": "Command shares the burden; Voss and Chen deepen their bond and gain 1 intel."},
+				{"id": &"battle_stations", "label": "CALL BATTLE STATIONS", "summary": "Turn doubt into readiness; gain 2 requisition and Gunnery earns Resolute."}
+			]
+		},
+		{
+			"event_id": &"last_torpedo",
+			"title": "THE LAST TORPEDO",
+			"body": "Kessler has one prewar torpedo left in a sealed magazine. It can be stripped for fleet stores or reserved as a promise for the Crucible core.",
+			"radio": "KESSLER: Some ammunition is a weapon. Some is a decision.",
+			"choices": [
+				{"id": &"strip_torpedo", "label": "STRIP FOR PARTS", "summary": "Recover 18 supplies for the fleet."},
+				{"id": &"reserve_torpedo", "label": "RESERVE THE WEAPON", "summary": "Gunnery gains Patient; gain 2 requisition."}
+			]
 		}
 	]
 
@@ -466,6 +526,59 @@ func resolve_operational_event(choice_id: StringName) -> String:
 			else:
 				intel += 2
 				message = "The command archive yielded +2 intel."
+		&"ghost_convoy":
+			if choice_id == &"trace_ghost":
+				intel += 2
+				_add_trait(assigned_person(&"Sensors"), "Signal Hunter")
+				message = "Sen decoded the ghost convoy; +2 intel."
+			else:
+				fuel += 2
+				message = "The fleet passed under emissions control; +2 fuel."
+		&"reactor_hymn":
+			if choice_id == &"cold_shutdown":
+				supplies -= 10
+				carrier_armor = minf(1.0, carrier_armor + 0.15)
+				message = "The harmonic fracture was repaired; carrier armor restored."
+			else:
+				fuel += 2
+				_add_trait(assigned_person(&"Engineering"), "Tested")
+				message = "Engineering rode the resonance; +2 fuel."
+		&"deserter_shuttle":
+			if choice_id == &"grant_asylum":
+				supplies -= 8
+				intel += 2
+				_add_trait(assigned_person(&"Command"), "Merciful")
+				message = "The deserter entered protective custody; +2 intel."
+			else:
+				intel += 1
+				requisition += 1
+				message = "Coordinates exchanged at distance; +1 intel, +1 requisition."
+		&"black_box_garden":
+			if choice_id == &"decode_recorders":
+				intel += 2
+				_add_trait(assigned_person(&"Flight"), "Veteran")
+				message = "The last sorties became doctrine; +2 intel."
+			else:
+				requisition += 1
+				_add_mutual_bond(&"sora_vale", &"elian_ward")
+				message = "The hangar held vigil; +1 requisition and a new bond."
+		&"silent_vote":
+			if choice_id == &"open_assembly":
+				intel += 1
+				_add_mutual_bond(&"mara_voss", &"ilya_chen")
+				message = "Command named the fleet's fear; +1 intel."
+			else:
+				requisition += 2
+				_add_trait(assigned_person(&"Gunnery"), "Resolute")
+				message = "The crew answered at battle stations; +2 requisition."
+		&"last_torpedo":
+			if choice_id == &"strip_torpedo":
+				supplies += 18
+				message = "The sealed magazine became +18 supplies."
+			else:
+				requisition += 2
+				_add_trait(assigned_person(&"Gunnery"), "Patient")
+				message = "The last torpedo remains reserved; +2 requisition."
 	resolved_operational_event_ids.append(event_id)
 	pending_operational_event.clear()
 	personnel_event_log.append(message)
