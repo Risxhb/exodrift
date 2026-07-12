@@ -1,0 +1,29 @@
+; EXODRIFT: Carrier Command - generated Godot 4 project configuration.
+config_version=5
+
+[application]
+
+config/name="EXODRIFT: Carrier Command"
+run/main_scene="res://scenes/app.tscn"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.003, 0.006, 0.015, 1)
+
+[physics]
+
+3d/default_gravity=0.0
+
+[audio]
+
+default_bus_layout="res://default_bus_layout.tres"

@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#050b12">
+  <meta name="description" content="EXODRIFT: Carrier Command is a single-player action-RTS where you pilot the flagship and command the fleet in real time.">
+  <meta property="og:title" content="EXODRIFT: Carrier Command">
+  <meta property="og:description" content="Pilot the flagship. Command the fleet. Survive the deep strike.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="assets/og-exodrift.png">
+  <link rel="canonical" href="https://risxhb.github.io/">
+  <title>EXODRIFT: Carrier Command</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="site.js" defer></script>
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <header class="nav-shell">
+    <a class="brand" href="#top" aria-label="EXODRIFT home">
+      <span class="brand-mark">EXO</span>
+      <span>EXODRIFT<small>CARRIER COMMAND</small></span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="#overview">Overview</a>
+      <a href="#fleet">Fleet Archive</a>
+      <a href="#personnel">Personnel</a>
+      <a href="#footage">Combat Feed</a>
+      <a href="#roadmap">Roadmap</a>
+      <a href="#other-games">Other Games</a>
+    </nav>
+    <a class="nav-cta" href="https://risxhb.github.io/exodrift/play/">Play Alpha</a>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-media" aria-hidden="true"></div>
+      <div class="hero-vignette" aria-hidden="true"></div>
+      <div class="hero-copy reveal">
+        <p class="eyebrow"><span></span> Tactical carrier action-RTS</p>
+        <h1>EXO<span>DRIFT</span></h1>
+        <p class="subtitle">Carrier Command</p>
+        <p class="tagline">Pilot the flagship. Command the fleet.<br>Survive the deep strike.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="https://risxhb.github.io/exodrift/play/"><b>Deploy Now</b><small>Launch browser alpha</small></a>
+          <a class="button ghost" href="#footage">Watch combat feed</a>
+        </div>
+        <div class="build-note"><i></i> Live development build · PC + Web · Single-player</div>
+      </div>
+      <div class="hero-card reveal">
+        <div class="card-kicker">FLAGSHIP DOSSIER // CVN-01</div>
+        <div class="ship-glyph carrier-glyph"><span></span></div>
+        <div class="hero-card-title">Sidebay-class Carrier</div>
+        <div class="stat"><span>Command</span><b>EX</b></div>
+        <div class="stat"><span>Hangar</span><b>Port / Starboard</b></div>
+        <div class="stat"><span>Role</span><b>Mobile Fleet Base</b></div>
+        <div class="rarity">FLAGSHIP // UNIQUE COMMAND</div>
+      </div>
+      <a class="scroll-cue" href="#overview">SCROLL TO BRIEFING <span>↓</span></a>
+    </section>
+
+    <section class="signal-strip" aria-label="Game highlights">
+      <div><strong>01</strong><span>Direct-pilot<br>carrier combat</span></div>
+      <div><strong>3D</strong><span>Live tactical<br>command map</span></div>
+      <div><strong>∞</strong><span>Continuous<br>real time</span></div>
+      <div><strong>2–3h</strong><span>Branching<br>deep-strike runs</span></div>
+    </section>
+
+    <section class="overview section" id="overview">
+      <div class="section-heading reveal">
+        <p class="eyebrow"><span></span> Command doctrine</p>
+        <h2>You are not above the battle.<br><em>You are inside it.</em></h2>
+        <p>Take the helm of a heavy carrier while issuing orders to persistent wings and capital escorts. Fight command strikes, interceptions, defenses, escorts, captures, and extractions in one uninterrupted battlespace.</p>
+      </div>
+      <div class="pillar-grid">
+        <article class="pillar reveal">
+          <div class="pillar-number">01</div>
+          <h3>Fly the flagship</h3>
+          <p>Command a 120-meter carrier with heavy inertia, braking assist, camera orbit, bounded vertical battlespace, flak, strike missiles, automated defenses, and layered durability.</p>
+        </article>
+        <article class="pillar reveal">
+          <div class="pillar-number">02</div>
+          <h3>Direct the fleet</h3>
+          <p>Open a live holographic map without pausing. Queue moves, attacks, intercepts, escorts, recalls, stances, and formations while your carrier holds course.</p>
+        </article>
+        <article class="pillar reveal">
+          <div class="pillar-number">03</div>
+          <h3>Own the flight cycle</h3>
+          <p>Launch fighters and drones through mirrored side bays. Manage ammunition and endurance, protect recovery lanes, service survivors, and relaunch.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="fleet section" id="fleet">
+      <div class="section-heading compact reveal">
+        <p class="eyebrow"><span></span> Fleet archive</p>
+        <h2>Assemble your <em>battlegroup.</em></h2>
+        <p>Ships are authored tactical sidegrades—not randomized-stat loot. Each hull has a readable role, silhouette, and place in the command network.</p>
+      </div>
+      <div class="fleet-tabs" role="tablist" aria-label="Fleet factions">
+        <button class="active" data-faction="navy">Human Navy</button>
+        <button data-faction="opposition">Acheron Opposition</button>
+      </div>
+      <div class="ship-carousel" data-fleet="navy">
+        <article class="ship-card flagship reveal">
+          <div class="card-top"><span>CVN-01</span><b>FLAGSHIP</b></div>
+          <div class="ship-visual carrier-glyph"><span></span></div>
+          <h3>Sidebay</h3><p class="role">Heavy Carrier</p>
+          <p>Player-piloted mobile base with mirrored launch galleries, command systems, flak batteries, and strike missiles.</p>
+          <div class="traits"><span>COMMAND</span><span>HANGAR</span><span>FORTRESS</span></div>
+        </article>
+        <article class="ship-card reveal">
+          <div class="card-top"><span>FFG-12</span><b>VANGUARD</b></div>
+          <div class="ship-visual frigate-glyph"><span></span></div>
+          <h3>Resolute</h3><p class="role">Missile Frigate</p>
+          <p>A commandable capital escort that screens the carrier and delivers deliberate long-range missile pressure.</p>
+          <div class="traits"><span>MISSILE</span><span>ESCORT</span></div>
+        </article>
+        <article class="ship-card reveal">
+          <div class="card-top"><span>VF-04</span><b>STRIKE WING</b></div>
+          <div class="ship-visual fighter-glyph"><span></span></div>
+          <h3>Raptor</h3><p class="role">Interceptor Squadron</p>
+          <p>Four fast interceptors built to break hostile fighter screens and protect the carrier’s recovery pattern.</p>
+          <div class="traits"><span>INTERCEPT</span><span>SCREEN</span></div>
+        </article>
+        <article class="ship-card reveal">
+          <div class="card-top"><span>RQ-03</span><b>RECON WING</b></div>
+          <div class="ship-visual drone-glyph"><span></span></div>
+          <h3>Watcher</h3><p class="role">Scout Drone Squadron</p>
+          <p>Three sensor drones that resolve uncertain contacts without forcing the carrier to reveal itself with an active ping.</p>
+          <div class="traits"><span>RECON</span><span>IDENTIFY</span></div>
+        </article>
+      </div>
+      <div class="ship-carousel hidden" data-fleet="opposition">
+        <article class="ship-card hostile flagship reveal visible">
+          <div class="card-top"><span>UNKNOWN-01</span><b>HOSTILE COMMAND</b></div>
+          <div class="ship-visual frigate-glyph"><span></span></div>
+          <h3>Acheron</h3><p class="role">Command Frigate</p>
+          <p>The encounter’s priority target. Identify it through the fog of war, penetrate the screen, and destroy it to secure victory.</p>
+          <div class="traits"><span>COMMAND</span><span>MISSILE</span></div>
+        </article>
+        <article class="ship-card hostile reveal visible">
+          <div class="card-top"><span>UNKNOWN-02</span><b>HOSTILE SCREEN</b></div>
+          <div class="ship-visual corvette-glyph"><span></span></div>
+          <h3>Acheron Screen</h3><p class="role">Combat Corvette</p>
+          <p>A fast cannon escort that closes aggressively and forces the battlegroup to divide attention.</p>
+          <div class="traits"><span>BRAWLER</span><span>SCREEN</span></div>
+        </article>
+        <article class="ship-card hostile reveal visible">
+          <div class="card-top"><span>UNKNOWN-03</span><b>HOSTILE WING</b></div>
+          <div class="ship-visual fighter-glyph"><span></span></div>
+          <h3>Acheron Talon</h3><p class="role">Fighter Squadron</p>
+          <p>An aggressive air group that hunts the carrier and tests point defense, flak discipline, and interceptor timing.</p>
+          <div class="traits"><span>ASSAULT</span><span>PURSUIT</span></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="personnel-showcase section" id="personnel">
+      <div class="personnel-copy reveal">
+        <p class="eyebrow"><span></span> The human cost of command</p>
+        <h2>The fleet remembers <em>who made it home.</em></h2>
+        <p>Twelve initial officers serve across Command, Flight, Gunnery, Engineering, Sensors, and Medical. Choose department leads, fund treatment, earn promotions, recruit authored specialists, unlock rare officers, and resolve operational events whose relationships and losses persist.</p>
+        <div class="department-grid">
+          <span>COMMAND<small>Command range</small></span>
+          <span>FLIGHT<small>Wing turnaround</small></span>
+          <span>GUNNERY<small>Weapon damage</small></span>
+          <span>ENGINEERING<small>Carrier hull</small></span>
+          <span>SENSORS<small>Detection range</small></span>
+          <span>MEDICAL<small>Rescue injuries</small></span>
+          <span>EVENTS<small>Authored command choices</small></span>
+          <span>RECRUITMENT<small>Common and rare officers</small></span>
+        </div>
+      </div>
+      <div class="personnel-media">
+        <figure class="personnel-image reveal">
+          <img src="assets/personnel-preview.png" alt="Personnel Command screen showing departments, treatment, promotion, and recruitment">
+          <figcaption>LIVE BUILD // PERSONNEL COMMAND</figcaption>
+        </figure>
+        <figure class="personnel-image reveal">
+          <img src="assets/event-preview.png" alt="Operational event screen presenting two relationship choices">
+          <figcaption>LIVE BUILD // OPERATIONAL EVENT</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="footage section" id="footage">
+      <div class="section-heading compact reveal">
+        <p class="eyebrow"><span></span> Unfiltered combat feed</p>
+        <h2>Captured from the <em>playable build.</em></h2>
+        <p>No pre-rendered gameplay. These captures come directly from the current Godot greybox running at 1080p.</p>
+      </div>
+      <div class="gallery">
+        <figure class="gallery-main reveal">
+          <img src="assets/flight-preview.png" alt="Carrier combat viewed from the third-person flight camera">
+          <figcaption><b>DIRECT COMMAND</b><span>Third-person carrier combat</span><i>LIVE BUILD // 01</i></figcaption>
+        </figure>
+        <figure class="reveal">
+          <img src="assets/tactical-preview.png" alt="Live three-dimensional tactical command map">
+          <figcaption><b>TACTICAL NET</b><span>Issue fleet orders in real time</span><i>LIVE BUILD // 02</i></figcaption>
+        </figure>
+        <figure class="reveal">
+          <img src="assets/campaign-preview.png" alt="Branching three-sector campaign map">
+          <figcaption><b>DEEP STRIKE</b><span>Choose a route, pay its cost</span><i>LIVE BUILD // 03</i></figcaption>
+        </figure>
+        <figure class="reveal">
+          <img src="assets/menu-preview.png" alt="Centered EXODRIFT command menu over a live fleet battle">
+          <figcaption><b>COMMAND SHELL</b><span>Live battle title presentation</span><i>LIVE BUILD // 04</i></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="roadmap section" id="roadmap">
+      <div class="section-heading compact reveal">
+        <p class="eyebrow"><span></span> Development transmission</p>
+        <h2>Playable now. <em>Built in public.</em></h2>
+      </div>
+      <div class="timeline">
+        <div class="timeline-item complete reveal"><span>01</span><div><b>FIRST PLAYABLE</b><h3>Carrier combat loop</h3><p>Flight, weapons, side bays, squadrons, live tactical command, sensors, AI, and win/loss flow.</p></div></div>
+        <div class="timeline-item complete reveal"><span>02</span><div><b>RUN LAYER</b><h3>Three-sector deep strike</h3><p>Branching route, supplies, fuel, intel, forecasts, combat nodes, manual saves, and browser distribution.</p></div></div>
+        <div class="timeline-item complete reveal"><span>03</span><div><b>FLEET PERSISTENCE</b><h3>Condition & buildcraft</h3><p>Battle damage, surviving craft, ammunition, fleet service, module slots, and authored sidegrade unlocks.</p></div></div>
+        <div class="timeline-item complete reveal"><span>04</span><div><b>OBJECTIVE FOUNDATION</b><h3>Interception & withdrawal</h3><p>Command strikes, interception battles, extraction corridors, emergency withdrawal, and reduced-reward partial victories.</p></div></div>
+        <div class="timeline-item complete reveal"><span>05</span><div><b>MISSION CONSEQUENCES</b><h3>No one gets left behind for free</h3><p>Defense, escort, capture, pursuit, escape pods, jump stragglers, after-action rescue, salvage, and persistent losses.</p></div></div>
+        <div class="timeline-item complete reveal"><span>06</span><div><b>PRESENTATION SHELL</b><h3>Command begins at the title screen</h3><p>A centered command menu over a continuously simulated carrier battle, with Continue, settings, credits, and campaign transitions.</p></div></div>
+        <div class="timeline-item complete reveal"><span>07</span><div><b>PERSONNEL COMMAND</b><h3>The names behind the fleet</h3><p>Twelve officers, six departments, tactical assignments, injuries, bonds, rescue outcomes, succession, and permanent death.</p></div></div>
+        <div class="timeline-item complete reveal"><span>08</span><div><b>OPERATIONAL LIVES</b><h3>Careers continue between battles</h3><p>Treatment, promotions, relationship events, radio barks, requisition pools, and rare authored officer unlocks.</p></div></div>
+        <div class="timeline-item current reveal"><span>09</span><div><b>NEXT IN DEVELOPMENT</b><h3>Fleet acquisition</h3><p>Authored escort requisition, replacement hull choices, hangar complements, salvage allocation, and deeper logistics.</p></div></div>
+      </div>
+    </section>
+
+    <section class="final-cta">
+      <div class="final-image" aria-hidden="true"></div>
+      <div class="reveal">
+        <p class="eyebrow"><span></span> Command link established</p>
+        <h2>The fleet is waiting.</h2>
+        <p>Launch the browser build or clone the Godot project and join development from the source of truth.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="https://risxhb.github.io/exodrift/play/"><b>Play EXODRIFT</b><small>Browser alpha</small></a>
+          <a class="button ghost" href="#roadmap">View roadmap</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="other-games section" id="other-games">
+      <div class="section-heading compact reveal">
+        <p class="eyebrow"><span></span> More from Risxhb Games</p>
+        <h2>Choose another <em>world.</em></h2>
+        <p>EXODRIFT is the flagship project, but the existing browser games remain playable from the same home port.</p>
+      </div>
+      <div class="other-game-grid">
+        <a class="other-game-card city-game reveal" href="https://risxhb.github.io/codex-city/">
+          <span>ISOMETRIC CITY BUILDER</span>
+          <h3>Codex City</h3>
+          <p>Build, budget, route, rescue—and keep the city alive when disaster arrives.</p>
+          <b>PLAY CODEX CITY →</b>
+        </a>
+        <a class="other-game-card eve-game reveal" href="https://risxhb.github.io/eve/">
+          <span>PARTY RPG PROTOTYPE</span>
+          <h3>Eve: Moonroot Hollow</h3>
+          <p>Gather your party, cross the village frontier, and descend into the dungeon.</p>
+          <b>ENTER MOONROOT HOLLOW →</b>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="brand"><span class="brand-mark">EXO</span><span>EXODRIFT<small>CARRIER COMMAND</small></span></div>
+    <p>Independent development build. “Project Sidebay” is the internal codename.</p>
+    <p>© 2026 EXODRIFT PROJECT // GODOT 4</p>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,13 @@
+.godot/
+.tools/
+.tmp/
+build/
+Godot/
+export_templates/
+feature_profiles/
+script_templates/
+text_editor_themes/
+*.log
+*.tmp
+Thumbs.db
+Desktop.ini
