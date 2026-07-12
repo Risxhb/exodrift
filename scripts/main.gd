@@ -42,6 +42,9 @@ var emergency_bay_seal: bool = false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	var graphics := _graphics_quality()
+	if graphics != null and not graphics.quality_changed.is_connected(_on_graphics_quality_changed):
+		graphics.quality_changed.connect(_on_graphics_quality_changed)
 	_configure_input_map()
 	_build_environment()
 	_build_battlefield()
@@ -53,6 +56,12 @@ func _ready() -> void:
 	_deploy_initial_forces()
 	_connect_feedback()
 	hud.notify("Passive contacts detected. Launch scouts or press P for active ping.")
+
+func _graphics_quality() -> Node:
+	return get_node_or_null("/root/GraphicsQualityManager")
+
+func _on_graphics_quality_changed(_profile_name: StringName) -> void:
+	_apply_graphics_quality()
 
 func _process(delta: float) -> void:
 	if get_tree().paused or battle_finished:
@@ -149,16 +158,17 @@ func _build_environment() -> void:
 	environment.background_color = Color(0.002, 0.004, 0.012)
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = Color(0.16, 0.22, 0.34)
-	environment.ambient_light_energy = 0.65
+	environment.ambient_light_energy = 0.92
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	world_environment.environment = environment
 	add_child(world_environment)
 	var key_light := DirectionalLight3D.new()
 	key_light.rotation_degrees = Vector3(-38.0, -28.0, 0.0)
 	key_light.light_color = Color(0.65, 0.76, 1.0)
-	key_light.light_energy = 1.15
+	key_light.light_energy = 1.38
 	add_child(key_light)
 	_build_starfield()
+	_apply_graphics_quality()
 
 func _build_starfield() -> void:
 	var mesh := SphereMesh.new()
@@ -185,10 +195,13 @@ func _build_starfield() -> void:
 	stars.multimesh = multimesh
 	add_child(stars)
 	_build_nebula_star_band()
-	_add_distant_body(Vector3(-7600.0, 2800.0, -11200.0), 760.0, Color(0.08, 0.16, 0.28, 1.0), 0.18, Vector3(1.0, 1.0, 1.0))
-	_add_distant_body(Vector3(9200.0, -2100.0, -13800.0), 240.0, Color(1.0, 0.42, 0.12, 1.0), 2.8, Vector3(1.0, 1.0, 1.0))
-	_add_distant_body(Vector3(5600.0, 1800.0, -9800.0), 520.0, Color(0.18, 0.08, 0.34, 0.12), 0.65, Vector3(3.8, 1.3, 2.2))
-	_add_distant_body(Vector3(-4200.0, -2600.0, -8600.0), 430.0, Color(0.04, 0.28, 0.34, 0.10), 0.55, Vector3(4.2, 1.1, 2.7))
+	_build_dust_field()
+	_add_nebula_card(Vector3(-6200.0, 1900.0, -11500.0), Vector2(6200.0, 3000.0), Color(0.48, 0.34, 0.92, 0.5), 2)
+	_add_nebula_card(Vector3(6900.0, -1700.0, -13200.0), Vector2(4800.0, 2300.0), Color(0.18, 0.72, 0.82, 0.34), 3)
+	_add_distant_body(Vector3(-7600.0, 2800.0, -11200.0), 760.0, Color(0.08, 0.16, 0.28, 1.0), 0.18, Vector3(1.0, 1.0, 1.0), 1)
+	_add_distant_body(Vector3(9200.0, -2100.0, -13800.0), 240.0, Color(1.0, 0.42, 0.12, 1.0), 2.8, Vector3(1.0, 1.0, 1.0), 2)
+	_add_distant_body(Vector3(5600.0, 1800.0, -9800.0), 520.0, Color(0.18, 0.08, 0.34, 0.12), 0.65, Vector3(3.8, 1.3, 2.2), 3)
+	_add_distant_body(Vector3(-4200.0, -2600.0, -8600.0), 430.0, Color(0.04, 0.28, 0.34, 0.10), 0.55, Vector3(4.2, 1.1, 2.7), 3)
 
 func _build_nebula_star_band() -> void:
 	var mesh := SphereMesh.new()
@@ -215,9 +228,64 @@ func _build_nebula_star_band() -> void:
 	band.name = "NebulaStarBand"
 	band.multimesh = multimesh
 	band.rotation_degrees = Vector3(18.0, 0.0, -12.0)
+	band.add_to_group("quality_backdrop")
+	band.set_meta("quality_layer", 2)
 	add_child(band)
 
-func _add_distant_body(position_value: Vector3, radius: float, color: Color, emission_energy: float, scale_value: Vector3) -> void:
+func _build_dust_field() -> void:
+	var mesh := SphereMesh.new()
+	mesh.radius = 4.0
+	mesh.height = 8.0
+	mesh.radial_segments = 8
+	mesh.rings = 4
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = Color(0.18, 0.5, 0.7, 0.16)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.emission_enabled = true
+	material.emission = Color(0.08, 0.28, 0.42)
+	mesh.material = material
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.mesh = mesh
+	multimesh.instance_count = 180
+	var random := RandomNumberGenerator.new()
+	random.seed = 190427
+	for index in multimesh.instance_count:
+		var point := Vector3(random.randf_range(-4800.0, 4800.0), random.randf_range(-1300.0, 1300.0), random.randf_range(-6500.0, 3200.0))
+		var scale_value := random.randf_range(0.35, 1.7)
+		multimesh.set_instance_transform(index, Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * scale_value), point))
+	var dust := MultiMeshInstance3D.new()
+	dust.name = "ParallaxDust"
+	dust.multimesh = multimesh
+	dust.add_to_group("quality_backdrop")
+	dust.set_meta("quality_layer", 3)
+	add_child(dust)
+
+func _add_nebula_card(position_value: Vector3, size_value: Vector2, tint: Color, quality_layer: int) -> void:
+	var card := MeshInstance3D.new()
+	card.name = "NebulaBillboard"
+	var mesh := QuadMesh.new()
+	mesh.size = size_value
+	card.mesh = mesh
+	card.position = position_value
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	material.albedo_color = tint
+	var nebula_texture := load("res://assets/textures/nebula_card.svg") as Texture2D
+	material.albedo_texture = nebula_texture
+	material.emission_enabled = true
+	material.emission = Color(tint.r, tint.g, tint.b) * 0.7
+	material.emission_texture = nebula_texture
+	card.material_override = material
+	card.add_to_group("quality_backdrop")
+	card.set_meta("quality_layer", quality_layer)
+	add_child(card)
+
+func _add_distant_body(position_value: Vector3, radius: float, color: Color, emission_energy: float, scale_value: Vector3, quality_layer: int = 1) -> void:
 	var body := MeshInstance3D.new()
 	body.name = "DistantBackdropBody"
 	var mesh := SphereMesh.new()
@@ -234,7 +302,24 @@ func _add_distant_body(position_value: Vector3, radius: float, color: Color, emi
 	material.emission_enabled = true
 	material.emission = Color(color.r, color.g, color.b) * emission_energy
 	body.material_override = material
+	body.add_to_group("quality_backdrop")
+	body.set_meta("quality_layer", quality_layer)
 	add_child(body)
+
+func _apply_graphics_quality() -> void:
+	var graphics := _graphics_quality()
+	var profile: Dictionary = graphics.profile() if graphics != null else {"effect_density": 0.75, "backdrop_layers": 2}
+	var density := clampf(float(profile.get("effect_density", 0.75)), 0.2, 1.0)
+	var backdrop_layers := clampi(int(profile.get("backdrop_layers", 2)), 1, 3)
+	var starfield := get_node_or_null("DeepStarfield") as MultiMeshInstance3D
+	if starfield != null and starfield.multimesh != null:
+		starfield.multimesh.visible_instance_count = int(starfield.multimesh.instance_count * density)
+	var band := get_node_or_null("NebulaStarBand") as MultiMeshInstance3D
+	if band != null and band.multimesh != null:
+		band.multimesh.visible_instance_count = int(band.multimesh.instance_count * density)
+	for backdrop in get_tree().get_nodes_in_group("quality_backdrop"):
+		if backdrop is Node3D and is_ancestor_of(backdrop):
+			backdrop.visible = int(backdrop.get_meta("quality_layer", 1)) <= backdrop_layers
 
 func _build_battlefield() -> void:
 	audio = SidebayAudio.new()

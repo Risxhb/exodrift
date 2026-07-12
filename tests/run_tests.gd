@@ -8,8 +8,9 @@ func _initialize() -> void:
 	_test_command_link_transitions()
 	_test_bay_state_machine()
 	_test_fleet_order_contract()
+	_test_ship_visual_profiles()
 	if failures.is_empty():
-		print("PASS: 5 Sidebay contract suites")
+		print("PASS: 6 Sidebay contract suites")
 		quit(0)
 	else:
 		for failure in failures:
@@ -80,6 +81,12 @@ func _test_fleet_order_contract() -> void:
 	var intercept := FleetOrder.at_entity(FleetOrder.OrderType.INTERCEPT, &"hostile_fighter_wing", 6.0)
 	var escort := FleetOrder.at_entity(FleetOrder.OrderType.ESCORT, &"player_carrier", 7.0)
 	_assert_true(intercept.order_type == FleetOrder.OrderType.INTERCEPT and escort.order_type == FleetOrder.OrderType.ESCORT, "intercept and escort remain first-class order types")
+
+func _test_ship_visual_profiles() -> void:
+	var friendly := ShipVisualProfile.for_ship(&"frigate", &"friendly")
+	var hostile := ShipVisualProfile.for_ship(&"corvette", &"hostile")
+	_assert_true(friendly.engine_color.b > friendly.engine_color.r, "friendly visual profile keeps cool engine identification")
+	_assert_true(hostile.engine_color.r > hostile.engine_color.b and hostile.shoulder_scale.x > friendly.shoulder_scale.x, "hostile corvette profile exposes a distinct hot-engine, broad-shoulder silhouette")
 
 func _assert_true(value: bool, message: String) -> void:
 	if not value:

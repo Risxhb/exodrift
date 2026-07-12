@@ -6,6 +6,12 @@ config_version=5
 config/name="EXODRIFT: Carrier Command"
 run/main_scene="res://scenes/app.tscn"
 
+[autoload]
+
+GraphicsQualityManager="*res://scripts/systems/graphics_quality.gd"
+CombatRegistry="*res://scripts/systems/combat_registry.gd"
+CombatVFX="*res://scripts/systems/combat_vfx.gd"
+
 [display]
 
 window/size/viewport_width=1280

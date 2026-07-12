@@ -192,7 +192,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 
 ## 8. Milestones and acceptance gates
 
-**Implementation status (2026-07-12):** M1–M13 are implemented. Contract, campaign, and integrated battle tests pass; current Web and Windows release exports succeed; presentation, fleet, personnel, and logistics screens have 1280×720 visual captures. After the carrier-combat expansion, the automated stabilized 600-frame combat gate measured 145 FPS at 1920×1080; the last windowed development-PC sample measured 165 FPS (GeForce RTX 3060, GL Compatibility renderer).
+**Implementation status (2026-07-12):** M1–M14 are implemented. Contract, campaign, integrated battle, normal-performance, and sustained-combat stress tests pass; current Web and Windows release exports succeed. The post-graphics 600-frame combat gate measures 144.9 FPS at 1920×1080. The sustained all-wings/flak/missile/point-defense gate measures 144.9 FPS with p95 9.72 ms and p99 10.02 ms on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
 
 ### M1 — Canonical bible and Godot foundation `[IMPLEMENTED]`
 
@@ -286,6 +286,14 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - **Implemented slice (2026-07-12):** CVN Sidebay, CVN Vanguard, and CVN Citadel form a fixed carrier-frame catalog with balanced, assault, and armored-command identities. Balanced, Raptor Strike, and Watcher Recon air groups provide authored 4/3, 5/2, and 3/4 interceptor/scout allocations with distinct ammunition, endurance, and service profiles. Requisition unlocks sector-gated frames and complements; supply-funded deck refits quote their exact repair/rearm cost. Selections persist in version-8 saves and drive tactical identity, movement, durability, weapon output, command/sensor reach, craft counts, stores, endurance, and servicing.
 - **Implemented slice (2026-07-12):** Battle sweeps and salvage nodes recover persistent allocation stock. Fixed recipes convert stock into supplies, fuel, or requisition. Balanced Stores, Lean Burn, and Recovery Rig postures expose exact route fuel/supply and salvage-yield tradeoffs; affordability, node cards, route execution, after-action projections, and version-9 persistence all use the selected posture. No randomized affixes, grind currency, or permanent stat power are introduced.
 
+### M14 — Combat graphics and performance foundation `[IMPLEMENTED]`
+
+- The carrier uses an original modular industrial hull with tapered bow armor, dorsal command mass, textured plating, readable flak mounts and missile cells, housed engine banks, retractable lit galleries, split bay doors, approach markers, and state feedback. Escorts, hostiles, and fighters use role/faction visual profiles without changing combat definitions.
+- GL-compatible shared projectile meshes/materials, bounded reusable impact slots, missile exhaust, flak tracers, muzzle flashes, shield/hull impacts, optional debris, nebula cards, parallax dust, and tiered backdrop visibility replace per-shot mesh/material construction.
+- Saved Low, Medium, and High profiles apply immediately. Windows defaults to High and Web to Medium; cosmetic density, impact budget, trail length, debris, and backdrop layers never alter simulation damage or collision behavior.
+- A maintained weak-reference combat registry replaces repeated scene-wide projectile/entity scans in projectile collision, point defense, sensors, and target resolution. Radar contact reconstruction runs at 10 Hz while pulse and sweep motion remain smooth.
+- The 1920×1080 normal gate passes at 144.9 FPS with p95 7.20 ms/p99 7.29 ms. The sustained stress gate passes at 144.9 FPS with p95 9.72 ms/p99 10.02 ms, projectile-adjusted bounded post-warmup node growth, and zero dropped effects in the measured run.
+
 ## 9. Test matrix
 
 Automated tests cover damage-layer transitions, missile-lock eligibility, FIFO order queues, sensor confidence decay and track drift, command-link transitions, and every valid bay-state transition.
@@ -297,6 +305,8 @@ M11 tests cover camera orbit independence, vertical bounds, authored roster cons
 M12 tests cover treatment quotes and recovery, promotion eligibility and costs, requisition recruitment, rare-candidate unlocks, mutual relationship bonds, authored event selection and outcomes, unaffordable-choice gating, pending-event persistence, event UI flow, and version-5 recruitment migration.
 
 M13 tests cover escort, carrier-yard, and flight-group supplier sector gates; exact requisition, refit, route, and salvage-conversion costs; authored acquisition and selection; unique permanent escort loss; version-9 persistence and older-save migration; dynamic 4/3, 5/2, and 3/4 hangar capacities; logistics and fleet-screen interaction; adjusted route affordability and salvage yields; and propagation of every selected tactical profile into combat.
+
+M14 tests cover ship visual profiles, immediate quality switching, backdrop tier visibility, VFX budgets, original texture resources, shared projectile mesh/material identity, combat-registry population, radar animation, normal p95/p99 frame time, sustained legal maximum fire, all deployed wings, hostile missile pressure, node stability, effect drops, and clean ObjectDB shutdown.
 
 Presentation tests cover menu-first startup, continuous background battle motion, accessibility settings, title-to-campaign fades, manual-save Continue, and return-to-title state preservation.
 
@@ -348,3 +358,4 @@ Each `/goal` owns exactly one milestone. Before work begins, read this bible and
 - **2026-07-12:** Completed M13 with persistent salvage stock, three fixed conversion recipes, three route logistics postures, exact map and executor costs, adjusted recovery yields, version-9 persistence, passing automated suites, clean 1280×720 logistics/fleet captures, and successful Web and Windows release exports. All defined milestones M1–M13 are implemented.
 - **2026-07-12:** Reworked the playable carrier's combat identity around dense flak curtains, four-missile long-range salvos, retractable armored flight galleries, and a closed-bay jump interlock. Reframed the chase camera on the carrier, removed the center crosshair, expanded the procedural space backdrop, and added a pulsing tactical radar. Emergency sealing preserves withdrawal straggler consequences.
 - **2026-07-12:** Completed the carrier-combat stabilization pass: added explicit weapon-cycle/range HUD feedback, removed all headless ObjectDB audio leaks, re-ran every automated suite cleanly, and passed the 600-frame 1920×1080 performance gate at 145 FPS.
+- **2026-07-12:** Completed M14 with an original modular/textured carrier combat presentation, role/faction ship profiles, shared and pooled GL-compatible VFX, saved live quality profiles, a maintained combat registry, 10 Hz radar contact caching, tiered parallax space, direct-render captures, and normal/stress performance gates. Carrier rules, bay/jump safety, sensors, and damage remain unchanged.

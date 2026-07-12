@@ -32,6 +32,7 @@ var armor_bar: ProgressBar
 var hull_bar: ProgressBar
 var notification_time: float = 0.0
 var radar
+var radar_title: Label
 
 func configure(
 	player_carrier: PlayerCarrier,
@@ -92,7 +93,7 @@ func _build_ui() -> void:
 	armor_bar = _bar(root, Vector2(164, 136), Vector2(132, 12), Color(0.95, 0.65, 0.12))
 	hull_bar = _bar(root, Vector2(304, 136), Vector2(132, 12), Color(0.9, 0.15, 0.12))
 	var radar_panel := _panel(root, Vector2(1025, 432), Vector2(230, 220), Color(0.008, 0.035, 0.052, 0.9))
-	var radar_title := _label(radar_panel, Vector2(12, 8), Vector2(206, 24), 13)
+	radar_title = _label(radar_panel, Vector2(12, 8), Vector2(206, 24), 13)
 	radar_title.text = "TACTICAL RADAR // ACTIVE"
 	radar_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	radar = RadarDisplay.new()
@@ -128,6 +129,8 @@ func _process(delta: float) -> void:
 	var flak_status := "READY" if carrier.flak_cooldown <= 0.0 else "CYCLING %.1fs" % carrier.flak_cooldown
 	var missile_status := "READY" if carrier.missile_cooldown <= 0.0 else "RELOAD %.1fs" % carrier.missile_cooldown
 	weapon_label.text = "FLAK CURTAIN  %s  //  %d rounds\nMISSILE SALVO  %s  //  %d weapons  %.1f km" % [flak_status, carrier.flak_burst_count, missile_status, carrier.missile_salvo_count, carrier.missile_weapon.range_m / 1000.0]
+	var graphics := get_node_or_null("/root/GraphicsQualityManager")
+	radar_title.text = "TACTICAL RADAR // %s" % (graphics.profile_label() if graphics != null else "ACTIVE")
 	mode_label.text = "TACTICAL MAP — LIVE" if tactical.enabled else ""
 	_update_target_presentation()
 	if tactical.enabled:

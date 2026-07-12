@@ -30,6 +30,20 @@ func _run() -> void:
 	var camera_to_carrier := carrier.chase_camera.global_position.direction_to(carrier.global_position + carrier.global_transform.basis.y * 3.0)
 	_assert_true(camera_to_carrier.dot(-carrier.chase_camera.global_transform.basis.z) > 0.98 and carrier.aim_direction.dot(-carrier.global_transform.basis.z) > 0.99, "chase camera centers the carrier while weapon aim remains on the carrier forward axis")
 	_assert_true(not game.hud.crosshair_label.visible and game.get_node_or_null("DeepStarfield") != null and game.get_node_or_null("NebulaStarBand") != null, "combat view removes the center crosshair and builds the layered deep-space backdrop")
+	var graphics := root.get_node_or_null("GraphicsQualityManager")
+	var vfx := root.get_node_or_null("CombatVFX")
+	var registry := root.get_node_or_null("CombatRegistry")
+	_assert_true(graphics != null and vfx != null and registry != null, "graphics quality, pooled combat VFX, and combat registry services are available")
+	var initial_quality: StringName = graphics.current_quality
+	graphics.set_quality(&"low", false)
+	await process_frame
+	_assert_true(vfx.active_impact_budget == 24 and not game.get_node("ParallaxDust").visible, "low graphics profile applies its bounded VFX budget and hides tertiary backdrop layers immediately")
+	graphics.set_quality(&"high", false)
+	await process_frame
+	_assert_true(vfx.active_impact_budget == 80 and game.get_node("ParallaxDust").visible, "high graphics profile restores the full pooled VFX budget and parallax backdrop")
+	graphics.set_quality(initial_quality, false)
+	_assert_true(registry.counts().x >= 6, "maintained combat registry tracks the active capital ships and craft without scene-wide projectile queries")
+	_assert_true(ResourceLoader.exists("res://assets/textures/armor_panels.svg") and ResourceLoader.exists("res://assets/textures/nebula_card.svg"), "original GL-compatible armor and nebula textures are packaged as project resources")
 	var radar_phase: float = game.hud.radar.pulse_phase
 	for _frame in 3:
 		await process_frame
@@ -47,6 +61,15 @@ func _run() -> void:
 	var flak_before := _source_projectile_count(carrier.stable_entity_id)
 	_assert_true(carrier.fire_flak(), "manual flak barrage fires when its cycle is ready")
 	_assert_true(_source_projectile_count(carrier.stable_entity_id) - flak_before == carrier.flak_burst_count, "manual flak creates the full seven-round defensive burst")
+	var flak_visuals: Array[SidebayProjectile] = []
+	for candidate in get_nodes_in_group("projectiles"):
+		if candidate is SidebayProjectile and candidate.source_entity_id == carrier.stable_entity_id:
+			flak_visuals.append(candidate)
+	_assert_true(flak_visuals.size() >= 2 and flak_visuals[0].get_child_count() > 0 and flak_visuals[1].get_child_count() > 0, "flak simulation nodes receive reusable shared-resource tracer visuals")
+	if flak_visuals.size() >= 2:
+		var first_core := flak_visuals[0].get_child(0).get_child(0) as MeshInstance3D
+		var second_core := flak_visuals[1].get_child(0).get_child(0) as MeshInstance3D
+		_assert_true(first_core.mesh == second_core.mesh and first_core.material_override == second_core.material_override, "flak shots share mesh and material resources instead of allocating per shot")
 	_clear_source_projectiles(carrier.stable_entity_id)
 	await process_frame
 	carrier.missile_cooldown = 0.0

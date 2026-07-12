@@ -3,6 +3,9 @@ extends CharacterBody3D
 
 const VERTICAL_BATTLESPACE_LIMIT_M := 1400.0
 
+static var armor_panel_texture: Texture2D
+static var deck_marking_texture: Texture2D
+
 signal ship_destroyed(entity_id: StringName)
 signal damage_received(entity_id: StringName, source_entity_id: StringName, amount: float)
 signal order_acknowledged(entity_id: StringName, message: String)
@@ -37,19 +40,41 @@ func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: 
 	collision_radius_m = maxf(definition.dimensions_m.x, definition.dimensions_m.z) * 0.35
 	add_to_group("combat_entities")
 	add_to_group("team_%s" % team)
+	var registry := _combat_registry()
+	if registry != null:
+		registry.register_combat_entity(self)
 	_build_visual()
 
+func _exit_tree() -> void:
+	var registry := _combat_registry()
+	if registry != null:
+		registry.unregister_combat_entity(self)
+
+func _combat_registry() -> Node:
+	return get_node_or_null("/root/CombatRegistry")
+
+func _combat_vfx() -> Node:
+	return get_node_or_null("/root/CombatVFX")
+
 func _build_visual() -> void:
+	var hull_dimensions := definition.dimensions_m
+	var profile := ShipVisualProfile.for_ship(StringName(definition.role), team)
 	var body := MeshInstance3D.new()
 	body.name = "Hull"
 	var mesh := BoxMesh.new()
-	mesh.size = definition.dimensions_m
+	mesh.size = hull_dimensions * profile.core_scale
 	body.mesh = mesh
 	body.material_override = _make_material(visual_color, 0.1)
 	add_child(body)
+	_add_visual_block("DorsalArmor", Vector3(0.0, hull_dimensions.y * 0.38, hull_dimensions.z * 0.05), hull_dimensions * profile.dorsal_scale, visual_color.lightened(0.08))
+	_add_visual_block("Keel", Vector3(0.0, -hull_dimensions.y * 0.38, hull_dimensions.z * 0.08), hull_dimensions * profile.keel_scale, visual_color.darkened(0.22))
+	for side in [-1.0, 1.0]:
+		_add_visual_block("ArmorShoulder", Vector3(side * hull_dimensions.x * 0.43, 0.0, hull_dimensions.z * 0.08), hull_dimensions * profile.shoulder_scale, visual_color.darkened(0.08))
+		_add_visual_block("EngineBank", Vector3(side * hull_dimensions.x * 0.28, 0.0, hull_dimensions.z * 0.46), hull_dimensions * profile.engine_scale, profile.engine_color, profile.engine_emission)
 	var nose := MeshInstance3D.new()
+	nose.name = "ArmoredBow"
 	var nose_mesh := PrismMesh.new()
-	nose_mesh.size = Vector3(definition.dimensions_m.x * 0.72, definition.dimensions_m.y * 0.7, definition.dimensions_m.z * 0.3)
+	nose_mesh.size = hull_dimensions * profile.bow_scale
 	nose.mesh = nose_mesh
 	nose.position.z = -definition.dimensions_m.z * 0.62
 	nose.rotation.y = PI
@@ -61,11 +86,28 @@ func _build_visual() -> void:
 	collision.shape = shape
 	add_child(collision)
 
+func _add_visual_block(node_name: String, position_value: Vector3, size_value: Vector3, color: Color, emission_energy: float = 0.0) -> MeshInstance3D:
+	var block := MeshInstance3D.new()
+	block.name = node_name
+	var mesh := BoxMesh.new()
+	mesh.size = size_value
+	block.mesh = mesh
+	block.position = position_value
+	block.material_override = _make_material(color, emission_energy)
+	add_child(block)
+	return block
+
 func _make_material(color: Color, emission_energy: float = 0.0) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
 	material.metallic = 0.65
 	material.roughness = 0.42
+	if emission_energy <= 0.2:
+		material.albedo_color = color.lightened(0.34)
+		if armor_panel_texture == null:
+			armor_panel_texture = load("res://assets/textures/armor_panels.svg") as Texture2D
+		material.albedo_texture = armor_panel_texture
+		material.uv1_scale = Vector3(3.0, 3.0, 3.0)
 	if emission_energy > 0.0:
 		material.emission_enabled = true
 		material.emission = color * emission_energy
@@ -188,25 +230,34 @@ func spawn_projectile(weapon: WeaponDefinition, start: Vector3, fire_direction: 
 		weapon.role == "missile",
 		weapon.role
 	)
+	var vfx := _combat_vfx()
+	if vfx != null:
+		vfx.spawn_burst("muzzle", start, 0.72 if weapon.role == "missile" else 0.42)
 	return projectile
 
 func receive_damage(amount: float, source_entity_id: StringName = &"") -> void:
 	if is_destroyed:
 		return
+	var shielded := damage_state.shields > 0.0
 	damage_state.apply_damage(amount)
+	var vfx := _combat_vfx()
+	if vfx != null:
+		vfx.spawn_damage_effect(global_position, shielded, clampf(amount / 24.0, 0.55, 1.8))
 	damage_received.emit(stable_entity_id, source_entity_id, amount)
 
 func resolve_entity(entity_id: StringName) -> CombatShip:
-	for candidate in get_tree().get_nodes_in_group("combat_entities"):
-		if candidate is CombatShip and candidate.stable_entity_id == entity_id:
-			return candidate
-	return null
+	var registry := _combat_registry()
+	var candidate: Node = registry.resolve_combat_entity(entity_id) if registry != null else null
+	return candidate as CombatShip
 
 func _on_destroyed() -> void:
 	if is_destroyed:
 		return
 	is_destroyed = true
 	velocity = Vector3.ZERO
+	var vfx := _combat_vfx()
+	if vfx != null:
+		vfx.spawn_burst("hull", global_position, 2.2)
 	ship_destroyed.emit(stable_entity_id)
 	var tween := create_tween()
 	tween.tween_property(self, "scale", Vector3.ZERO, 0.45)

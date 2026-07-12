@@ -8,6 +8,24 @@ var ammunition: int = 0
 var endurance_seconds: float = 0.0
 var home_squadron: SidebaySquadron
 
+func _build_visual() -> void:
+	var fuselage := MeshInstance3D.new()
+	fuselage.name = "FighterFuselage"
+	var fuselage_mesh := PrismMesh.new()
+	fuselage_mesh.size = Vector3(definition.dimensions_m.x * 0.42, definition.dimensions_m.y * 0.72, definition.dimensions_m.z)
+	fuselage.mesh = fuselage_mesh
+	fuselage.rotation.y = PI
+	fuselage.material_override = _make_material(visual_color, 0.08)
+	add_child(fuselage)
+	var wing := _add_visual_block("FighterWing", Vector3(0.0, 0.0, definition.dimensions_m.z * 0.12), Vector3(definition.dimensions_m.x, definition.dimensions_m.y * 0.18, definition.dimensions_m.z * 0.42), visual_color.darkened(0.08))
+	wing.rotation_degrees.z = -4.0 if team == &"friendly" else 8.0
+	_add_visual_block("FighterEngine", Vector3(0.0, 0.0, definition.dimensions_m.z * 0.5), Vector3(definition.dimensions_m.x * 0.24, definition.dimensions_m.y * 0.24, 1.2), Color(0.12, 0.72, 1.0) if team == &"friendly" else Color(1.0, 0.22, 0.04), 3.4)
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = definition.dimensions_m
+	collision.shape = shape
+	add_child(collision)
+
 func configure_craft(
 	ship_definition: ShipDefinition,
 	entity_id: StringName,

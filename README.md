@@ -16,6 +16,7 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 - A four-craft Raptor interceptor wing, three Watcher scout drones, and the commandable missile frigate `ISS Resolute`.
 - Visible launch, engagement, recall, side-bay recovery, servicing, relaunch, and armored bay-retraction cycles with a closed-bay jump interlock.
 - Layered deep-space scenery and a pulsing tactical radar plotting uncertain and identified sensor contacts.
+- Modular textured capital-ship silhouettes, low-node fighter geometry, pooled combat flashes, missile exhaust, shield/hull feedback, and saved Low/Medium/High graphics profiles shared by Windows and Web.
 - Strict sensor fog with uncertain contacts, active emissions, identification requirements, stale tracks, and command-link loss.
 - Live 3D fleet command with selection, move, attack, intercept, escort, hold, recall, withdraw, stances, formations, and queued orders.
 - An 18-node, three-sector run map with fuel, supplies, intel, forecasts, combat transitions, and manual versioned saves.
@@ -57,15 +58,16 @@ The packaged Windows build is generated at `build/ProjectSidebay.exe`. The GitHu
 godot --headless --path . --script tests/run_tests.gd
 godot --headless --path . --script tests/run_integration.gd
 godot --headless --path . --script tests/run_campaign_tests.gd
+godot --headless --path . --script tests/profile_combat_stress.gd
 godot --path . --script tests/profile_menu.gd
 godot --headless --path . --export-release "Web"
 godot --headless --path . --export-release "Windows Desktop"
 ```
 
-The last windowed development-PC gates measured 157.6 FPS for the animated menu and 165 FPS for the complete combat force at 1920×1080. The post-expansion automated 600-frame combat gate measures 145 FPS. See [GAME_BIBLE.md](GAME_BIBLE.md) for milestone acceptance evidence and current design truth.
+The post-graphics automated 600-frame combat gate measures 144.9 FPS at 1920×1080. The sustained all-wings/flak/missile/point-defense stress gate measures 144.9 FPS with p95 9.72 ms and p99 10.02 ms on the development RTX 3060. See [GAME_BIBLE.md](GAME_BIBLE.md) for acceptance evidence and hardware-target caveats.
 
 ## GitHub Pages
 
 The checked-in workflow at `.github/workflows/deploy-pages.yml` publishes `web/` when the site changes. In the repository’s **Settings → Pages**, select **GitHub Actions** as the source, then run the workflow or push to `main`.
 
-All currently defined milestones M1–M13 are implemented. M13 completes authored fleet acquisition, carrier and air-group sidegrades, salvage allocation, and route-level operational logistics.
+All currently defined milestones M1–M14 are implemented. M14 establishes the GL-compatible combat graphics, quality-profile, VFX-pooling, registry, and stress-performance foundation.
