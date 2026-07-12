@@ -1,6 +1,7 @@
 extends Node3D
 
 const OnboardingController := preload("res://scripts/systems/onboarding_controller.gd")
+const EncounterDirector := preload("res://scripts/systems/encounter_director.gd")
 
 signal return_to_campaign(victory: bool, battle_report: Dictionary)
 
@@ -44,6 +45,7 @@ var escape_pods: Array[Dictionary] = []
 var destroyed_hostile_count: int = 0
 var emergency_bay_seal: bool = false
 var onboarding: ExodriftOnboardingController
+var encounter: ExodriftEncounterDirector
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -54,13 +56,22 @@ func _ready() -> void:
 	_build_environment()
 	_build_battlefield()
 	_configure_objective()
+	encounter = EncounterDirector.new()
+	add_child(encounter)
+	encounter.configure(self)
+	audio.configure_sector(campaign_sector_index, encounter.is_sector_command)
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		recorder.begin_battle({"node_id": String(campaign_node_id), "sector": campaign_sector_index, "layout": String(encounter.layout_id), "objective": campaign_objective_type, "boss": encounter.is_sector_command})
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if OS.has_feature("web") else Input.MOUSE_MODE_CAPTURED
 	await get_tree().process_frame
 	await get_tree().process_frame
 	_apply_campaign_fleet_snapshot()
 	_deploy_initial_forces()
 	_connect_feedback()
-	hud.notify("Passive contacts detected. Launch scouts or press P for active ping.")
+	var opening_call := "SENSORS: Passive contacts detected. Launch scouts or use active ping."
+	hud.notify(opening_call)
+	audio.play_radio(opening_call, 0.32)
 	if guided_onboarding:
 		onboarding = OnboardingController.new()
 		add_child(onboarding)
@@ -80,10 +91,16 @@ func _process(delta: float) -> void:
 		escort.command_link.update_for_distance(escort.global_position.distance_to(carrier.global_position), carrier.definition.command_range_m)
 	if not tactical.enabled and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		if carrier.fire_flak():
+			var recorder := _playtest_recorder()
+			if recorder != null:
+				recorder.increment(&"flak_barrages")
 			audio.play_tone(180.0, 0.045, -28.0)
 	_update_target_lock()
 	_process_objective(delta)
 	_process_escape_pods()
+	var carrier_pressure := 1.0 - carrier.damage_state.normalized_layers().z if carrier.damage_state != null else 0.0
+	var boss_pressure := 0.2 if encounter != null and encounter.is_sector_command else 0.0
+	audio.set_intensity(clampf(0.22 + carrier_pressure * 0.58 + boss_pressure, 0.0, 1.0))
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -95,8 +112,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 	if battle_finished or get_tree().paused:
 		return
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_TAB:
+	if event.is_action_pressed("toggle_tactical"):
 		tactical.set_enabled(not tactical.enabled)
+		if tactical.enabled:
+			var recorder := _playtest_recorder()
+			if recorder != null:
+				recorder.increment(&"tactical_opens")
 		hud.notify("Tactical map is live; carrier maintains helm orders." if tactical.enabled else "Direct flight control restored.")
 		audio.play_tone(620.0 if tactical.enabled else 420.0, 0.1)
 		return
@@ -126,39 +147,29 @@ func _unhandled_input(event: InputEvent) -> void:
 			if target_lock == null:
 				hud.notify("Missile rejected: no identified target in lock cone")
 			elif carrier.fire_missile(target_lock):
+				var recorder := _playtest_recorder()
+				if recorder != null:
+					recorder.increment(&"missile_salvos")
 				hud.notify("LONG-RANGE SALVO AWAY — %d missiles tracking %s" % [carrier.missile_salvo_count, target_lock.display_name])
 				audio.play_tone(110.0, 0.3, -14.0)
-	elif event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
-			KEY_P:
-				sensors.emit_active_ping()
-				hud.notify("ACTIVE PING — emissions reveal the carrier")
-				audio.play_tone(880.0, 0.45, -12.0)
-			KEY_Z:
-				_toggle_wing(interceptor)
-			KEY_X:
-				_toggle_wing(scout)
-			KEY_V:
-				request_withdrawal()
+	elif event.is_action_pressed("sensor_ping"):
+		sensors.emit_active_ping()
+		var recorder := _playtest_recorder()
+		if recorder != null:
+			recorder.increment(&"active_pings")
+		hud.notify("ACTIVE PING — emissions reveal the carrier")
+		audio.play_tone(880.0, 0.45, -12.0)
+	elif event.is_action_pressed("interceptor_wing"):
+		_toggle_wing(interceptor)
+	elif event.is_action_pressed("scout_wing"):
+		_toggle_wing(scout)
+	elif event.is_action_pressed("jump_prep"):
+		request_withdrawal()
 
 func _configure_input_map() -> void:
-	var bindings := {
-		"move_forward": KEY_W,
-		"move_backward": KEY_S,
-		"move_left": KEY_A,
-		"move_right": KEY_D,
-		"move_up": KEY_SPACE,
-		"move_down": KEY_C,
-		"boost": KEY_SHIFT,
-		"brake": KEY_CTRL
-	}
-	for action in bindings:
-		if not InputMap.has_action(action):
-			InputMap.add_action(action)
-		var key_event := InputEventKey.new()
-		key_event.physical_keycode = bindings[action]
-		if not InputMap.action_has_event(action, key_event):
-			InputMap.action_add_event(action, key_event)
+	var config := ConfigFile.new()
+	config.load("user://exodrift_settings.cfg")
+	ExodriftInputSettings.load_bindings(config)
 
 func _sector_encounter_profile() -> Dictionary:
 	match clampi(campaign_sector_index, 0, 2):
@@ -348,15 +359,23 @@ func _build_environment() -> void:
 	environment.background_color = sector.background_color
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = sector.ambient_color
-	environment.ambient_light_energy = 0.92
+	environment.ambient_light_energy = 1.08
+	environment.reflected_light_source = Environment.REFLECTION_SOURCE_BG
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	world_environment.environment = environment
 	add_child(world_environment)
 	var key_light := DirectionalLight3D.new()
 	key_light.rotation_degrees = Vector3(-38.0, -28.0, 0.0)
 	key_light.light_color = sector.key_light_color
-	key_light.light_energy = 1.38
+	key_light.light_energy = 1.58
 	add_child(key_light)
+	var fill_light := DirectionalLight3D.new()
+	fill_light.name = "FleetFillLight"
+	fill_light.rotation_degrees = Vector3(28.0, 148.0, 8.0)
+	fill_light.light_color = (sector.key_light_color as Color).lerp(Color(0.28, 0.48, 0.72), 0.58)
+	fill_light.light_energy = 0.62
+	fill_light.shadow_enabled = false
+	add_child(fill_light)
 	_build_starfield()
 	_apply_graphics_quality()
 
@@ -566,7 +585,8 @@ func _build_battlefield() -> void:
 
 func _deploy_initial_forces() -> void:
 	var sector := _sector_encounter_profile()
-	hostile_fighters.start_deployed(sector.fighter_position)
+	var fighter_position: Vector3 = get_meta("encounter_fighter_position", sector.fighter_position)
+	hostile_fighters.start_deployed(fighter_position)
 	var priority_target_id := objective_ship.stable_entity_id if is_instance_valid(objective_ship) else carrier.stable_entity_id
 	var priority_attack := FleetOrder.at_entity(FleetOrder.OrderType.ATTACK, priority_target_id, elapsed_seconds)
 	priority_attack.requires_command_link = false
@@ -626,13 +646,22 @@ func _toggle_wing(wing: SidebaySquadron) -> void:
 		return
 	if wing.operation.state == BayOperation.State.READY:
 		if wing.request_launch():
+			var recorder := _playtest_recorder()
+			if recorder != null:
+				recorder.increment(&"wing_launches")
 			audio.play_tone(340.0, 0.16)
 	elif wing.operation.state in [BayOperation.State.DEPLOYED, BayOperation.State.LAUNCHING]:
 		wing.request_recall()
+		var recorder := _playtest_recorder()
+		if recorder != null:
+			recorder.increment(&"wing_recalls")
 	else:
 		hud.notify("%s is %s" % [wing.display_name, wing.operation.label()])
 
 func _on_order_feedback(_entity_id: StringName, message: String) -> void:
+	var recorder := _playtest_recorder()
+	if recorder != null and message.contains("acknowledges"):
+		recorder.increment(&"orders_issued")
 	if hud != null:
 		hud.notify(message)
 
@@ -823,6 +852,9 @@ func request_withdrawal() -> void:
 			audio.play_tone(190.0, 0.55, -8.0)
 		return
 	extraction_requested = true
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		recorder.increment(&"withdrawals")
 	battle_outcome = "withdrawal"
 	extraction_position = carrier.global_position + carrier.global_transform.basis.z.normalized() * 2400.0 + Vector3.UP * 120.0
 	_spawn_extraction_beacon()
@@ -926,8 +958,11 @@ func _finish_battle(victory: bool, outcome: String = "victory") -> void:
 	battle_finished = true
 	battle_result_victory = victory
 	battle_outcome = outcome
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		recorder.finish_battle(_create_battle_report())
 	hud.set_result(victory, "Press Enter to return to sector map" if hosted_campaign else "Press Enter to restart", outcome)
-	audio.play_tone(740.0 if victory else 90.0, 0.8, -10.0)
+	audio.play_stinger(victory)
 	get_tree().paused = true
 
 func _toggle_pause() -> void:
@@ -948,6 +983,9 @@ func _restart_encounter() -> void:
 func _installed_module(slot: String) -> StringName:
 	var installed: Dictionary = campaign_fleet_snapshot.get("installed_modules", {})
 	return StringName(installed.get(slot, ""))
+
+func _playtest_recorder() -> ExodriftPlaytestRecorder:
+	return get_node_or_null("/root/PlaytestRecorder") as ExodriftPlaytestRecorder
 
 func _apply_campaign_fleet_snapshot() -> void:
 	if campaign_fleet_snapshot.is_empty():

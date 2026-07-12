@@ -14,6 +14,7 @@ var collision_radius_m: float = 12.0
 var distance_travelled_m: float = 0.0
 var expired: bool = false
 var projectile_role: String = ""
+var source_visual_id: StringName = &""
 
 func configure(
 	projectile_team: StringName,
@@ -26,7 +27,8 @@ func configure(
 	tracked_target: CombatShip = null,
 	tracking: float = 0.0,
 	interceptable: bool = false,
-	role_value: String = ""
+	role_value: String = "",
+	visual_id: StringName = &""
 ) -> void:
 	team = projectile_team
 	source_entity_id = source_id
@@ -39,6 +41,7 @@ func configure(
 	tracking_strength = tracking
 	can_be_intercepted = interceptable
 	projectile_role = role_value
+	source_visual_id = visual_id
 	add_to_group("projectiles")
 	add_to_group("projectiles_%s" % team)
 	var registry := _combat_registry()
@@ -61,7 +64,7 @@ func _combat_vfx() -> Node:
 func _build_visual(is_missile: bool) -> void:
 	var vfx := _combat_vfx()
 	if vfx != null:
-		add_child(vfx.create_projectile_visual(projectile_role, is_missile))
+		add_child(vfx.create_projectile_visual(projectile_role, is_missile, team, source_visual_id))
 
 func _physics_process(delta: float) -> void:
 	if expired:
@@ -106,5 +109,5 @@ func expire() -> void:
 	expired = true
 	var vfx := _combat_vfx()
 	if vfx != null:
-		vfx.spawn_burst(projectile_role, global_position)
+		vfx.spawn_faction_burst(projectile_role, global_position, team, source_visual_id)
 	queue_free()

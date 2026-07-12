@@ -192,7 +192,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 
 ## 8. Milestones and acceptance gates
 
-**Implementation status (2026-07-12):** M1–M14 are implemented. Contract, campaign, integrated battle, normal-performance, and sustained-combat stress tests pass; current Web and Windows release exports succeed. The post-graphics 600-frame combat gate measures 144.9 FPS at 1920×1080. The sustained all-wings/flak/missile/point-defense gate measures 144.9 FPS with p95 9.72 ms and p99 10.02 ms on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
+**Implementation status (2026-07-12):** M1–M15 are implemented. Contract, campaign, integrated battle, encounter, onboarding, playtest-reporting, save/settings, ship-readability, audio/narrative, normal-performance, and sustained-combat stress tests pass. The M15 600-frame combat gate measures 144.9 FPS at 1920×1080 with p95 7.25 ms/p99 7.32 ms. The sustained all-wings/flak/missile/point-defense gate measures 144.9 FPS with p95 9.78 ms/p99 10.57 ms on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
 
 ### M1 — Canonical bible and Godot foundation `[IMPLEMENTED]`
 
@@ -256,7 +256,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 
 - The application opens on a centered EXODRIFT command menu over a continuously simulated 3D battle with the Sidebay carrier, friendly and hostile capital ships, fighter formations, projectiles, explosions, starfield, and moving camera.
 - Begin New Operation transitions cleanly into a fresh campaign. Continue restores either the in-memory operation or the versioned manual save; the sector map can return to title without discarding its in-memory state.
-- Settings persist master volume, fullscreen, and reduced combat flashes through local configuration. Credits and desktop quit navigation are functional; browser builds omit the desktop-only quit action.
+- Settings persist independent Master/Music/SFX volume, fullscreen, reduced combat flashes, graphics quality, and remappable command keys through local configuration. New Operation requires confirmation when a checkpoint exists; Credits and desktop quit navigation are functional, while browser builds omit the desktop-only quit action.
 - Automated presentation-shell checks cover menu-first startup, live background motion, settings behavior, New Operation, Continue, and title/campaign visibility transitions. Visual capture is reviewed at 1280×720.
 - The isolated menu simulation averages 157.6 FPS at 1920×1080 on the development PC; the complete combat force remains at 165 FPS in the same validation run.
 
@@ -272,8 +272,8 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 ### M12 — Personnel progression and operational events `[IMPLEMENTED]`
 
 - Requisition is a persistent run resource earned from salvage and full victories. The Personnel screen exposes an authored recruitment pool, quotes exact requisition costs, recruits officers into their matching department, and marks rare candidates explicitly.
-- Four deterministic, non-repeating operational events appear after noncombat nodes. Each presents authored narrative, a radio bark, two explicit outcomes, resource requirements, and relationship, trait, recovery, intel, fuel, requisition, or recruitment consequences.
-- The current event set covers a fractured sensor watch, Flight-Gunnery rivalry, medical-store rationing, and Captain Edda Kaine's rare command capsule. Event decisions and unresolved pending events persist in version-6 saves.
+- Ten deterministic, non-repeating operational events appear after noncombat nodes. Each presents authored narrative, a radio bark, two explicit outcomes, resource requirements, and relationship, trait, recovery, intel, fuel, requisition, or recruitment consequences.
+- The event set now also covers a ghost convoy, reactor resonance, an Acheron deserter, a black-box memorial, a crew confidence vote, and the fleet's last prewar torpedo. Event decisions and unresolved pending events persist in version-6 saves.
 - Injured officers can receive immediate supply-funded treatment with Medical-department cost reduction. Eligible active officers promote after three completed nodes, spending supplies to gain a persistent rank, skill point, promotion count, and Proven trait.
 - Relationship decisions create new mutual bonds or traits. Recruitment expands department rosters without replacing existing personnel; assignment cycling remains deterministic among available officers.
 - Version-5 saves migrate into the authored recruitment pool with one starting requisition. No randomized recruits, affixes, or permanent meta-stat purchases are introduced.
@@ -295,12 +295,16 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - A maintained weak-reference combat registry replaces repeated scene-wide projectile/entity scans in projectile collision, point defense, sensors, and target resolution. Radar contact reconstruction runs at 10 Hz while pulse and sweep motion remain smooth.
 - The 1920×1080 normal gate passes at 144.9 FPS with p95 7.20 ms/p99 7.29 ms. The sustained stress gate passes at 144.9 FPS with p95 9.72 ms/p99 10.02 ms, projectile-adjusted bounded post-warmup node growth, and zero dropped effects in the measured run.
 
-### M15 — Guided operation, encounter identity, and ship art `[IN PROGRESS]`
+### M15 — Ship-readiness completion `[IMPLEMENTED]`
 
 - The first campaign battle provides a dismissible six-step orientation covering carrier translation, active-ping risk, wing launch, the live tactical map, and intent-level orders. Action cards require a readable dwell before credit and the active-ping lesson cannot be skipped by an earlier input.
 - The three sectors field distinct Acheron, Vesper, and Crucible forces with authored command/screen roles, dimensions, movement, durability, weapon behavior, fighter complements, opening geometry, pursuit identity, lighting, dust, star, and nebula palettes. The standalone first playable retains the original Acheron force.
 - Navy, raider, and alien-carapace SVG hull textures are paired with expanded low-node capital geometry: armor ribs, engineering blocks, command towers, bridge windows, sensor masts, weapon turrets, engine housings/nozzles, navy mission pods, and hostile blade fins. Combat definitions and collision volumes remain separate from presentation.
-- Remaining M15 work is authored encounter layout depth, bespoke sector-command mechanics, a final strategic-command battle, external first-time-player testing, and balance changes based on that evidence.
+- Each sector has three deterministic encounter layouts with distinct geometry, interference, fortification, and reinforcement logic. Acheron's command net, Vesper's shield-break pincer, and Crucible's shield-anchor/core sequence provide bespoke multi-phase command battles, including the final strategic-command encounter.
+- Named escorts, fighter classes, and hostile factions use distinct geometry, engine trails, projectile/impact palettes, progressive damage breaches, sparks, and brighter fleet lighting. The presentation remains GL Compatibility-safe and separate from collision geometry.
+- Playtest telemetry records onboarding, command usage, battle timing, layouts, phases, outcomes, and first-time acceptance. A campaign debrief exports a structured report, tester notes, and six consistent interview prompts; external sessions remain the evidence-gathering input for later balance revisions.
+- Checkpoints use atomic temp writes, preserve a recoverable backup, fall back after corrupt primary data, autosave at campaign transitions, and confirm destructive New Operation choices. Independent audio buses and persistent keyboard rebinding complete the release settings surface.
+- A three-sector synthesized score layers combat pressure dynamically. Phase-aware radio stingers, faction-aware combat audio, and ten authored operational events replace the placeholder-audio/narrow-event-pool state.
 
 ## 9. Test matrix
 
@@ -316,13 +320,13 @@ M13 tests cover escort, carrier-yard, and flight-group supplier sector gates; ex
 
 M14 tests cover ship visual profiles, immediate quality switching, backdrop tier visibility, VFX budgets, original texture resources, shared projectile mesh/material identity, combat-registry population, radar animation, normal p95/p99 frame time, sustained legal maximum fire, all deployed wings, hostile missile pressure, node stability, effect drops, and clean ObjectDB shutdown.
 
-M15 tests cover deterministic onboarding progression and minimum card dwell, active-ping timing, first-operation gating, sector-index propagation, faction hull profiles, distinct capital texture assignment, and campaign/integration compatibility across the expanded encounter definitions.
+M15 tests cover deterministic onboarding progression and minimum card dwell, active-ping timing, nine deterministic layout variants, all bespoke boss phases, first-time-player telemetry/debrief output, atomic-save recovery, overwrite confirmation, input rebinding, independent audio buses, named-ship/fighter silhouettes, damage presentation, faction VFX, adaptive sector audio, ten operational events, and campaign/integration compatibility.
 
 Presentation tests cover menu-first startup, continuous background battle motion, accessibility settings, title-to-campaign fades, manual-save Continue, and return-to-title state preservation.
 
 Carrier-combat integration tests cover carrier-centered independent camera framing, mouse-directed flak without hull rotation, seven-round manual flak, four-missile long-range salvos, pulsing contact radar, layered deep-space backdrop, flight-operation locks, emergency sealing, pursuit exposure, and the closed-bay jump interlock.
 
-Verbose headless integration exits without leaked ObjectDB instances; procedural tones are skipped only under the headless display driver so desktop and Web audio remain unchanged.
+Verbose headless integration exits without leaked ObjectDB instances; procedural tones and score generation are skipped only under the headless display driver so desktop and Web audio remain unchanged.
 
 Manual integration checks verify:
 
@@ -370,3 +374,4 @@ Each `/goal` owns exactly one milestone. Before work begins, read this bible and
 - **2026-07-12:** Completed the carrier-combat stabilization pass: added explicit weapon-cycle/range HUD feedback, removed all headless ObjectDB audio leaks, re-ran every automated suite cleanly, and passed the 600-frame 1920×1080 performance gate at 145 FPS.
 - **2026-07-12:** Completed M14 with an original modular/textured carrier combat presentation, role/faction ship profiles, shared and pooled GL-compatible VFX, saved live quality profiles, a maintained combat registry, 10 Hz radar contact caching, tiered parallax space, direct-render captures, and normal/stress performance gates. Carrier rules, bay/jump safety, sensors, and damage remain unchanged.
 - **2026-07-12:** Began M15 with a six-step first-operation orientation, three sector-specific enemy fleets and battlefield palettes, original navy/raider/alien hull plating, and expanded capital-ship silhouettes with readable functional detail. Contract, campaign, integration, and dedicated onboarding suites pass; bespoke bosses and external playtest validation remain open.
+- **2026-07-12:** Completed M15 implementation with nine deterministic sector layouts, bespoke Acheron/Vesper/Crucible command phases, structured playtest telemetry and debriefing, role-readable ship/fighter geometry and damage VFX, atomic backup-recoverable autosaves, overwrite confirmation, remappable controls, independent audio buses, an adaptive procedural score, and ten authored operational events. Nine automated suites, menu/normal/stress performance gates, and both release exports pass; external first-time-player sessions now drive post-M15 balance evidence.

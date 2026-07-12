@@ -118,6 +118,11 @@ func _set_step(next_step: Step) -> void:
 	step_label.text = _step_title(next_step)
 	instruction_label.text = _step_instruction(next_step)
 	progress_label.text = "ORIENTATION   [F1] HIDE" if next_step == Step.WELCOME else "%d / 6   [F1] HIDE" % mini(int(next_step), 6)
+	var recorder := get_node_or_null("/root/PlaytestRecorder") as ExodriftPlaytestRecorder
+	if recorder != null:
+		recorder.record_event(&"onboarding_step", {"step": Step.keys()[next_step]})
+		if next_step == Step.COMPLETE:
+			recorder.increment(&"onboarding_completed")
 
 func _step_title(step: Step) -> String:
 	match step:

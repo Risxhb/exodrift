@@ -1,7 +1,8 @@
 extends Node
 
-const SAVE_PATH := "user://sidebay_run.json"
 const LogisticsScreen := preload("res://scripts/ui/logistics_screen.gd")
+const PlaytestReport := preload("res://scripts/ui/playtest_report.gd")
+const SaveManager := preload("res://scripts/systems/save_manager.gd")
 
 var run_state: SidebayRunState
 var generator := SidebayCampaignGenerator.new()
@@ -16,6 +17,8 @@ var after_action_report: ExodriftAfterActionReport
 var pending_battle_report: Dictionary = {}
 var pending_battle_victory: bool = false
 var main_menu: ExodriftMainMenu
+var playtest_report: ExodriftPlaytestReport
+var save_manager := SaveManager.new()
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -38,11 +41,14 @@ func _show_main_menu() -> void:
 	if is_instance_valid(operational_event_screen):
 		operational_event_screen.queue_free()
 		operational_event_screen = null
+	if is_instance_valid(playtest_report):
+		playtest_report.queue_free()
+		playtest_report = null
 	if is_instance_valid(main_menu):
 		main_menu.queue_free()
 	main_menu = ExodriftMainMenu.new()
 	add_child(main_menu)
-	main_menu.configure(run_state != null or FileAccess.file_exists(SAVE_PATH))
+	main_menu.configure(run_state != null or save_manager.has_any_save())
 	main_menu.new_run_requested.connect(_on_menu_new_run)
 	main_menu.continue_requested.connect(_on_menu_continue)
 	main_menu.quit_requested.connect(func() -> void: get_tree().quit())
@@ -56,7 +62,7 @@ func _on_menu_continue() -> void:
 	if next_state == null:
 		next_state = _read_saved_state()
 	if next_state == null:
-		main_menu.set_status("SAVE DATA UNAVAILABLE OR UNSUPPORTED")
+		main_menu.set_status(save_manager.last_message.to_upper())
 		return
 	await _close_main_menu()
 	run_state = next_state
@@ -84,6 +90,10 @@ func _start_new_run() -> void:
 	active_node = null
 	get_tree().paused = false
 	run_state = SidebayRunState.create_new()
+	save_manager.write_state(run_state, "initial")
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		recorder.begin_run(run_state.run_id)
 	generator = SidebayCampaignGenerator.new()
 	generator.generate(run_state.seed)
 	_open_campaign("Choose a reachable node. Nearby type and threat forecasts are confirmed.")
@@ -100,6 +110,7 @@ func _open_campaign(status: String) -> void:
 		campaign_map.fleet_requested.connect(_open_fleet_loadout)
 		campaign_map.logistics_requested.connect(_open_logistics_screen)
 		campaign_map.personnel_requested.connect(_open_personnel_screen)
+		campaign_map.playtest_requested.connect(_open_playtest_report)
 		campaign_map.title_requested.connect(_show_main_menu)
 		campaign_map.configure(run_state, generator)
 	else:
@@ -123,6 +134,9 @@ func _on_node_selected(node_id: StringName) -> void:
 		campaign_map.refresh()
 		return
 	active_node = node
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		recorder.record_event(&"route_selected", {"node_id": String(node.node_id), "sector": node.sector, "objective": node.objective_type})
 	if node.is_battle():
 		_launch_battle(node)
 	else:
@@ -234,8 +248,14 @@ func _resolve_after_action(decision: StringName) -> void:
 			unlock_message = " Module recovered: %s." % SidebayRunState.module_data(unlocked).get("name", "Unknown")
 		status = "Victory at %s: +%d supplies, +%d intel.%s%s" % [active_node.display_name, active_node.reward_supplies, active_node.reward_intel, unlock_message, decision_message]
 	var personnel_events := run_state.resolve_personnel_consequences(pending_battle_report, decision)
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		recorder.record_event(&"after_action_decision", {"decision": String(decision), "outcome": outcome})
+		if run_state.run_completed:
+			recorder.increment(&"runs_completed")
 	if not personnel_events.is_empty():
 		status += " Personnel: %s" % personnel_events[0]
+	_autosave("after-action")
 
 	if is_instance_valid(after_action_report):
 		after_action_report.queue_free()
@@ -301,6 +321,26 @@ func _close_personnel_screen() -> void:
 func _on_personnel_changed(message: String) -> void:
 	campaign_map.set_status(message)
 
+func _open_playtest_report() -> void:
+	if is_instance_valid(playtest_report):
+		return
+	var recorder := _playtest_recorder()
+	if recorder == null:
+		campaign_map.set_status("Playtest recorder unavailable.")
+		return
+	playtest_report = PlaytestReport.new()
+	add_child(playtest_report)
+	playtest_report.configure(recorder)
+	playtest_report.closed.connect(_close_playtest_report)
+
+func _close_playtest_report() -> void:
+	if is_instance_valid(playtest_report):
+		playtest_report.queue_free()
+	playtest_report = null
+
+func _playtest_recorder() -> ExodriftPlaytestRecorder:
+	return get_node_or_null("/root/PlaytestRecorder") as ExodriftPlaytestRecorder
+
 func _show_operational_event() -> void:
 	if run_state == null or run_state.pending_operational_event.is_empty() or is_instance_valid(operational_event_screen):
 		return
@@ -311,6 +351,7 @@ func _show_operational_event() -> void:
 
 func _on_operational_event_choice(choice_id: StringName) -> void:
 	var message := run_state.resolve_operational_event(choice_id)
+	_autosave("decision")
 	if is_instance_valid(operational_event_screen):
 		operational_event_screen.queue_free()
 	operational_event_screen = null
@@ -322,6 +363,7 @@ func _complete_node(node: SidebayCampaignNode) -> void:
 	run_state.mark_completed(node.node_id, node.sector)
 	if node.node_id == &"s3_boss":
 		run_state.run_completed = true
+	_autosave("node")
 
 func _reveal_forecast() -> void:
 	if not run_state.spend_intel(1):
@@ -332,34 +374,23 @@ func _reveal_forecast() -> void:
 	campaign_map.set_status("Deep forecast resolved %d downstream node(s)." % revealed.size())
 
 func _save_run() -> void:
-	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
-	if file == null:
-		campaign_map.set_status("Save failed: %s" % error_string(FileAccess.get_open_error()))
-		return
-	file.store_string(JSON.stringify(run_state.to_dictionary(), "  "))
-	file.close()
-	campaign_map.set_status("Manual save written to persistent run storage.")
+	var result := save_manager.write_state(run_state, "manual")
+	campaign_map.set_status(save_manager.last_message if result == OK else "Save failed: %s" % save_manager.last_message)
 
 func _load_run() -> void:
 	var loaded := _read_saved_state()
 	if loaded == null:
-		campaign_map.set_status("No manual run save exists yet.")
+		campaign_map.set_status(save_manager.last_message)
 		return
 	run_state = loaded
 	generator = SidebayCampaignGenerator.new()
 	generator.generate(run_state.seed)
 	campaign_map.replace_state(run_state, generator)
-	campaign_map.set_status("Manual save loaded.")
+	campaign_map.set_status(save_manager.last_message)
 
 func _read_saved_state() -> SidebayRunState:
-	if not FileAccess.file_exists(SAVE_PATH):
-		return null
-	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
-	if file == null:
-		return null
-	var parsed = JSON.parse_string(file.get_as_text())
-	file.close()
-	if not parsed is Dictionary:
-		return null
-	var loaded := SidebayRunState.from_dictionary(parsed)
-	return loaded
+	return save_manager.read_state()
+
+func _autosave(reason: String) -> void:
+	if run_state != null:
+		save_manager.write_state(run_state, reason)
