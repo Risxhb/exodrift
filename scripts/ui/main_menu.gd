@@ -266,7 +266,7 @@ func _build_interface(can_continue: bool) -> void:
 	var telemetry := _label(interface, Vector2(26, 22), Vector2(350, 56), 13)
 	telemetry.text = "LIVE COMBAT FEED // HELIOS REACH\nCOMMAND LINK: STANDBY"
 	var build := _label(interface, Vector2(990, 22), Vector2(260, 52), 13)
-	build.text = "GRAPHICS + CONTROL BUILD // M14+\nSINGLE-PLAYER // PC + WEB"
+	build.text = "SHIP READINESS BUILD // M15\nSINGLE-PLAYER // PC + WEB"
 	build.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	main_panel = _menu_panel()
 	var title := _label(main_panel, Vector2(24, 22), Vector2(392, 58), 42)
