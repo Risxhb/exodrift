@@ -1,6 +1,8 @@
 class_name ExodriftOperationalEvent
 extends Control
 
+const UIStyle := preload("res://scripts/ui/ui_style.gd")
+
 signal choice_selected(choice_id: StringName)
 
 var run_state: SidebayRunState
@@ -49,7 +51,7 @@ func _build_shell() -> void:
 		button.position = Vector2(40 + index * 415, 274)
 		button.size = Vector2(405, 150)
 		button.text = "%s\n\n%s" % [choice.get("label", "DECIDE"), choice.get("summary", "")]
-		button.add_theme_font_size_override("font_size", 15)
+		UIStyle.apply_button(button, 15, UIStyle.AMBER)
 		button.disabled = not run_state.can_resolve_event_choice(StringName(choice.get("id", "")))
 		button.tooltip_text = "Insufficient supplies for this decision." if button.disabled else "Commit this operational decision."
 		var choice_id := StringName(choice.get("id", ""))
@@ -69,7 +71,6 @@ func _label(parent: Control, position_value: Vector2, size_value: Vector2, font_
 	var label := Label.new()
 	label.position = position_value
 	label.size = size_value
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", Color(0.76, 0.92, 1.0))
+	UIStyle.apply_label(label, font_size)
 	parent.add_child(label)
 	return label

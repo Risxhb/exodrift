@@ -1,5 +1,7 @@
 extends Node3D
 
+const OnboardingController := preload("res://scripts/systems/onboarding_controller.gd")
+
 signal return_to_campaign(victory: bool, battle_report: Dictionary)
 
 var carrier: PlayerCarrier
@@ -18,6 +20,8 @@ var target_lock: CombatShip
 var elapsed_seconds: float = 0.0
 var hosted_campaign: bool = false
 var campaign_node_id: StringName = &""
+var campaign_sector_index: int = 0
+var guided_onboarding: bool = false
 var campaign_threat_multiplier: float = 1.0
 var battle_result_victory: bool = false
 var battle_outcome: String = "victory"
@@ -39,9 +43,13 @@ var pursuit_spawned: bool = false
 var escape_pods: Array[Dictionary] = []
 var destroyed_hostile_count: int = 0
 var emergency_bay_seal: bool = false
+var onboarding: ExodriftOnboardingController
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	var graphics := _graphics_quality()
+	if graphics != null and not graphics.quality_changed.is_connected(_on_graphics_quality_changed):
+		graphics.quality_changed.connect(_on_graphics_quality_changed)
 	_configure_input_map()
 	_build_environment()
 	_build_battlefield()
@@ -53,6 +61,16 @@ func _ready() -> void:
 	_deploy_initial_forces()
 	_connect_feedback()
 	hud.notify("Passive contacts detected. Launch scouts or press P for active ping.")
+	if guided_onboarding:
+		onboarding = OnboardingController.new()
+		add_child(onboarding)
+		onboarding.configure(carrier, interceptor, scout, sensors, tactical)
+
+func _graphics_quality() -> Node:
+	return get_node_or_null("/root/GraphicsQualityManager")
+
+func _on_graphics_quality_changed(_profile_name: StringName) -> void:
+	_apply_graphics_quality()
 
 func _process(delta: float) -> void:
 	if get_tree().paused or battle_finished:
@@ -142,33 +160,216 @@ func _configure_input_map() -> void:
 		if not InputMap.action_has_event(action, key_event):
 			InputMap.action_add_event(action, key_event)
 
+func _sector_encounter_profile() -> Dictionary:
+	match clampi(campaign_sector_index, 0, 2):
+		1:
+			return {
+				"background_color": Color(0.006, 0.002, 0.014),
+				"ambient_color": Color(0.28, 0.16, 0.38),
+				"key_light_color": Color(0.88, 0.62, 1.0),
+				"star_color": Color(0.92, 0.72, 1.0),
+				"star_emission": Color(1.0, 0.78, 1.0),
+				"band_color": Color(0.68, 0.18, 0.72),
+				"band_emission": Color(0.58, 0.1, 0.7),
+				"dust_color": Color(0.52, 0.18, 0.62, 0.16),
+				"dust_emission": Color(0.3, 0.07, 0.38),
+				"nebula_primary": Color(0.82, 0.18, 0.62, 0.52),
+				"nebula_secondary": Color(0.34, 0.22, 0.92, 0.38),
+				"command_name": "Vesper Lance Cruiser",
+				"command_ship_id": &"vesper_lance_cruiser",
+				"command_role": "cruiser",
+				"command_dimensions": Vector3(30.0, 10.0, 78.0),
+				"command_acceleration": 36.0,
+				"command_speed": 205.0,
+				"command_rotation": 0.74,
+				"command_signature": 1.18,
+				"command_layers": Vector3(320.0, 270.0, 390.0),
+				"command_regen": 7.0,
+				"command_mitigation": 0.2,
+				"command_weapon_name": "Gloam Torpedo",
+				"command_weapon_range": 5100.0,
+				"command_weapon_cooldown": 4.6,
+				"command_weapon_damage": 76.0,
+				"command_weapon_speed": 620.0,
+				"command_color": Color(0.48, 0.12, 0.66),
+				"command_position": Vector3(-1650.0, 620.0, -5050.0),
+				"corvette_name": "Vesper Needle Corvette",
+				"corvette_ship_id": &"vesper_needle_corvette",
+				"corvette_role": "torpedo corvette",
+				"corvette_dimensions": Vector3(12.0, 7.0, 48.0),
+				"corvette_acceleration": 68.0,
+				"corvette_speed": 340.0,
+				"corvette_rotation": 1.38,
+				"corvette_signature": 0.72,
+				"corvette_layers": Vector3(170.0, 145.0, 175.0),
+				"corvette_weapon_name": "Needle Repeater",
+				"corvette_weapon_range": 1900.0,
+				"corvette_weapon_cooldown": 0.68,
+				"corvette_weapon_damage": 17.0,
+				"corvette_weapon_speed": 1120.0,
+				"corvette_color": Color(0.68, 0.16, 0.82),
+				"corvette_position": Vector3(1750.0, -420.0, -3700.0),
+				"fighter_wing_id": &"vesper_gloam_lances",
+				"fighter_wing_name": "Vesper Gloam Lances",
+				"fighter_craft_id": &"vesper_gloam_fighter",
+				"fighter_name": "Gloam Lance",
+				"fighter_count": 5,
+				"fighter_dimensions": Vector3(5.2, 1.8, 10.0),
+				"fighter_speed": 690.0,
+				"fighter_color": Color(0.9, 0.24, 1.0),
+				"fighter_position": Vector3(-620.0, 760.0, -3200.0),
+				"pursuit_name": "Vesper Needle Pursuit",
+				"pursuit_color": Color(0.86, 0.2, 1.0)
+			}
+		2:
+			return {
+				"background_color": Color(0.012, 0.006, 0.001),
+				"ambient_color": Color(0.34, 0.24, 0.1),
+				"key_light_color": Color(1.0, 0.74, 0.38),
+				"star_color": Color(1.0, 0.88, 0.58),
+				"star_emission": Color(1.0, 0.76, 0.36),
+				"band_color": Color(0.72, 0.34, 0.08),
+				"band_emission": Color(0.74, 0.25, 0.04),
+				"dust_color": Color(0.68, 0.38, 0.1, 0.18),
+				"dust_emission": Color(0.42, 0.19, 0.03),
+				"nebula_primary": Color(0.92, 0.34, 0.08, 0.54),
+				"nebula_secondary": Color(0.72, 0.62, 0.12, 0.36),
+				"command_name": "Crucible War Regent",
+				"command_ship_id": &"crucible_war_regent",
+				"command_role": "battlecruiser",
+				"command_dimensions": Vector3(38.0, 18.0, 94.0),
+				"command_acceleration": 30.0,
+				"command_speed": 185.0,
+				"command_rotation": 0.62,
+				"command_signature": 1.4,
+				"command_layers": Vector3(370.0, 430.0, 520.0),
+				"command_regen": 5.0,
+				"command_mitigation": 0.28,
+				"command_weapon_name": "Regent Siege Missile",
+				"command_weapon_range": 5600.0,
+				"command_weapon_cooldown": 5.2,
+				"command_weapon_damage": 92.0,
+				"command_weapon_speed": 520.0,
+				"command_color": Color(0.62, 0.32, 0.06),
+				"command_position": Vector3(150.0, -120.0, -6100.0),
+				"corvette_name": "Crucible Breach Destroyer",
+				"corvette_ship_id": &"crucible_breach_destroyer",
+				"corvette_role": "destroyer",
+				"corvette_dimensions": Vector3(22.0, 13.0, 58.0),
+				"corvette_acceleration": 46.0,
+				"corvette_speed": 270.0,
+				"corvette_rotation": 0.98,
+				"corvette_signature": 1.0,
+				"corvette_layers": Vector3(210.0, 260.0, 310.0),
+				"corvette_weapon_name": "Breach Cannon",
+				"corvette_weapon_range": 2200.0,
+				"corvette_weapon_cooldown": 1.05,
+				"corvette_weapon_damage": 29.0,
+				"corvette_weapon_speed": 840.0,
+				"corvette_color": Color(0.78, 0.42, 0.08),
+				"corvette_position": Vector3(-420.0, 520.0, -4400.0),
+				"fighter_wing_id": &"crucible_ember_talons",
+				"fighter_wing_name": "Crucible Ember Talons",
+				"fighter_craft_id": &"crucible_talon_fighter",
+				"fighter_name": "Ember Talon",
+				"fighter_count": 6,
+				"fighter_dimensions": Vector3(7.2, 2.8, 9.0),
+				"fighter_speed": 590.0,
+				"fighter_color": Color(1.0, 0.58, 0.08),
+				"fighter_position": Vector3(1180.0, -260.0, -3900.0),
+				"pursuit_name": "Crucible Pursuit Destroyer",
+				"pursuit_color": Color(1.0, 0.48, 0.05)
+			}
+		_:
+			return {
+				"background_color": Color(0.002, 0.004, 0.012),
+				"ambient_color": Color(0.16, 0.22, 0.34),
+				"key_light_color": Color(0.65, 0.76, 1.0),
+				"star_color": Color(0.7, 0.84, 1.0),
+				"star_emission": Color(0.8, 0.9, 1.0),
+				"band_color": Color(0.42, 0.28, 0.78),
+				"band_emission": Color(0.28, 0.18, 0.7),
+				"dust_color": Color(0.18, 0.5, 0.7, 0.16),
+				"dust_emission": Color(0.08, 0.28, 0.42),
+				"nebula_primary": Color(0.48, 0.34, 0.92, 0.5),
+				"nebula_secondary": Color(0.18, 0.72, 0.82, 0.34),
+				"command_name": "Acheron Command",
+				"command_ship_id": &"hostile_command_frigate",
+				"command_role": "frigate",
+				"command_dimensions": Vector3(24.0, 12.0, 65.0),
+				"command_acceleration": 42.0,
+				"command_speed": 220.0,
+				"command_rotation": 0.9,
+				"command_signature": 1.05,
+				"command_layers": Vector3(260.0, 300.0, 340.0),
+				"command_regen": 5.0,
+				"command_mitigation": 0.22,
+				"command_weapon_name": "Frigate Missile",
+				"command_weapon_range": 4400.0,
+				"command_weapon_cooldown": 4.0,
+				"command_weapon_damage": 68.0,
+				"command_weapon_speed": 570.0,
+				"command_color": Color(0.62, 0.13, 0.1),
+				"command_position": Vector3(1050.0, 280.0, -5200.0),
+				"corvette_name": "Acheron Screen Corvette",
+				"corvette_ship_id": &"hostile_screen_corvette",
+				"corvette_role": "corvette",
+				"corvette_dimensions": Vector3(16.0, 8.0, 42.0),
+				"corvette_acceleration": 58.0,
+				"corvette_speed": 310.0,
+				"corvette_rotation": 1.25,
+				"corvette_signature": 0.8,
+				"corvette_layers": Vector3(150.0, 160.0, 190.0),
+				"corvette_weapon_name": "Screen Cannon",
+				"corvette_weapon_range": 1700.0,
+				"corvette_weapon_cooldown": 0.8,
+				"corvette_weapon_damage": 18.0,
+				"corvette_weapon_speed": 950.0,
+				"corvette_color": Color(0.72, 0.18, 0.08),
+				"corvette_position": Vector3(-1300.0, -170.0, -4050.0),
+				"fighter_wing_id": &"acheron_fighters",
+				"fighter_wing_name": "Acheron Fighter Wing",
+				"fighter_craft_id": &"acheron_fighter",
+				"fighter_name": "Acheron Fighter",
+				"fighter_count": 4,
+				"fighter_dimensions": Vector3(6.0, 2.2, 8.0),
+				"fighter_speed": 620.0,
+				"fighter_color": Color(1.0, 0.24, 0.08),
+				"fighter_position": Vector3(100.0, 420.0, -3550.0),
+				"pursuit_name": "Acheron Pursuit Corvette",
+				"pursuit_color": Color(0.92, 0.2, 0.05)
+			}
+
 func _build_environment() -> void:
+	var sector := _sector_encounter_profile()
 	var world_environment := WorldEnvironment.new()
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color(0.002, 0.004, 0.012)
+	environment.background_color = sector.background_color
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(0.16, 0.22, 0.34)
-	environment.ambient_light_energy = 0.65
+	environment.ambient_light_color = sector.ambient_color
+	environment.ambient_light_energy = 0.92
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	world_environment.environment = environment
 	add_child(world_environment)
 	var key_light := DirectionalLight3D.new()
 	key_light.rotation_degrees = Vector3(-38.0, -28.0, 0.0)
-	key_light.light_color = Color(0.65, 0.76, 1.0)
-	key_light.light_energy = 1.15
+	key_light.light_color = sector.key_light_color
+	key_light.light_energy = 1.38
 	add_child(key_light)
 	_build_starfield()
+	_apply_graphics_quality()
 
 func _build_starfield() -> void:
+	var sector := _sector_encounter_profile()
 	var mesh := SphereMesh.new()
 	mesh.radius = 2.0
 	mesh.height = 4.0
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = Color(0.7, 0.84, 1.0)
+	material.albedo_color = sector.star_color
 	material.emission_enabled = true
-	material.emission = Color(0.8, 0.9, 1.0) * 2.0
+	material.emission = sector.star_emission * 2.0
 	mesh.material = material
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
@@ -185,20 +386,24 @@ func _build_starfield() -> void:
 	stars.multimesh = multimesh
 	add_child(stars)
 	_build_nebula_star_band()
-	_add_distant_body(Vector3(-7600.0, 2800.0, -11200.0), 760.0, Color(0.08, 0.16, 0.28, 1.0), 0.18, Vector3(1.0, 1.0, 1.0))
-	_add_distant_body(Vector3(9200.0, -2100.0, -13800.0), 240.0, Color(1.0, 0.42, 0.12, 1.0), 2.8, Vector3(1.0, 1.0, 1.0))
-	_add_distant_body(Vector3(5600.0, 1800.0, -9800.0), 520.0, Color(0.18, 0.08, 0.34, 0.12), 0.65, Vector3(3.8, 1.3, 2.2))
-	_add_distant_body(Vector3(-4200.0, -2600.0, -8600.0), 430.0, Color(0.04, 0.28, 0.34, 0.10), 0.55, Vector3(4.2, 1.1, 2.7))
+	_build_dust_field()
+	_add_nebula_card(Vector3(-6200.0, 1900.0, -11500.0), Vector2(6200.0, 3000.0), sector.nebula_primary, 2)
+	_add_nebula_card(Vector3(6900.0, -1700.0, -13200.0), Vector2(4800.0, 2300.0), sector.nebula_secondary, 3)
+	_add_distant_body(Vector3(-7600.0, 2800.0, -11200.0), 760.0, Color(0.08, 0.16, 0.28, 1.0), 0.18, Vector3(1.0, 1.0, 1.0), 1)
+	_add_distant_body(Vector3(9200.0, -2100.0, -13800.0), 240.0, Color(1.0, 0.42, 0.12, 1.0), 2.8, Vector3(1.0, 1.0, 1.0), 2)
+	_add_distant_body(Vector3(5600.0, 1800.0, -9800.0), 520.0, Color(0.18, 0.08, 0.34, 0.12), 0.65, Vector3(3.8, 1.3, 2.2), 3)
+	_add_distant_body(Vector3(-4200.0, -2600.0, -8600.0), 430.0, Color(0.04, 0.28, 0.34, 0.10), 0.55, Vector3(4.2, 1.1, 2.7), 3)
 
 func _build_nebula_star_band() -> void:
+	var sector := _sector_encounter_profile()
 	var mesh := SphereMesh.new()
 	mesh.radius = 1.4
 	mesh.height = 2.8
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = Color(0.42, 0.28, 0.78)
+	material.albedo_color = sector.band_color
 	material.emission_enabled = true
-	material.emission = Color(0.28, 0.18, 0.7) * 2.2
+	material.emission = sector.band_emission * 2.2
 	mesh.material = material
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
@@ -215,9 +420,65 @@ func _build_nebula_star_band() -> void:
 	band.name = "NebulaStarBand"
 	band.multimesh = multimesh
 	band.rotation_degrees = Vector3(18.0, 0.0, -12.0)
+	band.add_to_group("quality_backdrop")
+	band.set_meta("quality_layer", 2)
 	add_child(band)
 
-func _add_distant_body(position_value: Vector3, radius: float, color: Color, emission_energy: float, scale_value: Vector3) -> void:
+func _build_dust_field() -> void:
+	var sector := _sector_encounter_profile()
+	var mesh := SphereMesh.new()
+	mesh.radius = 4.0
+	mesh.height = 8.0
+	mesh.radial_segments = 8
+	mesh.rings = 4
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = sector.dust_color
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.emission_enabled = true
+	material.emission = sector.dust_emission
+	mesh.material = material
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.mesh = mesh
+	multimesh.instance_count = 180
+	var random := RandomNumberGenerator.new()
+	random.seed = 190427
+	for index in multimesh.instance_count:
+		var point := Vector3(random.randf_range(-4800.0, 4800.0), random.randf_range(-1300.0, 1300.0), random.randf_range(-6500.0, 3200.0))
+		var scale_value := random.randf_range(0.35, 1.7)
+		multimesh.set_instance_transform(index, Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * scale_value), point))
+	var dust := MultiMeshInstance3D.new()
+	dust.name = "ParallaxDust"
+	dust.multimesh = multimesh
+	dust.add_to_group("quality_backdrop")
+	dust.set_meta("quality_layer", 3)
+	add_child(dust)
+
+func _add_nebula_card(position_value: Vector3, size_value: Vector2, tint: Color, quality_layer: int) -> void:
+	var card := MeshInstance3D.new()
+	card.name = "NebulaBillboard"
+	var mesh := QuadMesh.new()
+	mesh.size = size_value
+	card.mesh = mesh
+	card.position = position_value
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	material.albedo_color = tint
+	var nebula_texture := load("res://assets/textures/nebula_card.svg") as Texture2D
+	material.albedo_texture = nebula_texture
+	material.emission_enabled = true
+	material.emission = Color(tint.r, tint.g, tint.b) * 0.7
+	material.emission_texture = nebula_texture
+	card.material_override = material
+	card.add_to_group("quality_backdrop")
+	card.set_meta("quality_layer", quality_layer)
+	add_child(card)
+
+func _add_distant_body(position_value: Vector3, radius: float, color: Color, emission_energy: float, scale_value: Vector3, quality_layer: int = 1) -> void:
 	var body := MeshInstance3D.new()
 	body.name = "DistantBackdropBody"
 	var mesh := SphereMesh.new()
@@ -234,9 +495,27 @@ func _add_distant_body(position_value: Vector3, radius: float, color: Color, emi
 	material.emission_enabled = true
 	material.emission = Color(color.r, color.g, color.b) * emission_energy
 	body.material_override = material
+	body.add_to_group("quality_backdrop")
+	body.set_meta("quality_layer", quality_layer)
 	add_child(body)
 
+func _apply_graphics_quality() -> void:
+	var graphics := _graphics_quality()
+	var profile: Dictionary = graphics.profile() if graphics != null else {"effect_density": 0.75, "backdrop_layers": 2}
+	var density := clampf(float(profile.get("effect_density", 0.75)), 0.2, 1.0)
+	var backdrop_layers := clampi(int(profile.get("backdrop_layers", 2)), 1, 3)
+	var starfield := get_node_or_null("DeepStarfield") as MultiMeshInstance3D
+	if starfield != null and starfield.multimesh != null:
+		starfield.multimesh.visible_instance_count = int(starfield.multimesh.instance_count * density)
+	var band := get_node_or_null("NebulaStarBand") as MultiMeshInstance3D
+	if band != null and band.multimesh != null:
+		band.multimesh.visible_instance_count = int(band.multimesh.instance_count * density)
+	for backdrop in get_tree().get_nodes_in_group("quality_backdrop"):
+		if backdrop is Node3D and is_ancestor_of(backdrop):
+			backdrop.visible = int(backdrop.get_meta("quality_layer", 1)) <= backdrop_layers
+
 func _build_battlefield() -> void:
+	var sector := _sector_encounter_profile()
 	audio = SidebayAudio.new()
 	add_child(audio)
 	carrier = PlayerCarrier.new()
@@ -259,18 +538,18 @@ func _build_battlefield() -> void:
 	scout.configure(_scout_squadron_definition(), &"scout_wing", &"friendly", carrier, &"starboard", Color(0.35, 1.0, 0.82))
 	hostile_command = CombatShip.new()
 	add_child(hostile_command)
-	hostile_command.configure(_frigate_definition("Acheron Command", true), &"hostile_command", &"hostile", Color(0.62, 0.13, 0.1))
+	hostile_command.configure(_frigate_definition(sector.command_name, true), &"hostile_command", &"hostile", sector.command_color)
 	hostile_command.is_command_ship = true
-	hostile_command.global_position = Vector3(1050.0, 280.0, -5200.0)
+	hostile_command.global_position = sector.command_position
 	hostile_command.ai_enabled = true
 	hostile_corvette = CombatShip.new()
 	add_child(hostile_corvette)
-	hostile_corvette.configure(_corvette_definition(), &"hostile_corvette", &"hostile", Color(0.72, 0.18, 0.08))
-	hostile_corvette.global_position = Vector3(-1300.0, -170.0, -4050.0)
+	hostile_corvette.configure(_corvette_definition(), &"hostile_corvette", &"hostile", sector.corvette_color)
+	hostile_corvette.global_position = sector.corvette_position
 	hostile_corvette.ai_enabled = true
 	hostile_fighters = SidebaySquadron.new()
 	add_child(hostile_fighters)
-	hostile_fighters.configure(_hostile_squadron_definition(), &"hostile_fighter_wing", &"hostile", null, &"port", Color(1.0, 0.24, 0.08))
+	hostile_fighters.configure(_hostile_squadron_definition(), &"hostile_fighter_wing", &"hostile", null, &"port", sector.fighter_color)
 	sensors = SidebaySensorSystem.new()
 	add_child(sensors)
 	sensors.configure(carrier)
@@ -286,7 +565,8 @@ func _build_battlefield() -> void:
 	hud.configure(carrier, interceptor, scout, sensors, tactical)
 
 func _deploy_initial_forces() -> void:
-	hostile_fighters.start_deployed(Vector3(100.0, 420.0, -3550.0))
+	var sector := _sector_encounter_profile()
+	hostile_fighters.start_deployed(sector.fighter_position)
 	var priority_target_id := objective_ship.stable_entity_id if is_instance_valid(objective_ship) else carrier.stable_entity_id
 	var priority_attack := FleetOrder.at_entity(FleetOrder.OrderType.ATTACK, priority_target_id, elapsed_seconds)
 	priority_attack.requires_command_link = false
@@ -450,11 +730,11 @@ func _spawn_withdrawal_pursuit() -> void:
 	pursuit_spawned = true
 	pursuit_ship = CombatShip.new()
 	add_child(pursuit_ship)
+	var sector := _sector_encounter_profile()
 	var definition := _corvette_definition()
-	definition.ship_id = &"hostile_pursuit_corvette"
-	definition.display_name = "Acheron Pursuit Corvette"
+	definition.display_name = sector.pursuit_name
 	definition.maximum_speed_mps *= 1.18
-	pursuit_ship.configure(definition, &"hostile_pursuit", &"hostile", Color(0.92, 0.2, 0.05))
+	pursuit_ship.configure(definition, &"hostile_pursuit", &"hostile", sector.pursuit_color)
 	var away_from_exit := (carrier.global_position - extraction_position).normalized()
 	if away_from_exit.length_squared() < 0.1:
 		away_from_exit = Vector3.FORWARD
@@ -820,17 +1100,26 @@ func _carrier_definition() -> ShipDefinition:
 
 func _frigate_definition(ship_name: String, hostile: bool) -> ShipDefinition:
 	var definition := ShipDefinition.new()
-	definition.ship_id = &"hostile_command_frigate" if hostile else &"human_missile_frigate"
+	var sector := _sector_encounter_profile()
+	definition.ship_id = sector.command_ship_id if hostile else &"human_missile_frigate"
 	definition.display_name = ship_name
-	definition.role = "frigate"
-	definition.dimensions_m = Vector3(24.0, 12.0, 65.0)
-	definition.acceleration_mps2 = 42.0
-	definition.maximum_speed_mps = 220.0
-	definition.rotation_speed_radians = 0.9
-	definition.signature = 1.05
+	definition.role = sector.command_role if hostile else "frigate"
+	definition.dimensions_m = sector.command_dimensions if hostile else Vector3(24.0, 12.0, 65.0)
+	definition.acceleration_mps2 = sector.command_acceleration if hostile else 42.0
+	definition.maximum_speed_mps = sector.command_speed if hostile else 220.0
+	definition.rotation_speed_radians = sector.command_rotation if hostile else 0.9
+	definition.signature = sector.command_signature if hostile else 1.05
 	var scale_value := campaign_threat_multiplier if hostile else 1.0
-	definition.damage_layers = _damage_layers(260.0 * scale_value, 300.0 * scale_value, 340.0 * scale_value, 5.0, 0.22)
-	definition.weapons = [_weapon(&"frigate_missile", "Frigate Missile", "missile", 4400.0, 4.0, 68.0 * scale_value, 570.0, false, true, false)]
+	var layers: Vector3 = sector.command_layers if hostile else Vector3(260.0, 300.0, 340.0)
+	var regen: float = sector.command_regen if hostile else 5.0
+	var mitigation: float = sector.command_mitigation if hostile else 0.22
+	definition.damage_layers = _damage_layers(layers.x * scale_value, layers.y * scale_value, layers.z * scale_value, regen, mitigation)
+	var weapon_name: String = sector.command_weapon_name if hostile else "Frigate Missile"
+	var weapon_range: float = sector.command_weapon_range if hostile else 4400.0
+	var weapon_cooldown: float = sector.command_weapon_cooldown if hostile else 4.0
+	var weapon_damage: float = sector.command_weapon_damage if hostile else 68.0
+	var weapon_speed: float = sector.command_weapon_speed if hostile else 570.0
+	definition.weapons = [_weapon(&"frigate_missile", weapon_name, "missile", weapon_range, weapon_cooldown, weapon_damage * scale_value, weapon_speed, false, true, false)]
 	return definition
 
 func _friendly_escort_definition(escort_id: StringName) -> ShipDefinition:
@@ -860,27 +1149,30 @@ func _friendly_escort_color(escort_id: StringName) -> Color:
 			return Color(0.2, 0.48, 0.68)
 
 func _corvette_definition() -> ShipDefinition:
+	var sector := _sector_encounter_profile()
 	var definition := ShipDefinition.new()
-	definition.ship_id = &"hostile_screen_corvette"
-	definition.display_name = "Acheron Screen Corvette"
-	definition.role = "corvette"
-	definition.dimensions_m = Vector3(16.0, 8.0, 42.0)
-	definition.acceleration_mps2 = 58.0
-	definition.maximum_speed_mps = 310.0
-	definition.rotation_speed_radians = 1.25
-	definition.signature = 0.8
-	definition.damage_layers = _damage_layers(150.0 * campaign_threat_multiplier, 160.0 * campaign_threat_multiplier, 190.0 * campaign_threat_multiplier, 4.0, 0.16)
-	definition.weapons = [_weapon(&"corvette_cannon", "Screen Cannon", "cannon", 1700.0, 0.8, 18.0 * campaign_threat_multiplier, 950.0)]
+	definition.ship_id = sector.corvette_ship_id
+	definition.display_name = sector.corvette_name
+	definition.role = sector.corvette_role
+	definition.dimensions_m = sector.corvette_dimensions
+	definition.acceleration_mps2 = sector.corvette_acceleration
+	definition.maximum_speed_mps = sector.corvette_speed
+	definition.rotation_speed_radians = sector.corvette_rotation
+	definition.signature = sector.corvette_signature
+	var layers: Vector3 = sector.corvette_layers
+	definition.damage_layers = _damage_layers(layers.x * campaign_threat_multiplier, layers.y * campaign_threat_multiplier, layers.z * campaign_threat_multiplier, 4.0, 0.16)
+	definition.weapons = [_weapon(&"corvette_cannon", sector.corvette_weapon_name, "cannon", sector.corvette_weapon_range, sector.corvette_weapon_cooldown, sector.corvette_weapon_damage * campaign_threat_multiplier, sector.corvette_weapon_speed)]
 	return definition
 
 func _fighter_definition(ship_id: StringName, name_value: String, role_value: String, hostile: bool = false) -> ShipDefinition:
+	var sector := _sector_encounter_profile()
 	var definition := ShipDefinition.new()
 	definition.ship_id = ship_id
 	definition.display_name = name_value
 	definition.role = role_value
-	definition.dimensions_m = Vector3(6.0, 2.2, 8.0)
+	definition.dimensions_m = sector.fighter_dimensions if hostile else Vector3(6.0, 2.2, 8.0)
 	definition.acceleration_mps2 = 210.0
-	definition.maximum_speed_mps = 620.0 if hostile else 680.0
+	definition.maximum_speed_mps = sector.fighter_speed if hostile else 680.0
 	definition.rotation_speed_radians = 3.0
 	definition.signature = 0.45
 	var scale_value := campaign_threat_multiplier if hostile else 1.0
@@ -921,15 +1213,16 @@ func _scout_squadron_definition() -> SquadronDefinition:
 	return definition
 
 func _hostile_squadron_definition() -> SquadronDefinition:
+	var sector := _sector_encounter_profile()
 	var definition := SquadronDefinition.new()
-	definition.squadron_id = &"acheron_fighters"
-	definition.display_name = "Acheron Fighter Wing"
+	definition.squadron_id = sector.fighter_wing_id
+	definition.display_name = sector.fighter_wing_name
 	definition.role = "interceptor"
-	definition.craft_count = 4
+	definition.craft_count = sector.fighter_count
 	definition.endurance_seconds = 300.0
 	definition.ammunition_per_craft = 36
 	definition.default_stance = "aggressive"
-	definition.craft_definition = _fighter_definition(&"acheron_fighter", "Acheron Fighter", "fighter", true)
+	definition.craft_definition = _fighter_definition(sector.fighter_craft_id, sector.fighter_name, "fighter", true)
 	return definition
 
 func _damage_layers(shields: float, armor: float, hull: float, regen: float, mitigation: float) -> DamageLayerDefinition:

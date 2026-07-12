@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#050b12">
-  <meta name="description" content="EXODRIFT: Carrier Command is a single-player action-RTS where you pilot the flagship and command the fleet in real time.">
+  <meta name="description" content="EXODRIFT: Carrier Command is a guided single-player action-RTS where you pilot a textured heavy carrier and command the fleet across three hostile sectors in real time.">
   <meta property="og:title" content="EXODRIFT: Carrier Command">
   <meta property="og:description" content="Pilot the flagship. Command the fleet. Survive the deep strike.">
   <meta property="og:type" content="website">
@@ -45,7 +45,7 @@
           <a class="button primary" href="https://risxhb.github.io/exodrift/play/"><b>Deploy Now</b><small>Launch browser alpha</small></a>
           <a class="button ghost" href="#footage">Watch combat feed</a>
         </div>
-        <div class="build-note"><i></i> Live development build · PC + Web · Single-player</div>
+        <div class="build-note"><i></i> Guided operation build · 3 hostile fleets · PC + Web</div>
       </div>
       <div class="hero-card reveal">
         <div class="card-kicker">FLAGSHIP DOSSIER // CVN-01</div>
@@ -62,7 +62,7 @@
     <section class="signal-strip" aria-label="Game highlights">
       <div><strong>01</strong><span>Direct-pilot<br>carrier combat</span></div>
       <div><strong>3D</strong><span>Live tactical<br>command map</span></div>
-      <div><strong>∞</strong><span>Continuous<br>real time</span></div>
+      <div><strong>3</strong><span>Hostile fleet<br>doctrines</span></div>
       <div><strong>2–3h</strong><span>Branching<br>deep-strike runs</span></div>
     </section>
 
@@ -76,7 +76,7 @@
         <article class="pillar reveal">
           <div class="pillar-number">01</div>
           <h3>Fly the flagship</h3>
-          <p>Command a 120-meter carrier with heavy inertia, braking assist, camera orbit, bounded vertical battlespace, flak, strike missiles, automated defenses, and layered durability.</p>
+          <p>Command a textured 120-meter carrier with heavy inertia, braking assist, mouse-directed flak, bounded vertical battlespace, strike missiles, automated defenses, and layered durability.</p>
         </article>
         <article class="pillar reveal">
           <div class="pillar-number">02</div>
@@ -95,11 +95,11 @@
       <div class="section-heading compact reveal">
         <p class="eyebrow"><span></span> Fleet archive</p>
         <h2>Assemble your <em>battlegroup.</em></h2>
-        <p>Ships are authored tactical sidegrades—not randomized-stat loot. Each hull has a readable role, silhouette, and place in the command network.</p>
+        <p>Ships are authored tactical sidegrades—not randomized-stat loot. Layered armor, faction hull plating, bridge windows, turrets, engines, and role-specific silhouettes make every capital ship readable in the command network.</p>
       </div>
       <div class="fleet-tabs" role="tablist" aria-label="Fleet factions">
         <button class="active" data-faction="navy">Human Navy</button>
-        <button data-faction="opposition">Acheron Opposition</button>
+        <button data-faction="opposition">Three-Sector Opposition</button>
       </div>
       <div class="ship-carousel" data-fleet="navy">
         <article class="ship-card flagship reveal">
@@ -135,23 +135,23 @@
         <article class="ship-card hostile flagship reveal visible">
           <div class="card-top"><span>UNKNOWN-01</span><b>HOSTILE COMMAND</b></div>
           <div class="ship-visual frigate-glyph"><span></span></div>
-          <h3>Acheron</h3><p class="role">Command Frigate</p>
-          <p>The encounter’s priority target. Identify it through the fog of war, penetrate the screen, and destroy it to secure victory.</p>
-          <div class="traits"><span>COMMAND</span><span>MISSILE</span></div>
+          <h3>Acheron Picket</h3><p class="role">Outer-Line Command Frigate</p>
+          <p>A disciplined missile picket protected by a fast screen and four-fighter attack wing. It teaches the sensor, launch, and command fundamentals of the deep strike.</p>
+          <div class="traits"><span>COMMAND</span><span>PICKET</span><span>MISSILE</span></div>
         </article>
         <article class="ship-card hostile reveal visible">
           <div class="card-top"><span>UNKNOWN-02</span><b>HOSTILE SCREEN</b></div>
           <div class="ship-visual corvette-glyph"><span></span></div>
-          <h3>Acheron Screen</h3><p class="role">Combat Corvette</p>
-          <p>A fast cannon escort that closes aggressively and forces the battlegroup to divide attention.</p>
-          <div class="traits"><span>BRAWLER</span><span>SCREEN</span></div>
+          <h3>Vesper Lance</h3><p class="role">Contested-Space Cruiser</p>
+          <p>A purple-hulled lance cruiser operating with a needle corvette and five Gloam fighters in a split high-low formation.</p>
+          <div class="traits"><span>TORPEDO</span><span>PINCER</span><span>MOBILE</span></div>
         </article>
         <article class="ship-card hostile reveal visible">
           <div class="card-top"><span>UNKNOWN-03</span><b>HOSTILE WING</b></div>
           <div class="ship-visual fighter-glyph"><span></span></div>
-          <h3>Acheron Talon</h3><p class="role">Fighter Squadron</p>
-          <p>An aggressive air group that hunts the carrier and tests point defense, flak discipline, and interceptor timing.</p>
-          <div class="traits"><span>ASSAULT</span><span>PURSUIT</span></div>
+          <h3>Crucible Regent</h3><p class="role">Command-Zone Battlecruiser</p>
+          <p>A layered alien-carapace warship backed by a breach destroyer and six Ember Talons in a deeper, heavier command-zone formation.</p>
+          <div class="traits"><span>SIEGE</span><span>CARAPACE</span><span>HEAVY</span></div>
         </article>
       </div>
     </section>
@@ -188,24 +188,28 @@
       <div class="section-heading compact reveal">
         <p class="eyebrow"><span></span> Unfiltered combat feed</p>
         <h2>Captured from the <em>playable build.</em></h2>
-        <p>No pre-rendered gameplay. These captures come directly from the current Godot greybox running at 1080p.</p>
+        <p>No pre-rendered gameplay. These captures come directly from the current GL-compatible Godot build, including the redesigned command HUD, faction hull plating, and expanded capital-ship geometry.</p>
       </div>
       <div class="gallery">
         <figure class="gallery-main reveal">
           <img src="assets/flight-preview.png" alt="Carrier combat viewed from the third-person flight camera">
-          <figcaption><b>DIRECT COMMAND</b><span>Third-person carrier combat</span><i>LIVE BUILD // 01</i></figcaption>
+          <figcaption><b>DIRECT COMMAND</b><span>Textured carrier and mouse-directed flak</span><i>LIVE BUILD // 01</i></figcaption>
         </figure>
         <figure class="reveal">
           <img src="assets/tactical-preview.png" alt="Live three-dimensional tactical command map">
           <figcaption><b>TACTICAL NET</b><span>Issue fleet orders in real time</span><i>LIVE BUILD // 02</i></figcaption>
         </figure>
         <figure class="reveal">
+          <img src="assets/bays-sealed-preview.png" alt="Sidebay carrier with both armored flight galleries retracted and jump-safe">
+          <figcaption><b>JUMP SAFE</b><span>Retract and seal both flight galleries</span><i>LIVE BUILD // 03</i></figcaption>
+        </figure>
+        <figure class="reveal">
           <img src="assets/campaign-preview.png" alt="Branching three-sector campaign map">
-          <figcaption><b>DEEP STRIKE</b><span>Choose a route, pay its cost</span><i>LIVE BUILD // 03</i></figcaption>
+          <figcaption><b>DEEP STRIKE</b><span>Choose a route, pay its cost</span><i>LIVE BUILD // 04</i></figcaption>
         </figure>
         <figure class="reveal">
           <img src="assets/menu-preview.png" alt="Centered EXODRIFT command menu over a live fleet battle">
-          <figcaption><b>COMMAND SHELL</b><span>Live battle title presentation</span><i>LIVE BUILD // 04</i></figcaption>
+          <figcaption><b>COMMAND SHELL</b><span>Live battle title presentation</span><i>LIVE BUILD // 05</i></figcaption>
         </figure>
       </div>
     </section>
@@ -224,7 +228,9 @@
         <div class="timeline-item complete reveal"><span>06</span><div><b>PRESENTATION SHELL</b><h3>Command begins at the title screen</h3><p>A centered command menu over a continuously simulated carrier battle, with Continue, settings, credits, and campaign transitions.</p></div></div>
         <div class="timeline-item complete reveal"><span>07</span><div><b>PERSONNEL COMMAND</b><h3>The names behind the fleet</h3><p>Twelve officers, six departments, tactical assignments, injuries, bonds, rescue outcomes, succession, and permanent death.</p></div></div>
         <div class="timeline-item complete reveal"><span>08</span><div><b>OPERATIONAL LIVES</b><h3>Careers continue between battles</h3><p>Treatment, promotions, relationship events, radio barks, requisition pools, and rare authored officer unlocks.</p></div></div>
-        <div class="timeline-item current reveal"><span>09</span><div><b>NEXT IN DEVELOPMENT</b><h3>Fleet acquisition</h3><p>Authored escort requisition, replacement hull choices, hangar complements, salvage allocation, and deeper logistics.</p></div></div>
+        <div class="timeline-item complete reveal"><span>09</span><div><b>FLEET ACQUISITION</b><h3>Build the task force</h3><p>Authored escort requisition, carrier frames, hangar complements, salvage allocation, and route-level logistics.</p></div></div>
+        <div class="timeline-item complete reveal"><span>10</span><div><b>GRAPHICS + PERFORMANCE</b><h3>Make every salvo readable</h3><p>Modular textured hulls, retractable lit galleries, pooled flak and missile effects, quality profiles, richer space, radar caching, and sustained-combat performance gates.</p></div></div>
+        <div class="timeline-item current reveal"><span>11</span><div><b>GUIDED OPERATION + SECTOR IDENTITY</b><h3>Teach the command, then change the war</h3><p>A six-step first-operation orientation, Acheron/Vesper/Crucible fleet doctrines, sector-specific formations and space palettes, and navy/raider/alien capital-ship art. Bespoke command battles and external playtesting are next.</p></div></div>
       </div>
     </section>
 
@@ -233,10 +239,10 @@
       <div class="reveal">
         <p class="eyebrow"><span></span> Command link established</p>
         <h2>The fleet is waiting.</h2>
-        <p>Launch the browser build or clone the Godot project and join development from the source of truth.</p>
+        <p>Launch the browser build. The first operation now guides new commanders through helm control, sensors, flight operations, the live tactical map, and intent-level fleet orders.</p>
         <div class="hero-actions">
           <a class="button primary" href="https://risxhb.github.io/exodrift/play/"><b>Play EXODRIFT</b><small>Browser alpha</small></a>
-          <a class="button ghost" href="#roadmap">View roadmap</a>
+          <a class="button ghost" href="https://github.com/Risxhb/exodrift">View source</a>
         </div>
       </div>
     </section>

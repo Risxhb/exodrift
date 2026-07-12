@@ -22,14 +22,42 @@ func _run() -> void:
 	carrier.adjust_chase_zoom(1.0)
 	_assert_true(carrier.chase_target_distance_m < initial_chase_zoom, "combat camera wheel zoom moves the chase camera inward")
 	var steering_yaw := carrier.look_yaw
+	var steering_pitch := carrier.look_pitch
 	carrier.set_camera_orbiting(true)
 	carrier.apply_camera_orbit(Vector2(90.0, -40.0))
 	carrier._update_camera()
 	_assert_true(absf(carrier.camera_orbit_yaw) > 0.1 and absf(carrier.camera_orbit_pitch) > 0.05, "middle-drag combat camera orbit rotates independently around the carrier")
-	_assert_true(is_equal_approx(carrier.look_yaw, steering_yaw), "camera orbit does not alter the carrier steering heading")
+	_assert_true(is_equal_approx(carrier.look_yaw, steering_yaw) and is_equal_approx(carrier.look_pitch, steering_pitch), "camera orbit does not alter the carrier steering heading")
 	var camera_to_carrier := carrier.chase_camera.global_position.direction_to(carrier.global_position + carrier.global_transform.basis.y * 3.0)
-	_assert_true(camera_to_carrier.dot(-carrier.chase_camera.global_transform.basis.z) > 0.98 and carrier.aim_direction.dot(-carrier.global_transform.basis.z) > 0.99, "chase camera centers the carrier while weapon aim remains on the carrier forward axis")
+	_assert_true(camera_to_carrier.dot(-carrier.chase_camera.global_transform.basis.z) > 0.98 and carrier.aim_direction.dot(camera_to_carrier) > 0.99 and carrier.aim_direction.dot(-carrier.global_transform.basis.z) < 0.98, "chase camera centers the carrier while its independent view directs flak away from the hull-forward axis")
+	var orbit_before_mouse_look := Vector2(carrier.camera_orbit_yaw, carrier.camera_orbit_pitch)
+	carrier.apply_mouse_look(Vector2(35.0, 12.0))
+	_assert_true(Vector2(carrier.camera_orbit_yaw, carrier.camera_orbit_pitch) != orbit_before_mouse_look and is_equal_approx(carrier.look_yaw, steering_yaw), "normal mouse look moves the combat camera without rotating the carrier")
+	var centered_aim := carrier.aim_direction
+	var viewport_size := game.get_viewport().get_visible_rect().size
+	carrier.set_web_cursor_steering(Vector2(viewport_size.x * 0.75, viewport_size.y * 0.5), viewport_size)
+	carrier._update_camera()
+	_assert_true(carrier.aim_direction.dot(centered_aim) < 0.995 and is_equal_approx(carrier.look_yaw, steering_yaw), "Web cursor position offsets the flak director without steering the hull")
+	_assert_true(not carrier.flak_mounts.is_empty() and (-carrier.flak_mounts[0].global_transform.basis.z).dot(carrier.aim_direction) > 0.99, "visible flak mounts track the mouse director")
+	carrier.flak_aim_uses_pointer = false
+	carrier.web_cursor_steer = Vector2.ZERO
+	carrier._update_camera()
 	_assert_true(not game.hud.crosshair_label.visible and game.get_node_or_null("DeepStarfield") != null and game.get_node_or_null("NebulaStarBand") != null, "combat view removes the center crosshair and builds the layered deep-space backdrop")
+	_assert_true(ResourceLoader.exists("res://scripts/ui/ui_style.gd") and game.hud.target_panel is Panel and game.hud.telemetry_panel.visible and game.hud.controls_panel.visible, "combat HUD uses the shared polished panel system with grouped telemetry and controls")
+	var graphics := root.get_node_or_null("GraphicsQualityManager")
+	var vfx := root.get_node_or_null("CombatVFX")
+	var registry := root.get_node_or_null("CombatRegistry")
+	_assert_true(graphics != null and vfx != null and registry != null, "graphics quality, pooled combat VFX, and combat registry services are available")
+	var initial_quality: StringName = graphics.current_quality
+	graphics.set_quality(&"low", false)
+	await process_frame
+	_assert_true(vfx.active_impact_budget == 24 and not game.get_node("ParallaxDust").visible, "low graphics profile applies its bounded VFX budget and hides tertiary backdrop layers immediately")
+	graphics.set_quality(&"high", false)
+	await process_frame
+	_assert_true(vfx.active_impact_budget == 80 and game.get_node("ParallaxDust").visible, "high graphics profile restores the full pooled VFX budget and parallax backdrop")
+	graphics.set_quality(initial_quality, false)
+	_assert_true(registry.counts().x >= 6, "maintained combat registry tracks the active capital ships and craft without scene-wide projectile queries")
+	_assert_true(ResourceLoader.exists("res://assets/textures/armor_panels.svg") and ResourceLoader.exists("res://assets/textures/nebula_card.svg"), "original GL-compatible armor and nebula textures are packaged as project resources")
 	var radar_phase: float = game.hud.radar.pulse_phase
 	for _frame in 3:
 		await process_frame
@@ -47,6 +75,17 @@ func _run() -> void:
 	var flak_before := _source_projectile_count(carrier.stable_entity_id)
 	_assert_true(carrier.fire_flak(), "manual flak barrage fires when its cycle is ready")
 	_assert_true(_source_projectile_count(carrier.stable_entity_id) - flak_before == carrier.flak_burst_count, "manual flak creates the full seven-round defensive burst")
+	var flak_visuals: Array[SidebayProjectile] = []
+	for candidate in get_nodes_in_group("projectiles"):
+		if candidate is SidebayProjectile and candidate.source_entity_id == carrier.stable_entity_id:
+			flak_visuals.append(candidate)
+	_assert_true(flak_visuals.size() >= 2 and flak_visuals[0].get_child_count() > 0 and flak_visuals[1].get_child_count() > 0, "flak simulation nodes receive reusable shared-resource tracer visuals")
+	if not flak_visuals.is_empty():
+		_assert_true(flak_visuals[0].direction.dot(carrier.aim_direction) > 0.995, "manual flak follows the independent mouse director")
+	if flak_visuals.size() >= 2:
+		var first_core := flak_visuals[0].get_child(0).get_child(0) as MeshInstance3D
+		var second_core := flak_visuals[1].get_child(0).get_child(0) as MeshInstance3D
+		_assert_true(first_core.mesh == second_core.mesh and first_core.material_override == second_core.material_override, "flak shots share mesh and material resources instead of allocating per shot")
 	_clear_source_projectiles(carrier.stable_entity_id)
 	await process_frame
 	carrier.missile_cooldown = 0.0
@@ -60,6 +99,8 @@ func _run() -> void:
 	carrier.velocity = Vector3(0.0, 0.0, -140.0)
 	var before := carrier.global_position
 	tactical.set_enabled(true)
+	await process_frame
+	_assert_true(game.hud.map_info_panel.visible and game.hud.mode_panel.visible and not game.hud.telemetry_panel.visible, "tactical mode swaps combat telemetry for the polished command-link presentation")
 	var initial_map_zoom := tactical.zoom_factor
 	var wheel_event := InputEventMouseButton.new()
 	wheel_event.button_index = MOUSE_BUTTON_WHEEL_UP

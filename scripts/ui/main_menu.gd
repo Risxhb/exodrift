@@ -6,6 +6,7 @@ signal continue_requested
 signal quit_requested
 
 const SETTINGS_PATH := "user://exodrift_settings.cfg"
+const UIStyle := preload("res://scripts/ui/ui_style.gd")
 
 var world_root: Node3D
 var camera: Camera3D
@@ -18,6 +19,7 @@ var status_label: Label
 var volume_slider: HSlider
 var fullscreen_toggle: CheckButton
 var flash_toggle: CheckButton
+var quality_selector: OptionButton
 var menu_buttons: Array[Button] = []
 var ships: Array[Dictionary] = []
 var tracers: Array[Dictionary] = []
@@ -25,6 +27,9 @@ var explosions: Array[Dictionary] = []
 var elapsed: float = 0.0
 var reduced_flashes: bool = false
 var departing: bool = false
+
+func _graphics_quality() -> Node:
+	return get_node_or_null("/root/GraphicsQualityManager")
 
 func configure(can_continue: bool) -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -253,7 +258,7 @@ func _build_interface(can_continue: bool) -> void:
 	var telemetry := _label(interface, Vector2(26, 22), Vector2(350, 56), 13)
 	telemetry.text = "LIVE COMBAT FEED // HELIOS REACH\nCOMMAND LINK: STANDBY"
 	var build := _label(interface, Vector2(990, 22), Vector2(260, 52), 13)
-	build.text = "DEVELOPMENT BUILD // M10\nSINGLE-PLAYER // PC + WEB"
+	build.text = "GRAPHICS + CONTROL BUILD // M14+\nSINGLE-PLAYER // PC + WEB"
 	build.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	main_panel = _menu_panel()
 	var title := _label(main_panel, Vector2(24, 22), Vector2(392, 58), 42)
@@ -295,11 +300,7 @@ func _menu_panel() -> Panel:
 	panel.position = Vector2(420, 84)
 	panel.size = Vector2(440, 552)
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.008, 0.022, 0.04, 0.91)
-	style.border_color = Color(0.1, 0.62, 0.86, 0.9)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(5)
-	style.shadow_color = Color(0.0, 0.0, 0.0, 0.72)
+	style = UIStyle.panel_style(Color(0.006, 0.022, 0.038, 0.94), UIStyle.CYAN, 2, 6)
 	style.shadow_size = 18
 	panel.add_theme_stylebox_override("panel", style)
 	interface.add_child(panel)
@@ -310,33 +311,45 @@ func _build_settings_panel() -> void:
 	settings_panel.visible = false
 	var title := _label(settings_panel, Vector2(28, 28), Vector2(384, 44), 28)
 	title.text = "SYSTEM SETTINGS"
-	var volume_label := _label(settings_panel, Vector2(38, 112), Vector2(364, 28), 16)
+	var volume_label := _label(settings_panel, Vector2(38, 88), Vector2(364, 28), 16)
 	volume_label.text = "MASTER VOLUME"
 	volume_slider = HSlider.new()
-	volume_slider.position = Vector2(38, 150)
+	volume_slider.position = Vector2(38, 120)
 	volume_slider.size = Vector2(364, 34)
 	volume_slider.min_value = 0.0
 	volume_slider.max_value = 1.0
 	volume_slider.step = 0.05
 	settings_panel.add_child(volume_slider)
+	var quality_label := _label(settings_panel, Vector2(38, 174), Vector2(170, 28), 16)
+	quality_label.text = "GRAPHICS PROFILE"
+	quality_selector = OptionButton.new()
+	quality_selector.position = Vector2(218, 168)
+	quality_selector.size = Vector2(184, 40)
+	UIStyle.apply_option_button(quality_selector, 15)
+	var graphics := _graphics_quality()
+	var profile_order: Array = graphics.PROFILE_ORDER if graphics != null else [&"low", &"medium", &"high"]
+	for profile_name in profile_order:
+		quality_selector.add_item(String(profile_name).to_upper())
+	settings_panel.add_child(quality_selector)
 	fullscreen_toggle = CheckButton.new()
 	fullscreen_toggle.text = "FULLSCREEN"
-	fullscreen_toggle.position = Vector2(38, 220)
+	fullscreen_toggle.position = Vector2(38, 232)
 	fullscreen_toggle.size = Vector2(364, 44)
-	fullscreen_toggle.add_theme_font_size_override("font_size", 16)
+	UIStyle.apply_check_button(fullscreen_toggle, 16)
 	settings_panel.add_child(fullscreen_toggle)
 	flash_toggle = CheckButton.new()
 	flash_toggle.text = "REDUCED COMBAT FLASHES"
-	flash_toggle.position = Vector2(38, 278)
+	flash_toggle.position = Vector2(38, 286)
 	flash_toggle.size = Vector2(364, 44)
-	flash_toggle.add_theme_font_size_override("font_size", 16)
+	UIStyle.apply_check_button(flash_toggle, 16)
 	settings_panel.add_child(flash_toggle)
-	var note := _label(settings_panel, Vector2(38, 348), Vector2(364, 58), 13)
-	note.text = "Settings are saved locally and apply immediately. Fullscreen may require browser permission."
+	var note := _label(settings_panel, Vector2(38, 348), Vector2(364, 72), 13)
+	note.text = "Graphics, audio, and accessibility changes apply immediately. Web defaults to Medium; Windows defaults to High."
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var back := _button(settings_panel, "RETURN", Vector2(54, 452), Vector2(332, 48))
 	back.pressed.connect(_show_main)
 	volume_slider.value_changed.connect(_on_volume_changed)
+	quality_selector.item_selected.connect(_on_quality_selected)
 	fullscreen_toggle.toggled.connect(_on_fullscreen_toggled)
 	flash_toggle.toggled.connect(_on_flash_toggled)
 
@@ -377,10 +390,10 @@ func _show_main() -> void:
 	menu_buttons[0].grab_focus()
 
 func _load_settings() -> void:
-	var config := ConfigFile.new()
-	if config.load(SETTINGS_PATH) != OK:
-		return
-	reduced_flashes = bool(config.get_value("accessibility", "reduced_flashes", false))
+	var graphics := _graphics_quality()
+	if graphics != null:
+		graphics.load_settings()
+		reduced_flashes = bool(graphics.reduced_flashes)
 
 func _apply_settings() -> void:
 	var config := ConfigFile.new()
@@ -388,6 +401,8 @@ func _apply_settings() -> void:
 	var volume := clampf(float(config.get_value("audio", "master_volume", 0.8)), 0.0, 1.0)
 	var fullscreen := bool(config.get_value("display", "fullscreen", false))
 	volume_slider.set_value_no_signal(volume)
+	var graphics := _graphics_quality()
+	quality_selector.select(graphics.profile_index() if graphics != null else (1 if OS.has_feature("web") else 2))
 	fullscreen_toggle.set_pressed_no_signal(fullscreen)
 	flash_toggle.set_pressed_no_signal(reduced_flashes)
 	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Master"), linear_to_db(maxf(volume, 0.001)))
@@ -396,8 +411,11 @@ func _apply_settings() -> void:
 
 func _save_settings() -> void:
 	var config := ConfigFile.new()
+	config.load(SETTINGS_PATH)
 	config.set_value("audio", "master_volume", volume_slider.value)
 	config.set_value("display", "fullscreen", fullscreen_toggle.button_pressed)
+	var graphics := _graphics_quality()
+	config.set_value("display", "graphics_quality", String(graphics.current_quality) if graphics != null else ("medium" if OS.has_feature("web") else "high"))
 	config.set_value("accessibility", "reduced_flashes", flash_toggle.button_pressed)
 	config.save(SETTINGS_PATH)
 
@@ -409,8 +427,18 @@ func _on_fullscreen_toggled(enabled: bool) -> void:
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if enabled else DisplayServer.WINDOW_MODE_WINDOWED)
 	_save_settings()
 
+func _on_quality_selected(index: int) -> void:
+	var graphics := _graphics_quality()
+	if graphics == null or index < 0 or index >= graphics.PROFILE_ORDER.size():
+		return
+	graphics.set_quality(graphics.PROFILE_ORDER[index])
+	_save_settings()
+
 func _on_flash_toggled(enabled: bool) -> void:
 	reduced_flashes = enabled
+	var graphics := _graphics_quality()
+	if graphics != null:
+		graphics.set_reduced_flashes(enabled)
 	_save_settings()
 
 func _material(color: Color, emission_energy: float = 0.0) -> StandardMaterial3D:
@@ -427,11 +455,7 @@ func _label(parent: Control, position_value: Vector2, size_value: Vector2, font_
 	var label := Label.new()
 	label.position = position_value
 	label.size = size_value
-	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", Color(0.76, 0.92, 1.0))
-	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.95))
-	label.add_theme_constant_override("shadow_offset_x", 2)
-	label.add_theme_constant_override("shadow_offset_y", 2)
+	UIStyle.apply_label(label, font_size)
 	parent.add_child(label)
 	return label
 
@@ -440,7 +464,7 @@ func _button(parent: Control, text_value: String, position_value: Vector2, size_
 	button.text = text_value
 	button.position = position_value
 	button.size = size_value
-	button.add_theme_font_size_override("font_size", 15)
+	UIStyle.apply_button(button, 15)
 	parent.add_child(button)
 	menu_buttons.append(button)
 	return button

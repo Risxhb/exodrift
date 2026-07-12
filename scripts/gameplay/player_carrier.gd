@@ -24,6 +24,9 @@ var chase_target_distance_m: float = 125.0
 var camera_orbit_yaw: float = 0.0
 var camera_orbit_pitch: float = 0.0
 var camera_orbiting: bool = false
+var flak_aim_screen_position: Vector2 = Vector2.ZERO
+var flak_aim_uses_pointer: bool = false
+var flak_mounts: Array[Node3D] = []
 var bay_closure: float = 0.0
 var bay_target_closure: float = 0.0
 var bay_transition_seconds: float = 2.2
@@ -41,14 +44,15 @@ func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: 
 			missile_weapon = weapon
 
 func _build_visual() -> void:
-	var hull := MeshInstance3D.new()
-	var hull_mesh := BoxMesh.new()
-	hull_mesh.size = definition.dimensions_m
-	hull.mesh = hull_mesh
-	hull.material_override = _make_material(visual_color, 0.03)
-	add_child(hull)
-	_add_hull_block(Vector3(0.0, definition.dimensions_m.y * 0.6, 8.0), Vector3(15.0, 12.0, 30.0), visual_color.lightened(0.12))
-	_add_hull_block(Vector3(0.0, 0.0, definition.dimensions_m.z * 0.48), Vector3(27.0, 14.0, 25.0), visual_color.darkened(0.15))
+	var dimensions := definition.dimensions_m
+	_add_hull_block(Vector3(0.0, 0.0, 5.0), Vector3(dimensions.x * 0.62, dimensions.y * 0.74, dimensions.z * 0.76), visual_color.darkened(0.08), "ArmoredCore")
+	_add_hull_block(Vector3(0.0, dimensions.y * 0.42, 4.0), Vector3(dimensions.x * 0.34, dimensions.y * 0.22, dimensions.z * 0.64), visual_color.lightened(0.06), "DorsalSpine")
+	_add_hull_block(Vector3(0.0, dimensions.y * 0.68, 13.0), Vector3(15.0, 9.0, 30.0), visual_color.lightened(0.16), "CommandIsland")
+	_add_hull_block(Vector3(0.0, -dimensions.y * 0.46, 12.0), Vector3(dimensions.x * 0.32, dimensions.y * 0.18, dimensions.z * 0.5), visual_color.darkened(0.28), "KeelArmor")
+	_add_hull_block(Vector3(0.0, 0.0, dimensions.z * 0.47), Vector3(31.0, 15.0, 20.0), visual_color.darkened(0.2), "EngineCitadel")
+	_add_armored_bow(dimensions)
+	_add_engine_banks(dimensions)
+	_add_missile_cells()
 	_add_bay(-1.0, "PortBay")
 	_add_bay(1.0, "StarboardBay")
 	for side in [-1.0, 1.0]:
@@ -62,6 +66,10 @@ func _build_visual() -> void:
 			turret.position = Vector3(side * 23.0, 11.0, z)
 			turret.material_override = _make_material(Color(0.24, 0.3, 0.35))
 			add_child(turret)
+			flak_mounts.append(turret)
+			var barrel := _mesh_block(Vector3(2.0, 1.2, 8.0), Color(0.12, 0.18, 0.23))
+			barrel.position = Vector3(0.0, 2.0, -4.0)
+			turret.add_child(barrel)
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
 	shape.size = definition.dimensions_m
@@ -75,14 +83,71 @@ func _build_visual() -> void:
 	chase_camera.far = 30000.0
 	add_child(chase_camera)
 
-func _add_hull_block(position_value: Vector3, size_value: Vector3, color: Color) -> void:
+func _add_hull_block(position_value: Vector3, size_value: Vector3, color: Color, node_name: String = "HullModule") -> MeshInstance3D:
 	var block := MeshInstance3D.new()
+	block.name = node_name
 	var mesh := BoxMesh.new()
 	mesh.size = size_value
 	block.mesh = mesh
 	block.position = position_value
 	block.material_override = _make_material(color)
 	add_child(block)
+	return block
+
+func _mesh_block(size_value: Vector3, color: Color, emission_energy: float = 0.0) -> MeshInstance3D:
+	var block := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = size_value
+	block.mesh = mesh
+	block.material_override = _make_material(color, emission_energy)
+	return block
+
+func _add_armored_bow(dimensions: Vector3) -> void:
+	var bow := MeshInstance3D.new()
+	bow.name = "TaperedArmoredBow"
+	var mesh := PrismMesh.new()
+	mesh.size = Vector3(dimensions.x * 0.58, dimensions.y * 0.7, dimensions.z * 0.27)
+	bow.mesh = mesh
+	bow.position.z = -dimensions.z * 0.47
+	bow.rotation.y = PI
+	bow.material_override = _make_material(visual_color.lightened(0.04), 0.02)
+	add_child(bow)
+
+func _add_engine_banks(dimensions: Vector3) -> void:
+	for side in [-1.0, 1.0]:
+		for height in [-5.0, 5.0]:
+			var housing := MeshInstance3D.new()
+			housing.name = "EngineHousing"
+			var housing_mesh := CylinderMesh.new()
+			housing_mesh.top_radius = 4.2
+			housing_mesh.bottom_radius = 5.0
+			housing_mesh.height = 9.5
+			housing_mesh.radial_segments = 16
+			housing.mesh = housing_mesh
+			housing.rotation_degrees.x = 90.0
+			housing.position = Vector3(side * 13.0, height, dimensions.z * 0.55)
+			housing.material_override = _make_material(Color(0.055, 0.085, 0.11))
+			add_child(housing)
+			var engine := MeshInstance3D.new()
+			engine.name = "EngineGlow"
+			var mesh := CylinderMesh.new()
+			mesh.top_radius = 2.1
+			mesh.bottom_radius = 2.8
+			mesh.height = 8.2
+			mesh.radial_segments = 16
+			engine.mesh = mesh
+			engine.rotation_degrees.x = 90.0
+			engine.position = Vector3(side * 13.0, height, dimensions.z * 0.575)
+			engine.material_override = _make_material(Color(0.035, 0.34, 0.68), 2.15)
+			add_child(engine)
+
+func _add_missile_cells() -> void:
+	for side in [-1.0, 1.0]:
+		for rack in 2:
+			var cell := _mesh_block(Vector3(7.0, 2.0, 12.0), Color(0.14, 0.19, 0.23))
+			cell.name = "MissileCell"
+			cell.position = Vector3(side * (12.0 + rack * 6.0), 12.5, -20.0 + rack * 15.0)
+			add_child(cell)
 
 func _add_bay(side: float, bay_name: String) -> void:
 	var assembly := Node3D.new()
@@ -100,15 +165,32 @@ func _add_bay(side: float, bay_name: String) -> void:
 	mouth_mesh.size = Vector3(2.0, 6.0, 58.0)
 	mouth.mesh = mouth_mesh
 	mouth.position = Vector3(side * 9.0, 0.0, -4.0)
-	mouth.material_override = _make_material(Color(1.0, 0.34, 0.05), 2.5)
+	var mouth_material := _make_material(Color(0.12, 0.82, 1.0), 3.6)
+	if deck_marking_texture == null:
+		deck_marking_texture = load("res://assets/textures/deck_markings.svg") as Texture2D
+	mouth_material.albedo_texture = deck_marking_texture
+	mouth_material.emission_texture = deck_marking_texture
+	mouth_material.uv1_scale = Vector3(1.0, 5.0, 1.0)
+	mouth.material_override = mouth_material
 	assembly.add_child(mouth)
+	var gallery_roof := _mesh_block(Vector3(15.0, 2.0, 68.0), visual_color.lightened(0.06))
+	gallery_roof.name = "GalleryArmor"
+	gallery_roof.position.y = 5.5
+	assembly.add_child(gallery_roof)
+	var rail_lights: Array[MeshInstance3D] = []
+	for rail_index in 8:
+		var rail := _mesh_block(Vector3(1.2, 0.65, 4.5), Color(0.12, 0.9, 1.0), 4.0)
+		rail.name = "ApproachLight"
+		rail.position = Vector3(side * 8.8, -2.3, -28.0 + rail_index * 8.0)
+		assembly.add_child(rail)
+		rail_lights.append(rail)
 	var door_a := _add_bay_door(assembly, side, -31.0)
 	var door_b := _add_bay_door(assembly, side, 31.0)
 	var marker := Marker3D.new()
 	marker.name = bay_name
 	marker.position = Vector3(side * 14.0, 0.0, -4.0)
 	assembly.add_child(marker)
-	bay_assemblies.append({"node": assembly, "side": side, "mouth": mouth, "door_a": door_a, "door_b": door_b})
+	bay_assemblies.append({"node": assembly, "side": side, "mouth": mouth, "door_a": door_a, "door_b": door_b, "lights": rail_lights})
 	if side < 0.0:
 		port_bay_marker = marker
 	else:
@@ -144,8 +226,8 @@ func _physics_process(delta: float) -> void:
 
 func _process_player_flight(delta: float) -> void:
 	if OS.has_feature("web"):
-		look_yaw -= web_cursor_steer.x * 1.15 * delta
-		look_pitch = clampf(look_pitch - web_cursor_steer.y * 0.85 * delta, -0.75, 0.75)
+		camera_orbit_yaw = wrapf(camera_orbit_yaw - web_cursor_steer.x * 1.15 * delta, -PI, PI)
+		camera_orbit_pitch = clampf(camera_orbit_pitch - web_cursor_steer.y * 0.85 * delta, -0.85, 0.65)
 	rotation = Vector3(look_pitch, look_yaw, 0.0)
 	var input := Vector3(
 		Input.get_axis("move_left", "move_right"),
@@ -181,8 +263,7 @@ func _process_autopilot(delta: float) -> void:
 func apply_mouse_look(relative_motion: Vector2) -> void:
 	if not control_enabled:
 		return
-	look_yaw -= relative_motion.x * mouse_sensitivity
-	look_pitch = clampf(look_pitch - relative_motion.y * mouse_sensitivity, -0.75, 0.75)
+	apply_camera_orbit(relative_motion)
 
 func set_camera_orbiting(enabled: bool) -> void:
 	camera_orbiting = enabled
@@ -198,7 +279,10 @@ func reset_camera_orbit() -> void:
 func set_web_cursor_steering(cursor_position: Vector2, viewport_size: Vector2) -> void:
 	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
 		web_cursor_steer = Vector2.ZERO
+		flak_aim_uses_pointer = false
 		return
+	flak_aim_screen_position = cursor_position
+	flak_aim_uses_pointer = true
 	var normalized := Vector2(cursor_position.x / viewport_size.x, cursor_position.y / viewport_size.y) * 2.0 - Vector2.ONE
 	var deadzone := 0.12
 	web_cursor_steer.x = signf(normalized.x) * maxf(0.0, absf(normalized.x) - deadzone) / (1.0 - deadzone)
@@ -215,7 +299,18 @@ func _update_camera() -> void:
 	camera_offset = camera_offset.rotated(Vector3.UP, camera_orbit_yaw)
 	chase_camera.position = camera_offset
 	chase_camera.look_at(global_position + global_transform.basis.y * 3.0, Vector3.UP)
-	aim_direction = -global_transform.basis.z.normalized()
+	var viewport_size := get_viewport().get_visible_rect().size
+	var director_position := flak_aim_screen_position if flak_aim_uses_pointer else viewport_size * 0.5
+	director_position.x = clampf(director_position.x, 0.0, viewport_size.x)
+	director_position.y = clampf(director_position.y, 0.0, viewport_size.y)
+	aim_direction = chase_camera.project_ray_normal(director_position).normalized()
+	_update_flak_mounts()
+
+func _update_flak_mounts() -> void:
+	var turret_up := Vector3.FORWARD if absf(aim_direction.dot(Vector3.UP)) > 0.98 else Vector3.UP
+	for mount in flak_mounts:
+		if is_instance_valid(mount):
+			mount.look_at(mount.global_position + aim_direction, turret_up)
 
 func adjust_chase_zoom(wheel_steps: float) -> void:
 	chase_target_distance_m = clampf(chase_target_distance_m * pow(0.86, wheel_steps), 70.0, 260.0)
@@ -253,7 +348,11 @@ func _spawn_flak_barrage(direction_value: Vector3, count: int, damage_scale: flo
 		var pattern_index := flak_sequence + index
 		var yaw := (float(pattern_index % 5) - 2.0) * 0.018
 		var pitch := (float((pattern_index * 3) % 5) - 2.0) * 0.014
-		var shot_direction := base_direction.rotated(Vector3.UP, yaw).rotated(global_transform.basis.x.normalized(), pitch).normalized()
+		var yaw_direction := base_direction.rotated(Vector3.UP, yaw).normalized()
+		var director_right := yaw_direction.cross(Vector3.UP).normalized()
+		if director_right.length_squared() < 0.01:
+			director_right = global_transform.basis.x.normalized()
+		var shot_direction := yaw_direction.rotated(director_right, pitch).normalized()
 		var side := -1.0 if pattern_index % 2 == 0 else 1.0
 		var local_start := Vector3(side * 23.0, 11.0, -30.0 + float(pattern_index % 3) * 30.0)
 		var projectile := spawn_projectile(flak_weapon, global_transform * local_start, shot_direction)
@@ -263,7 +362,9 @@ func _spawn_flak_barrage(direction_value: Vector3, count: int, damage_scale: flo
 func _process_point_defense() -> void:
 	if point_defense_cooldown > 0.0:
 		return
-	for candidate in get_tree().get_nodes_in_group("projectiles"):
+	var registry := _combat_registry()
+	var projectiles: Array = registry.active_projectiles() if registry != null else get_tree().get_nodes_in_group("projectiles")
+	for candidate in projectiles:
 		if candidate is SidebayProjectile and candidate.team != team and candidate.can_be_intercepted:
 			if global_position.distance_to(candidate.global_position) <= 900.0:
 				_spawn_flak_barrage(global_position.direction_to(candidate.global_position), 3, 0.28)
@@ -318,7 +419,20 @@ func _update_bay_retraction(delta: float) -> void:
 		door_b.position.z = lerpf(31.0, 15.0, bay_closure)
 		var mouth: MeshInstance3D = bay_data.mouth
 		mouth.visible = bay_closure < 0.94
+		var lights: Array = bay_data.lights
+		for light in lights:
+			light.visible = bay_closure < 0.9
 	if are_bays_closed():
+		if previous < 0.995:
+			for bay_data in bay_assemblies:
+				var vfx := _combat_vfx()
+				if vfx != null:
+					vfx.spawn_burst("bay", (bay_data.node as Node3D).global_position, 0.7)
 		bay_state_changed.emit("CLOSED / JUMP SAFE")
 	elif are_bays_open():
+		if previous > 0.005:
+			for bay_data in bay_assemblies:
+				var vfx := _combat_vfx()
+				if vfx != null:
+					vfx.spawn_burst("bay", (bay_data.node as Node3D).global_position, 0.55)
 		bay_state_changed.emit("OPEN / FLIGHT OPS")

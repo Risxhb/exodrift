@@ -75,7 +75,9 @@ func _observer_positions() -> Array[Vector3]:
 
 func _hostile_targets() -> Array[Dictionary]:
 	var targets: Array[Dictionary] = []
-	for entity in get_tree().get_nodes_in_group("combat_entities"):
+	var registry := get_node_or_null("/root/CombatRegistry")
+	var entities: Array = registry.active_combat_entities() if registry != null else get_tree().get_nodes_in_group("combat_entities")
+	for entity in entities:
 		if entity is CombatShip and entity.team != carrier.team and not entity.is_destroyed:
 			# Squadron craft are represented by their parent group to avoid seven noisy contacts.
 			if entity is FighterCraft and entity.home_squadron != null:
@@ -129,11 +131,11 @@ func best_target_in_direction(origin: Vector3, direction: Vector3, maximum_range
 	return best
 
 func resolve_combat_target(entity_id: StringName) -> CombatShip:
-	for entity in get_tree().get_nodes_in_group("combat_entities"):
-		if entity is CombatShip and entity.stable_entity_id == entity_id:
-			return entity
+	var registry := get_node_or_null("/root/CombatRegistry")
+	var entity: Node = registry.resolve_combat_entity(entity_id) if registry != null else null
+	if entity is CombatShip:
+		return entity
 	for group in get_tree().get_nodes_in_group("squadrons"):
 		if group is SidebaySquadron and group.stable_entity_id == entity_id:
 			return group.resolve_command_target(entity_id)
 	return null
-

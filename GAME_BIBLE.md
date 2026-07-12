@@ -3,7 +3,7 @@
 **Document status:** Canonical source of truth  
 **Public title:** EXODRIFT: Carrier Command `[PROVISIONAL]`  
 **Internal codename:** Project Sidebay  
-**Last updated:** 2026-07-11  
+**Last updated:** 2026-07-12
 **Target:** Godot 4, Windows PC and Web, mouse and keyboard, single-player
 
 This file owns the current design, technical constraints, milestone gates, and decision history. Foundational decisions are marked `[LOCKED]`. Values, names, content counts, and experimental behavior remain `[PROVISIONAL]` until playtesting validates them. When a decision changes, update the relevant section first and add a dated entry to the decision log.
@@ -31,7 +31,7 @@ The defining experience is moving continuously between two forms of command:
 
 ### Carrier control `[LOCKED]`
 
-- Third-person mouse-look steering with assisted leveling. The chase camera centers the carrier rather than an action crosshair; weapon aim follows the hull's forward axis. Middle-mouse drag independently orbits without changing carrier heading, and wheel zoom remains available. `[LOCKED]`
+- Third-person carrier control with an independent mouse-look combat director. The chase camera remains centered on the carrier, mouse movement never rotates the hull, manual flak follows the camera/cursor director, and wheel zoom remains available. `[LOCKED]`
 - Heavy inertia and slow rotation communicate scale; braking assist and practical lateral/vertical thrust prevent sluggish controls from becoming frustrating.
 - Keyboard thrust: fore/aft, lateral, vertical, boost, and brake.
 - The vertical combat volume is capped at ±1,400 meters on the Godot Y axis for every capital ship and craft; outward velocity is canceled at the boundary. `[PROVISIONAL]`
@@ -192,7 +192,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 
 ## 8. Milestones and acceptance gates
 
-**Implementation status (2026-07-12):** M1–M13 are implemented. Contract, campaign, and integrated battle tests pass; current Web and Windows release exports succeed; presentation, fleet, personnel, and logistics screens have 1280×720 visual captures. After the carrier-combat expansion, the automated stabilized 600-frame combat gate measured 145 FPS at 1920×1080; the last windowed development-PC sample measured 165 FPS (GeForce RTX 3060, GL Compatibility renderer).
+**Implementation status (2026-07-12):** M1–M14 are implemented. Contract, campaign, integrated battle, normal-performance, and sustained-combat stress tests pass; current Web and Windows release exports succeed. The post-graphics 600-frame combat gate measures 144.9 FPS at 1920×1080. The sustained all-wings/flak/missile/point-defense gate measures 144.9 FPS with p95 9.72 ms and p99 10.02 ms on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
 
 ### M1 — Canonical bible and Godot foundation `[IMPLEMENTED]`
 
@@ -267,7 +267,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - Assigned Command, Flight, Gunnery, Engineering, and Sensors leads modify command range, servicing time, carrier weapon damage, carrier hull, and sensor range. Medical skill reduces injuries sustained during rescue operations.
 - Escape-pod source IDs map endangered craft and ships to appropriate named personnel. The after-action report identifies recovered and adrift officers before the rescue/salvage/departure decision.
 - Rescued officers suffer persistent injuries and recover across completed nodes. Abandoned officers die permanently; bonded survivors gain a Grieving trait that reduces effective skill.
-- Direct combat supports independent middle-drag camera orbit, and every combat ship is held inside the ±1,400-meter vertical battlespace.
+- Direct combat uses independent mouse free-look with a camera/cursor-directed flak solution; the hull retains its helm attitude, and every combat ship is held inside the ±1,400-meter vertical battlespace.
 
 ### M12 — Personnel progression and operational events `[IMPLEMENTED]`
 
@@ -286,6 +286,22 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - **Implemented slice (2026-07-12):** CVN Sidebay, CVN Vanguard, and CVN Citadel form a fixed carrier-frame catalog with balanced, assault, and armored-command identities. Balanced, Raptor Strike, and Watcher Recon air groups provide authored 4/3, 5/2, and 3/4 interceptor/scout allocations with distinct ammunition, endurance, and service profiles. Requisition unlocks sector-gated frames and complements; supply-funded deck refits quote their exact repair/rearm cost. Selections persist in version-8 saves and drive tactical identity, movement, durability, weapon output, command/sensor reach, craft counts, stores, endurance, and servicing.
 - **Implemented slice (2026-07-12):** Battle sweeps and salvage nodes recover persistent allocation stock. Fixed recipes convert stock into supplies, fuel, or requisition. Balanced Stores, Lean Burn, and Recovery Rig postures expose exact route fuel/supply and salvage-yield tradeoffs; affordability, node cards, route execution, after-action projections, and version-9 persistence all use the selected posture. No randomized affixes, grind currency, or permanent stat power are introduced.
 
+### M14 — Combat graphics and performance foundation `[IMPLEMENTED]`
+
+- The carrier uses an original modular industrial hull with tapered bow armor, dorsal command mass, textured plating, readable flak mounts and missile cells, housed engine banks, retractable lit galleries, split bay doors, approach markers, and state feedback. Escorts, hostiles, and fighters use role/faction visual profiles without changing combat definitions.
+- GL-compatible shared projectile meshes/materials, bounded reusable impact slots, missile exhaust, flak tracers, muzzle flashes, shield/hull impacts, optional debris, nebula cards, parallax dust, and tiered backdrop visibility replace per-shot mesh/material construction.
+- A shared command-interface style provides consistent bordered panels, typography, focus/hover states, compact durability bars, and accent colors across the combat HUD, tactical map, campaign, fleet, personnel, logistics, event, and after-action screens. Combat information is grouped by telemetry, air group, fire control, target solution, radar, notifications, and control context.
+- Saved Low, Medium, and High profiles apply immediately. Windows defaults to High and Web to Medium; cosmetic density, impact budget, trail length, debris, and backdrop layers never alter simulation damage or collision behavior.
+- A maintained weak-reference combat registry replaces repeated scene-wide projectile/entity scans in projectile collision, point defense, sensors, and target resolution. Radar contact reconstruction runs at 10 Hz while pulse and sweep motion remain smooth.
+- The 1920×1080 normal gate passes at 144.9 FPS with p95 7.20 ms/p99 7.29 ms. The sustained stress gate passes at 144.9 FPS with p95 9.72 ms/p99 10.02 ms, projectile-adjusted bounded post-warmup node growth, and zero dropped effects in the measured run.
+
+### M15 — Guided operation, encounter identity, and ship art `[IN PROGRESS]`
+
+- The first campaign battle provides a dismissible six-step orientation covering carrier translation, active-ping risk, wing launch, the live tactical map, and intent-level orders. Action cards require a readable dwell before credit and the active-ping lesson cannot be skipped by an earlier input.
+- The three sectors field distinct Acheron, Vesper, and Crucible forces with authored command/screen roles, dimensions, movement, durability, weapon behavior, fighter complements, opening geometry, pursuit identity, lighting, dust, star, and nebula palettes. The standalone first playable retains the original Acheron force.
+- Navy, raider, and alien-carapace SVG hull textures are paired with expanded low-node capital geometry: armor ribs, engineering blocks, command towers, bridge windows, sensor masts, weapon turrets, engine housings/nozzles, navy mission pods, and hostile blade fins. Combat definitions and collision volumes remain separate from presentation.
+- Remaining M15 work is authored encounter layout depth, bespoke sector-command mechanics, a final strategic-command battle, external first-time-player testing, and balance changes based on that evidence.
+
 ## 9. Test matrix
 
 Automated tests cover damage-layer transitions, missile-lock eligibility, FIFO order queues, sensor confidence decay and track drift, command-link transitions, and every valid bay-state transition.
@@ -298,9 +314,13 @@ M12 tests cover treatment quotes and recovery, promotion eligibility and costs, 
 
 M13 tests cover escort, carrier-yard, and flight-group supplier sector gates; exact requisition, refit, route, and salvage-conversion costs; authored acquisition and selection; unique permanent escort loss; version-9 persistence and older-save migration; dynamic 4/3, 5/2, and 3/4 hangar capacities; logistics and fleet-screen interaction; adjusted route affordability and salvage yields; and propagation of every selected tactical profile into combat.
 
+M14 tests cover ship visual profiles, immediate quality switching, backdrop tier visibility, VFX budgets, original texture resources, shared projectile mesh/material identity, combat-registry population, radar animation, normal p95/p99 frame time, sustained legal maximum fire, all deployed wings, hostile missile pressure, node stability, effect drops, and clean ObjectDB shutdown.
+
+M15 tests cover deterministic onboarding progression and minimum card dwell, active-ping timing, first-operation gating, sector-index propagation, faction hull profiles, distinct capital texture assignment, and campaign/integration compatibility across the expanded encounter definitions.
+
 Presentation tests cover menu-first startup, continuous background battle motion, accessibility settings, title-to-campaign fades, manual-save Continue, and return-to-title state preservation.
 
-Carrier-combat integration tests cover carrier-centered camera framing, hull-forward weapon aim, seven-round manual flak, four-missile long-range salvos, pulsing contact radar, layered deep-space backdrop, flight-operation locks, emergency sealing, pursuit exposure, and the closed-bay jump interlock.
+Carrier-combat integration tests cover carrier-centered independent camera framing, mouse-directed flak without hull rotation, seven-round manual flak, four-missile long-range salvos, pulsing contact radar, layered deep-space backdrop, flight-operation locks, emergency sealing, pursuit exposure, and the closed-bay jump interlock.
 
 Verbose headless integration exits without leaked ObjectDB instances; procedural tones are skipped only under the headless display driver so desktop and Web audio remain unchanged.
 
@@ -331,7 +351,7 @@ Each `/goal` owns exactly one milestone. Before work begins, read this bible and
 - **2026-07-11:** `[PROVISIONAL]` Adopted the first-playable dimensions, ranges, timings, and force counts listed in this bible pending playtest.
 - **2026-07-11:** `[PROVISIONAL]` Selected GL Compatibility for the greybox build so testing does not require Vulkan; renderer choice will be revisited with final art targets.
 - **2026-07-11:** Implemented and packaged the complete greybox first playable. Automated contract/integration suites and the 1080p performance gate pass; the stabilized development-PC measurement was 165 FPS.
-- **2026-07-11:** `[PROVISIONAL]` Added Web as a secondary distribution target using cursor-offset flight steering and single-threaded export for static GitHub Pages hosting.
+- **2026-07-11:** `[PROVISIONAL]` Added Web as a secondary distribution target using cursor-offset camera/flak direction and single-threaded export for static GitHub Pages hosting.
 - **2026-07-11:** Implemented M7 run-layer foundation: three-sector graph, resources, forecasts, threat-scaled combat transitions, manual saves, browser build, and Pages deployment workflow.
 - **2026-07-11:** `[PROVISIONAL]` Adopted `EXODRIFT: Carrier Command` as the public title while retaining `Project Sidebay` as the internal codename.
 - **2026-07-11:** Implemented M8 fleet persistence and buildcraft: battle condition carries across nodes and saves, supply service restores losses, and victories unlock authored module sidegrades.
@@ -348,3 +368,5 @@ Each `/goal` owns exactly one milestone. Before work begins, read this bible and
 - **2026-07-12:** Completed M13 with persistent salvage stock, three fixed conversion recipes, three route logistics postures, exact map and executor costs, adjusted recovery yields, version-9 persistence, passing automated suites, clean 1280×720 logistics/fleet captures, and successful Web and Windows release exports. All defined milestones M1–M13 are implemented.
 - **2026-07-12:** Reworked the playable carrier's combat identity around dense flak curtains, four-missile long-range salvos, retractable armored flight galleries, and a closed-bay jump interlock. Reframed the chase camera on the carrier, removed the center crosshair, expanded the procedural space backdrop, and added a pulsing tactical radar. Emergency sealing preserves withdrawal straggler consequences.
 - **2026-07-12:** Completed the carrier-combat stabilization pass: added explicit weapon-cycle/range HUD feedback, removed all headless ObjectDB audio leaks, re-ran every automated suite cleanly, and passed the 600-frame 1920×1080 performance gate at 145 FPS.
+- **2026-07-12:** Completed M14 with an original modular/textured carrier combat presentation, role/faction ship profiles, shared and pooled GL-compatible VFX, saved live quality profiles, a maintained combat registry, 10 Hz radar contact caching, tiered parallax space, direct-render captures, and normal/stress performance gates. Carrier rules, bay/jump safety, sensors, and damage remain unchanged.
+- **2026-07-12:** Began M15 with a six-step first-operation orientation, three sector-specific enemy fleets and battlefield palettes, original navy/raider/alien hull plating, and expanded capital-ship silhouettes with readable functional detail. Contract, campaign, integration, and dedicated onboarding suites pass; bespoke bosses and external playtest validation remain open.
