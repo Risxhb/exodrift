@@ -301,6 +301,14 @@ func _test_application_flow() -> void:
 		await process_frame
 	_assert_true(is_instance_valid(app.active_battle) and not app.campaign_map.visible, "combat node launches existing battle scene")
 	_assert_true(app.active_battle.hosted_campaign and app.active_battle.campaign_threat_multiplier > 1.0, "campaign context reaches combat executor")
+	_assert_true(app.active_battle.campaign_sector_index == 0 and app.active_battle.guided_onboarding and is_instance_valid(app.active_battle.onboarding), "first sector combat receives campaign identity and the one-run guided orientation")
+	var acheron_profile: Dictionary = app.active_battle._sector_encounter_profile()
+	app.active_battle.campaign_sector_index = 1
+	var vesper_profile: Dictionary = app.active_battle._sector_encounter_profile()
+	app.active_battle.campaign_sector_index = 2
+	var crucible_profile: Dictionary = app.active_battle._sector_encounter_profile()
+	app.active_battle.campaign_sector_index = 0
+	_assert_true(acheron_profile.command_name != vesper_profile.command_name and vesper_profile.command_name != crucible_profile.command_name and int(acheron_profile.fighter_count) < int(vesper_profile.fighter_count) and int(vesper_profile.fighter_count) < int(crucible_profile.fighter_count), "sector profiles define distinct hostile fleets with escalating complements")
 	_assert_true(app.active_battle.carrier.display_name == "CVN Vanguard" and app.active_battle.carrier.definition.maximum_speed_mps > 290.0, "selected carrier frame identity and mobility profile reach tactical combat")
 	_assert_true(app.active_battle.interceptor.crafts.size() == 5 and app.active_battle.scout.crafts.size() == 2 and app.active_battle.interceptor.definition.ammunition_per_craft == 32, "selected hangar complement reaches tactical craft counts and stores")
 	_assert_true(app.active_battle.escort.display_name == "ISS Harrier" and app.active_battle.escort.definition.maximum_speed_mps == 330.0 and app.active_battle.escort.definition.weapons[0].can_intercept_projectiles, "selected escort identity and tactical profile reach the combat executor")
@@ -325,6 +333,7 @@ func _test_application_flow() -> void:
 	for _frame in 6:
 		await process_frame
 	_assert_true(is_instance_valid(app.active_battle), "sector command launches after the completed midpoint")
+	_assert_true(not app.active_battle.guided_onboarding and not is_instance_valid(app.active_battle.onboarding), "guided orientation does not repeat after the first completed battle")
 	var supplies_before_withdrawal: int = app.run_state.supplies
 	var fuel_before_rescue: int = app.run_state.fuel
 	var withdrawal_report: Dictionary = app.active_battle._create_battle_report()

@@ -28,6 +28,9 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 - Six objective types: command strike, interception, extraction, defense, escort, and capture.
 - Withdrawal pursuit, jump-range stragglers, recoverable escape pods, and an after-action rescue/salvage/departure choice with persistent consequences.
 - A centered main menu over a continuously simulated carrier battle, with New Operation, Continue, persistent settings, credits, and return-to-title navigation.
+- A six-step first-operation orientation that teaches helm translation, active sensors, flight operations, the live tactical map, and intent-level orders without pausing combat.
+- Three sector-specific hostile fleets—Acheron, Vesper, and Crucible—with different capital roles, fighter complements, opening formations, weapons, pursuit identities, and battlefield palettes.
+- Textured, layered capital ships with faction hull plating, tapered armor, command towers, bridge windows, sensor masts, visible turrets, housed engines, and navy/raider/alien silhouette language.
 - Twelve persistent named officers across six departments, with assignments, tactical effects, traits, bonds, injuries, rescue, recovery, succession, and permanent death.
 - Supply-funded treatment, earned promotions, requisition recruitment, rare officer unlocks, and deterministic operational events with authored radio and relationship outcomes.
 

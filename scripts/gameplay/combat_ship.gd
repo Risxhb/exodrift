@@ -5,6 +5,7 @@ const VERTICAL_BATTLESPACE_LIMIT_M := 1400.0
 
 static var armor_panel_texture: Texture2D
 static var deck_marking_texture: Texture2D
+static var hull_texture_cache: Dictionary = {}
 
 signal ship_destroyed(entity_id: StringName)
 signal damage_received(entity_id: StringName, source_entity_id: StringName, amount: float)
@@ -58,19 +59,19 @@ func _combat_vfx() -> Node:
 
 func _build_visual() -> void:
 	var hull_dimensions := definition.dimensions_m
-	var profile := ShipVisualProfile.for_ship(StringName(definition.role), team)
+	var profile := ShipVisualProfile.for_ship(StringName(definition.role), team, definition.ship_id)
 	var body := MeshInstance3D.new()
 	body.name = "Hull"
 	var mesh := BoxMesh.new()
 	mesh.size = hull_dimensions * profile.core_scale
 	body.mesh = mesh
-	body.material_override = _make_material(visual_color, 0.1)
+	body.material_override = _make_material(visual_color, 0.1, profile.hull_texture_path)
 	add_child(body)
-	_add_visual_block("DorsalArmor", Vector3(0.0, hull_dimensions.y * 0.38, hull_dimensions.z * 0.05), hull_dimensions * profile.dorsal_scale, visual_color.lightened(0.08))
-	_add_visual_block("Keel", Vector3(0.0, -hull_dimensions.y * 0.38, hull_dimensions.z * 0.08), hull_dimensions * profile.keel_scale, visual_color.darkened(0.22))
+	_add_visual_block("DorsalArmor", Vector3(0.0, hull_dimensions.y * 0.38, hull_dimensions.z * 0.05), hull_dimensions * profile.dorsal_scale, visual_color.lightened(0.08), 0.0, profile.hull_texture_path)
+	_add_visual_block("Keel", Vector3(0.0, -hull_dimensions.y * 0.38, hull_dimensions.z * 0.08), hull_dimensions * profile.keel_scale, visual_color.darkened(0.22), 0.0, profile.hull_texture_path)
 	for side in [-1.0, 1.0]:
-		_add_visual_block("ArmorShoulder", Vector3(side * hull_dimensions.x * 0.43, 0.0, hull_dimensions.z * 0.08), hull_dimensions * profile.shoulder_scale, visual_color.darkened(0.08))
-		_add_visual_block("EngineBank", Vector3(side * hull_dimensions.x * 0.28, 0.0, hull_dimensions.z * 0.46), hull_dimensions * profile.engine_scale, profile.engine_color, profile.engine_emission)
+		_add_visual_block("ArmorShoulder", Vector3(side * hull_dimensions.x * 0.43, 0.0, hull_dimensions.z * 0.08), hull_dimensions * profile.shoulder_scale, visual_color.darkened(0.08), 0.0, profile.hull_texture_path)
+		_add_engine_nacelle(side, hull_dimensions, profile)
 	var nose := MeshInstance3D.new()
 	nose.name = "ArmoredBow"
 	var nose_mesh := PrismMesh.new()
@@ -78,40 +79,140 @@ func _build_visual() -> void:
 	nose.mesh = nose_mesh
 	nose.position.z = -definition.dimensions_m.z * 0.62
 	nose.rotation.y = PI
-	nose.material_override = _make_material(visual_color.lightened(0.15), 0.0)
+	nose.material_override = _make_material(visual_color.lightened(0.15), 0.0, profile.hull_texture_path)
 	add_child(nose)
+	_build_hull_details(hull_dimensions, profile)
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
 	shape.size = definition.dimensions_m
 	collision.shape = shape
 	add_child(collision)
 
-func _add_visual_block(node_name: String, position_value: Vector3, size_value: Vector3, color: Color, emission_energy: float = 0.0) -> MeshInstance3D:
+func _build_hull_details(hull_dimensions: Vector3, profile: ShipVisualProfile) -> void:
+	_add_visual_block("AftEngineering", Vector3(0.0, -hull_dimensions.y * 0.05, hull_dimensions.z * 0.39), Vector3(hull_dimensions.x * 0.52, hull_dimensions.y * 0.58, hull_dimensions.z * 0.18), visual_color.darkened(0.18), 0.0, profile.hull_texture_path)
+	_add_visual_block("LongitudinalSpine", Vector3(0.0, hull_dimensions.y * 0.46, hull_dimensions.z * 0.02), Vector3(hull_dimensions.x * 0.12, hull_dimensions.y * 0.16, hull_dimensions.z * 0.78), profile.accent_color.darkened(0.32), 0.0, profile.hull_texture_path)
+	for index in profile.armor_rib_count:
+		var progress := (float(index) + 1.0) / (float(profile.armor_rib_count) + 1.0)
+		var z_position := lerpf(-hull_dimensions.z * 0.35, hull_dimensions.z * 0.34, progress)
+		_add_visual_block("ArmorRib%02d" % index, Vector3(0.0, hull_dimensions.y * 0.34, z_position), Vector3(hull_dimensions.x * 0.78, hull_dimensions.y * 0.08, hull_dimensions.z * 0.035), profile.accent_color.darkened(0.38), 0.0, profile.hull_texture_path)
+	_build_command_tower(hull_dimensions, profile)
+	for turret_index in profile.turret_count:
+		var turret_progress := (float(turret_index) + 1.0) / (float(profile.turret_count) + 1.0)
+		var turret_z := lerpf(-hull_dimensions.z * 0.4, hull_dimensions.z * 0.24, turret_progress)
+		var turret_side := -1.0 if turret_index % 2 == 0 else 1.0
+		_add_weapon_turret(turret_index, Vector3(turret_side * hull_dimensions.x * 0.24, hull_dimensions.y * 0.55, turret_z), hull_dimensions, profile)
+	if profile.faction_style == &"navy":
+		_build_navy_details(hull_dimensions, profile)
+	else:
+		_build_hostile_fins(hull_dimensions, profile)
+
+func _build_command_tower(hull_dimensions: Vector3, profile: ShipVisualProfile) -> void:
+	var tower_z := hull_dimensions.z * 0.08
+	_add_visual_block("CommandTower", Vector3(0.0, hull_dimensions.y * 0.67, tower_z), Vector3(hull_dimensions.x * 0.3, hull_dimensions.y * 0.32, hull_dimensions.z * 0.2), visual_color.lightened(0.04), 0.0, profile.hull_texture_path)
+	_add_visual_block("BridgeWindows", Vector3(0.0, hull_dimensions.y * 0.73, tower_z - hull_dimensions.z * 0.105), Vector3(hull_dimensions.x * 0.23, hull_dimensions.y * 0.06, hull_dimensions.z * 0.018), profile.bridge_color, 2.2)
+	var mast := MeshInstance3D.new()
+	mast.name = "SensorMast"
+	var mast_mesh := CylinderMesh.new()
+	mast_mesh.top_radius = hull_dimensions.x * 0.025
+	mast_mesh.bottom_radius = hull_dimensions.x * 0.035
+	mast_mesh.height = hull_dimensions.y * 0.48
+	mast_mesh.radial_segments = 8
+	mast.mesh = mast_mesh
+	mast.position = Vector3(0.0, hull_dimensions.y * 1.02, tower_z + hull_dimensions.z * 0.04)
+	mast.material_override = _make_material(profile.accent_color.darkened(0.25), 0.0, profile.hull_texture_path)
+	add_child(mast)
+	var sensor := MeshInstance3D.new()
+	sensor.name = "SensorCrown"
+	var sensor_mesh := SphereMesh.new()
+	sensor_mesh.radius = hull_dimensions.x * 0.075
+	sensor_mesh.height = hull_dimensions.x * 0.1
+	sensor_mesh.radial_segments = 8
+	sensor_mesh.rings = 4
+	sensor.mesh = sensor_mesh
+	sensor.position = mast.position + Vector3.UP * hull_dimensions.y * 0.28
+	sensor.material_override = _make_material(profile.bridge_color, 1.1)
+	add_child(sensor)
+
+func _build_navy_details(hull_dimensions: Vector3, profile: ShipVisualProfile) -> void:
+	for side in [-1.0, 1.0]:
+		_add_visual_block("MissionPod", Vector3(side * hull_dimensions.x * 0.5, -hull_dimensions.y * 0.12, -hull_dimensions.z * 0.02), Vector3(hull_dimensions.x * 0.14, hull_dimensions.y * 0.34, hull_dimensions.z * 0.32), visual_color.darkened(0.12), 0.0, profile.hull_texture_path)
+		_add_visual_block("RegistryStripe", Vector3(side * hull_dimensions.x * 0.575, hull_dimensions.y * 0.03, -hull_dimensions.z * 0.08), Vector3(hull_dimensions.x * 0.012, hull_dimensions.y * 0.08, hull_dimensions.z * 0.18), profile.accent_color, 0.18)
+
+func _build_hostile_fins(hull_dimensions: Vector3, profile: ShipVisualProfile) -> void:
+	for side in [-1.0, 1.0]:
+		var fin := MeshInstance3D.new()
+		fin.name = "BladeFin"
+		var fin_mesh := PrismMesh.new()
+		fin_mesh.size = Vector3(hull_dimensions.x * profile.fin_scale, hull_dimensions.y * 0.14, hull_dimensions.z * 0.42)
+		fin.mesh = fin_mesh
+		fin.position = Vector3(side * hull_dimensions.x * 0.55, hull_dimensions.y * (0.08 if profile.faction_style == &"raider" else 0.28), hull_dimensions.z * 0.02)
+		fin.rotation_degrees = Vector3(0.0, 0.0, side * (18.0 if profile.faction_style == &"raider" else 34.0))
+		fin.material_override = _make_material(visual_color.darkened(0.1), 0.0, profile.hull_texture_path)
+		add_child(fin)
+		_add_visual_block("FactionLight", Vector3(side * hull_dimensions.x * 0.46, hull_dimensions.y * 0.26, -hull_dimensions.z * 0.18), Vector3(hull_dimensions.x * 0.025, hull_dimensions.y * 0.055, hull_dimensions.z * 0.26), profile.accent_color, 1.8)
+
+func _add_weapon_turret(index: int, position_value: Vector3, hull_dimensions: Vector3, profile: ShipVisualProfile) -> void:
+	var turret := MeshInstance3D.new()
+	turret.name = "WeaponTurret%02d" % index
+	var turret_mesh := CylinderMesh.new()
+	turret_mesh.top_radius = hull_dimensions.x * 0.08
+	turret_mesh.bottom_radius = hull_dimensions.x * 0.11
+	turret_mesh.height = hull_dimensions.y * 0.12
+	turret_mesh.radial_segments = 8
+	turret.mesh = turret_mesh
+	turret.position = position_value
+	turret.material_override = _make_material(visual_color.darkened(0.16), 0.0, profile.hull_texture_path)
+	add_child(turret)
+	var barrel := _add_visual_block("TurretBarrel%02d" % index, position_value + Vector3(0.0, hull_dimensions.y * 0.04, -hull_dimensions.z * 0.075), Vector3(hull_dimensions.x * 0.045, hull_dimensions.y * 0.045, hull_dimensions.z * 0.18), profile.accent_color.darkened(0.42), 0.0, profile.hull_texture_path)
+	barrel.rotation.x = -0.03
+
+func _add_engine_nacelle(side: float, hull_dimensions: Vector3, profile: ShipVisualProfile) -> void:
+	var engine_position := Vector3(side * hull_dimensions.x * 0.3, 0.0, hull_dimensions.z * 0.44)
+	_add_visual_block("EngineHousing", engine_position, Vector3(hull_dimensions.x * 0.2, hull_dimensions.y * 0.48, hull_dimensions.z * 0.28), visual_color.darkened(0.25), 0.0, profile.hull_texture_path)
+	var emitter := MeshInstance3D.new()
+	emitter.name = "EngineEmitter"
+	var emitter_mesh := CylinderMesh.new()
+	emitter_mesh.top_radius = hull_dimensions.x * 0.065
+	emitter_mesh.bottom_radius = hull_dimensions.x * 0.09
+	emitter_mesh.height = hull_dimensions.z * 0.055
+	emitter_mesh.radial_segments = 10
+	emitter.mesh = emitter_mesh
+	emitter.position = engine_position + Vector3(0.0, 0.0, hull_dimensions.z * 0.165)
+	emitter.rotation.x = PI * 0.5
+	emitter.material_override = _make_material(profile.engine_color, profile.engine_emission)
+	add_child(emitter)
+
+func _add_visual_block(node_name: String, position_value: Vector3, size_value: Vector3, color: Color, emission_energy: float = 0.0, texture_path: String = "") -> MeshInstance3D:
 	var block := MeshInstance3D.new()
 	block.name = node_name
 	var mesh := BoxMesh.new()
 	mesh.size = size_value
 	block.mesh = mesh
 	block.position = position_value
-	block.material_override = _make_material(color, emission_energy)
+	block.material_override = _make_material(color, emission_energy, texture_path)
 	add_child(block)
 	return block
 
-func _make_material(color: Color, emission_energy: float = 0.0) -> StandardMaterial3D:
+func _make_material(color: Color, emission_energy: float = 0.0, texture_path: String = "") -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
 	material.metallic = 0.65
 	material.roughness = 0.42
 	if emission_energy <= 0.2:
-		material.albedo_color = color.lightened(0.34)
-		if armor_panel_texture == null:
-			armor_panel_texture = load("res://assets/textures/armor_panels.svg") as Texture2D
-		material.albedo_texture = armor_panel_texture
+		material.albedo_color = color.lightened(0.5)
+		var default_texture_path := "res://assets/textures/navy_hull.svg" if team == &"friendly" else "res://assets/textures/raider_hull.svg"
+		var resolved_texture_path := texture_path if not texture_path.is_empty() else default_texture_path
+		material.albedo_texture = _hull_texture(resolved_texture_path)
 		material.uv1_scale = Vector3(3.0, 3.0, 3.0)
 	if emission_energy > 0.0:
 		material.emission_enabled = true
 		material.emission = color * emission_energy
 	return material
+
+func _hull_texture(texture_path: String) -> Texture2D:
+	if not hull_texture_cache.has(texture_path):
+		hull_texture_cache[texture_path] = load(texture_path) as Texture2D
+	return hull_texture_cache.get(texture_path) as Texture2D
 
 func _physics_process(delta: float) -> void:
 	if is_destroyed or definition == null:

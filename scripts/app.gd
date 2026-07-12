@@ -153,6 +153,8 @@ func _launch_battle(node: SidebayCampaignNode) -> void:
 	active_battle = (load("res://scenes/main.tscn") as PackedScene).instantiate()
 	active_battle.hosted_campaign = true
 	active_battle.campaign_node_id = node.node_id
+	active_battle.campaign_sector_index = node.sector
+	active_battle.guided_onboarding = node.sector == 0 and run_state.battles_won == 0 and run_state.objectives_failed == 0 and run_state.withdrawals == 0
 	active_battle.campaign_threat_multiplier = 1.0 + maxf(0.0, float(node.threat - 1)) * 0.08
 	active_battle.campaign_objective_type = node.objective_type
 	active_battle.campaign_fleet_snapshot = run_state.fleet_snapshot()
