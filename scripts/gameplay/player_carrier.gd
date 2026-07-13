@@ -56,11 +56,11 @@ var has_commanded_heading: bool = false
 var flak_screen_active: bool = false
 var flak_placement_active: bool = false
 var flak_placement_valid: bool = false
-var flak_screen_range_m: float = 1600.0
-var flak_screen_min_range_m: float = 800.0
-var flak_screen_max_range_m: float = 2400.0
-var flak_screen_range_step_m: float = 200.0
-var flak_airburst_radius_m: float = 150.0
+var flak_screen_range_m: float = 2000.0
+var flak_screen_min_range_m: float = 1000.0
+var flak_screen_max_range_m: float = 3200.0
+var flak_screen_range_step_m: float = 250.0
+var flak_airburst_radius_m: float = 250.0
 var flak_screen_local_offset: Vector3 = Vector3(0.0, 0.0, -1600.0)
 var flak_preview_local_offset: Vector3 = Vector3(0.0, 0.0, -1600.0)
 var flak_screen_indicator: Node3D
@@ -73,7 +73,7 @@ var flak_camera_blend: float = 0.0
 var nuclear_available: bool = true
 var nuclear_arming_distance_m: float = 1200.0
 var nuclear_blast_radius_m: float = 650.0
-var engine_trails: Array[MeshInstance3D] = []
+var engine_trails: Array[Dictionary] = []
 var pending_flak_shots: Array[Dictionary] = []
 var flak_round_interval_seconds: float = 0.035
 var target_navigation_mode: TargetNavigationMode = TargetNavigationMode.NONE
@@ -91,14 +91,23 @@ func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: 
 			missile_weapon = weapon
 		elif weapon.role == "nuclear":
 			nuclear_weapon = weapon
+	if flak_weapon != null:
+		flak_screen_max_range_m = flak_weapon.range_m
+		flak_screen_range_m = clampf(flak_screen_range_m, flak_screen_min_range_m, flak_screen_max_range_m)
 
 func _build_visual() -> void:
 	var dimensions := definition.dimensions_m
-	_add_hull_block(Vector3(0.0, 0.0, 5.0), Vector3(dimensions.x * 0.62, dimensions.y * 0.74, dimensions.z * 0.76), visual_color.darkened(0.08), "ArmoredCore")
-	_add_hull_block(Vector3(0.0, dimensions.y * 0.42, 4.0), Vector3(dimensions.x * 0.34, dimensions.y * 0.22, dimensions.z * 0.64), visual_color.lightened(0.06), "DorsalSpine")
-	_add_hull_block(Vector3(0.0, dimensions.y * 0.68, 13.0), Vector3(15.0, 9.0, 30.0), visual_color.lightened(0.16), "CommandIsland")
-	_add_hull_block(Vector3(0.0, -dimensions.y * 0.46, 12.0), Vector3(dimensions.x * 0.32, dimensions.y * 0.18, dimensions.z * 0.5), visual_color.darkened(0.28), "KeelArmor")
-	_add_hull_block(Vector3(0.0, 0.0, dimensions.z * 0.47), Vector3(31.0, 15.0, 20.0), visual_color.darkened(0.2), "EngineCitadel")
+	_add_tapered_visual_block("ArmoredCore", Vector3(0.0, 0.0, 6.0), Vector3(dimensions.x * 0.62, dimensions.y * 0.72, dimensions.z * 0.72), 0.62, 0.96, visual_color.darkened(0.12), visual_profile.hull_texture_path)
+	_add_tapered_visual_block("RecessedWaist", Vector3(0.0, -dimensions.y * 0.03, 13.0), Vector3(dimensions.x * 0.42, dimensions.y * 0.48, dimensions.z * 0.48), 0.7, 0.92, visual_color.darkened(0.3), visual_profile.hull_texture_path)
+	_add_tapered_visual_block("DorsalSpine", Vector3(0.0, dimensions.y * 0.42, 4.0), Vector3(dimensions.x * 0.34, dimensions.y * 0.22, dimensions.z * 0.64), 0.48, 0.9, visual_color.lightened(0.02), visual_profile.hull_texture_path)
+	_add_tapered_visual_block("KeelArmor", Vector3(0.0, -dimensions.y * 0.46, 12.0), Vector3(dimensions.x * 0.32, dimensions.y * 0.18, dimensions.z * 0.5), 0.58, 0.9, visual_color.darkened(0.3), visual_profile.hull_texture_path)
+	_add_hull_block(Vector3(0.0, dimensions.y * 0.68, 13.0), Vector3(15.0, 9.0, 30.0), visual_color.lightened(0.06), "CommandIsland")
+	_add_hull_block(Vector3(0.0, 0.0, dimensions.z * 0.47), Vector3(31.0, 15.0, 20.0), visual_color.darkened(0.24), "EngineCitadel")
+	for rib_index in 7:
+		var progress := float(rib_index) / 6.0
+		var rib_z := lerpf(-dimensions.z * 0.3, dimensions.z * 0.32, progress)
+		var rib_width := lerpf(dimensions.x * 0.46, dimensions.x * 0.56, progress)
+		_add_hull_block(Vector3(0.0, dimensions.y * 0.485, rib_z), Vector3(rib_width, 1.25, 5.5), visual_color.lightened(0.015), "OverlappingArmorRib%02d" % rib_index)
 	_add_armored_bow(dimensions)
 	_add_engine_banks(dimensions)
 	_add_missile_cells()
@@ -153,15 +162,14 @@ func _mesh_block(size_value: Vector3, color: Color, emission_energy: float = 0.0
 	return block
 
 func _add_armored_bow(dimensions: Vector3) -> void:
-	var bow := MeshInstance3D.new()
-	bow.name = "TaperedArmoredBow"
-	var mesh := PrismMesh.new()
-	mesh.size = Vector3(dimensions.x * 0.58, dimensions.y * 0.7, dimensions.z * 0.27)
-	bow.mesh = mesh
-	bow.position.z = -dimensions.z * 0.47
-	bow.rotation.y = PI
-	bow.material_override = _make_material(visual_color.lightened(0.04), 0.02)
-	add_child(bow)
+	var bow := _add_tapered_visual_block("TaperedArmoredBow", Vector3(0.0, -0.2, -dimensions.z * 0.42), Vector3(dimensions.x * 0.58, dimensions.y * 0.7, dimensions.z * 0.34), 0.34, 0.94, visual_color.lightened(0.015), visual_profile.hull_texture_path)
+	bow.rotation_degrees.x = -1.5
+	for plate_index in 3:
+		var plate := _add_tapered_visual_block("BowArmorPlate%02d" % plate_index, Vector3(0.0, dimensions.y * (0.35 + plate_index * 0.075), -dimensions.z * (0.48 - plate_index * 0.055)), Vector3(dimensions.x * (0.5 - plate_index * 0.055), 1.15, dimensions.z * 0.18), 0.32, 0.92, visual_color.lightened(0.025 + plate_index * 0.01), visual_profile.hull_texture_path)
+		plate.rotation_degrees.x = -2.0 + plate_index
+	for side in [-1.0, 1.0]:
+		var prow_cheek := _add_tapered_visual_block("ProwCheek", Vector3(side * dimensions.x * 0.24, -dimensions.y * 0.08, -dimensions.z * 0.42), Vector3(dimensions.x * 0.18, dimensions.y * 0.42, dimensions.z * 0.3), 0.28, 0.86, visual_color.darkened(0.04), visual_profile.hull_texture_path)
+		prow_cheek.rotation_degrees.y = side * 4.0
 
 func _add_engine_banks(dimensions: Vector3) -> void:
 	for side in [-1.0, 1.0]:
@@ -190,17 +198,28 @@ func _add_engine_banks(dimensions: Vector3) -> void:
 			engine.position = Vector3(side * 13.0, height, dimensions.z * 0.575)
 			engine.material_override = _make_material(Color(0.035, 0.34, 0.68), 2.15)
 			add_child(engine)
-			var trail := MeshInstance3D.new()
-			trail.name = "CarrierEngineTrail"
-			var trail_mesh := PrismMesh.new()
-			trail_mesh.size = Vector3(1.7, 1.7, 22.0)
-			trail.mesh = trail_mesh
-			trail.position = Vector3(side * 13.0, height, dimensions.z * 0.73)
-			trail.rotation.y = PI
-			trail.material_override = _make_material(Color(0.05, 0.5, 1.0, 0.28), 2.9)
-			trail.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			add_child(trail)
-			engine_trails.append(trail)
+			var origin := Vector3(side * 13.0, height, dimensions.z * 0.68)
+			var outer := _engine_plume_layer("CarrierEngineOuterPlume", origin + Vector3(0.0, 0.0, 10.0), Vector3(4.8, 4.8, 34.0), Color(0.08, 0.3, 1.0, 0.16), 2.1)
+			var inner := _engine_plume_layer("CarrierEngineInnerPlume", origin + Vector3(0.0, 0.0, 7.0), Vector3(2.7, 2.7, 25.0), Color(0.08, 0.76, 1.0, 0.36), 3.8)
+			var core := _engine_plume_layer("CarrierEngineCorePlume", origin + Vector3(0.0, 0.0, 4.8), Vector3(1.15, 1.15, 17.0), Color(0.82, 0.97, 1.0, 0.82), 5.6)
+			engine_trails.append({"outer": outer, "inner": inner, "core": core, "phase": float(engine_trails.size()) * 1.73})
+
+func _engine_plume_layer(node_name: String, position_value: Vector3, size_value: Vector3, color: Color, emission: float) -> MeshInstance3D:
+	var plume := MeshInstance3D.new()
+	plume.name = node_name
+	var mesh := PrismMesh.new()
+	mesh.size = size_value
+	plume.mesh = mesh
+	plume.position = position_value
+	plume.rotation.y = PI
+	var material := _make_material(color, emission)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	plume.material_override = material
+	plume.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(plume)
+	return plume
 
 func _build_flak_screen_indicator() -> void:
 	flak_screen_indicator = Node3D.new()
@@ -704,10 +723,23 @@ func _update_flak_indicator(preview: bool) -> void:
 
 func _update_engine_trails() -> void:
 	var speed_ratio := clampf(velocity.length() / maxf(1.0, definition.maximum_speed_mps), 0.0, 1.6)
-	for trail in engine_trails:
-		if is_instance_valid(trail):
-			trail.scale.z = lerpf(0.08, 1.35, speed_ratio)
-			trail.transparency = lerpf(0.86, 0.18, clampf(speed_ratio, 0.0, 1.0))
+	var acceleration_demand := absf(throttle_setting - clampf(speed_ratio, 0.0, 1.0)) * 1.35
+	var output := clampf(maxf(0.07, maxf(throttle_setting * 0.32, acceleration_demand)), 0.0, 1.25)
+	var now := Time.get_ticks_msec() * 0.001
+	for trail_data in engine_trails:
+		var flicker := 0.94 + sin(now * 18.0 + float(trail_data.phase)) * 0.06
+		var outer: MeshInstance3D = trail_data.outer
+		var inner: MeshInstance3D = trail_data.inner
+		var core: MeshInstance3D = trail_data.core
+		if is_instance_valid(outer):
+			outer.scale = Vector3(0.82 + output * 0.2, 0.82 + output * 0.2, lerpf(0.08, 1.42, output) * flicker)
+			outer.transparency = lerpf(0.88, 0.34, clampf(output, 0.0, 1.0))
+		if is_instance_valid(inner):
+			inner.scale = Vector3(0.9 + output * 0.14, 0.9 + output * 0.14, lerpf(0.1, 1.24, output) * (2.0 - flicker))
+			inner.transparency = lerpf(0.76, 0.18, clampf(output, 0.0, 1.0))
+		if is_instance_valid(core):
+			core.scale = Vector3(0.94, 0.94, lerpf(0.12, 1.05, output) * flicker)
+			core.transparency = lerpf(0.62, 0.04, clampf(output, 0.0, 1.0))
 
 func _process_point_defense() -> void:
 	if point_defense_cooldown > 0.0:
@@ -727,7 +759,7 @@ func set_autopilot(destination: Vector3) -> void:
 	autopilot_destination = destination
 	autopilot_active = true
 
-func command_approach(target_ship: CombatShip, stop_distance_m: float = 350.0) -> bool:
+func command_approach(target_ship: CombatShip, stop_distance_m: float = 500.0) -> bool:
 	return _command_target_navigation(TargetNavigationMode.APPROACH, target_ship, stop_distance_m, 0.82)
 
 func command_orbit(target_ship: CombatShip, orbit_distance_m: float = 1200.0) -> bool:
@@ -741,7 +773,7 @@ func _command_target_navigation(mode: TargetNavigationMode, target_ship: CombatS
 		return false
 	target_navigation_mode = mode
 	target_navigation_target = target_ship
-	target_navigation_distance_m = clampf(distance_m, 250.0, 6000.0)
+	target_navigation_distance_m = clampf(distance_m, 250.0, 25000.0)
 	autopilot_active = false
 	has_commanded_heading = false
 	set_throttle(throttle)

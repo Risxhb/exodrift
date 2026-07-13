@@ -147,7 +147,7 @@ func _step_instruction(step: Step) -> String:
 		Step.COMMAND:
 			return "Press Tab for the live tactical map. Combat continues while you inspect contacts and command the fleet."
 		Step.ORDERS:
-			return "Select a wing or the carrier, then right-click a contact or position. Shift queues orders; I orders an intercept."
+			return "Select the carrier and right-click an identified contact for approach, orbit, or range control. Wings retain attack orders; Shift queues and I intercepts."
 		_:
 			return "Command link established. Recall deployed wings before jump preparation; damaged or empty wings need time to service."
 

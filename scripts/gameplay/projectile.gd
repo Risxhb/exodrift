@@ -151,7 +151,10 @@ func detonate() -> void:
 		candidate.receive_damage(damage * falloff, source_entity_id)
 	var vfx := _combat_vfx()
 	if vfx != null:
-		vfx.spawn_faction_burst(projectile_role, global_position, team, source_visual_id, 4.8 if projectile_role == "nuclear" else 1.15)
+		if projectile_role == "flak" and vfx.has_method("spawn_flak_airburst"):
+			vfx.spawn_flak_airburst(global_position, team, source_visual_id, 1.15)
+		else:
+			vfx.spawn_faction_burst(projectile_role, global_position, team, source_visual_id, 4.8 if projectile_role == "nuclear" else 1.15)
 	queue_free()
 
 func intercept() -> void:

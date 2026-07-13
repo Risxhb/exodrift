@@ -36,7 +36,7 @@ The defining experience is moving continuously between two forms of command:
 - Keyboard thrust: fore/aft, lateral, vertical, boost, and brake.
 - The vertical combat volume is capped at ±1,400 meters on the Godot Y axis for every capital ship and craft; outward velocity is canceled at the boundary. `[PROVISIONAL]`
 - The carrier keeps its current velocity or assigned autopilot destination while the tactical map is open.
-- Flak is a carrier-relative area-denial screen. `1` opens a temporary placement view, the pointer places a visible 150 m airburst volume 0.8–2.4 km from the carrier, and distributed batteries sustain staggered seven-round curtains into that volume until ceased or relocated.
+- Flak is a carrier-relative area-denial screen. `1` opens a temporary placement view, the pointer places a visible 250 m airburst volume 1.0–3.2 km from the carrier in 250 m steps, and distributed batteries sustain staggered seven-round curtains into that volume until ceased or relocated. The flak-director upgrade extends the placement maximum to 4 km.
 - `2` fires the four-round identified-lock missile salvo. `3` fires one interceptable nuclear torpedo per battle; it arms after 1.2 km and applies a 650 m falloff blast to friendly and hostile ships.
 - Missiles lock identified targets and launch four-weapon salvos for deliberate anti-ship attacks out to 8.5 kilometers.
 - Automated close defense throws visible three-round flak curtains at interceptable projectiles and remains active while the tactical map is open.
@@ -161,7 +161,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 | Passive sensor range | 8 km |
 | Active ping range | 12 km |
 | Command link range | 7 km |
-| Flak effective range | 900 m |
+| Flak effective range | 3.2 km base / 4 km upgraded |
 | Missile range | 5 km |
 | Wing service time | 6 seconds |
 | Target frame rate | 60 FPS at 1920x1080 on the development PC |
@@ -319,7 +319,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 ### M17 — Fleet authenticity and strategic ordnance `[IMPLEMENTED]`
 
 - Direct combat uses one visible-pointer command view: double-click sets full-cruise heading, middle-drag orbits, wheel zooms, and `W/S`, `Ctrl`, and `Shift` operate persistent heavy-carrier throttle, stop, and boost. Acceleration is 14 m/s² times frame profile and turn response is 0.30 rad/s times frame profile.
-- `1` opens a temporary camera move toward a visible carrier-relative flak volume. Left click confirms, right click or `Esc` cancels, `Shift+1` ceases, and brackets adjust a 0.8–2.4 km range in 0.2 km steps. Confirmed screens retain their local bearing as the carrier moves and turns and sustain staggered seven-round fire into a 150 m interception/airburst radius.
+- `1` opens a temporary camera move toward a visible carrier-relative flak volume. Left click confirms, right click or `Esc` cancels, `Shift+1` ceases, and brackets adjust a 1.0–3.2 km range in 250 m steps, or to 4 km with the flak director. Confirmed screens retain their local bearing as the carrier moves and turns and sustain staggered seven-round fire into a 250 m interception/airburst radius.
 - `2` fires four guided missiles at an identified lock. `3` fires the battle's single 10 km nuclear torpedo, which arms after 1.2 km, can be intercepted, leaves a two-stage trail, and applies a 650 m falloff blast with friendly fire.
 - Missile, nuclear, fighter, and carrier engine trails plus layered hull hits, ship detonations, shock rings, cores, and debris use the existing quality-scaled 80-slot pool. Reduced-flash behavior and zero-drop stress acceptance remain intact.
 - Pressing `Z` or `X` during servicing queues the surviving wing to physically relaunch as soon as deck turnaround completes; the HUD exposes the queued state.
@@ -338,6 +338,16 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - Capital hull cores, dorsal armor, and keels use tapered faceted geometry with brighter triplanar PBR surfaces and restrained rim response while retaining the existing texture atlases and node budgets.
 - The `/exodrift/` showcase and `risxhb.github.io` home page use current runtime models in a premium, truthful fleet-collection presentation with accessible faction tabs.
 - All fourteen automated suites pass. Normal combat measures 144.9 FPS (p95 7.40 ms/p99 7.59 ms), sustained maximum ordnance measures 144.9 FPS (p95 9.57 ms/p99 9.99 ms, zero dropped effects), and the runtime-model menu measures 144.9 effective FPS on the development RTX 3060.
+
+### Combat presentation and tutorial upgrade `[IMPLEMENTED]`
+
+- Sidebay's base flak envelope is 1.0–3.2 km in 250 m fuse steps, extended to 4 km by the flak director. Seven-round curtains now use a 250 m falloff volume and pooled WWII-inspired flashes, smoke clusters, fragments, and pressure rings while retaining interception, faction safety, and reduced-flash behavior.
+- Carrier and menu propulsion use layered white-blue cores, cyan tapered exhaust, and outer ion glow. Plume length and opacity respond to propulsion demand with per-nozzle flicker.
+- CVN Sidebay retains its 120 m gameplay envelope, bays, hardpoints, and statistics while presenting a tapered armored bow, overlapping ribbed plates, recessed waist, side hangar pods, aft engineering spine, paired nacelles, dark gunmetal plating, cyan registry marks, and restrained amber hazards.
+- A seam-feathered 3840×1920 galaxy-arm panorama blends with the existing procedural sky in menu and combat, at reduced combat intensity for target and HUD legibility.
+- Desktop output defaults to 2560×1440. Edge-anchored combat HUD groups render at 75% visual scale while preserving the logical canvas, all information, and collapsible panels.
+- Right-clicking an identified contact marker or Tactical Overview row with the carrier selected opens one menu for lock, 500 m approach, 500 m/5 km/10 km/25 km orbit, the same keep-at-distance values, and clear relative navigation. Empty-space moves and wing/escort orders retain their established behavior.
+- The title menu includes an eight-lesson standalone communications tutorial with Commander Mara Voss. It resolves live key bindings and uses three consistent poses, four eye/mouth facial states per pose, 36-character-per-second text, punctuation pauses, speaking-only mouth animation, and randomized blinks.
 
 ## 9. Test matrix
 
@@ -360,6 +370,8 @@ M16 tests cover heading navigation, persistent throttle and stop/boost behavior,
 M17 tests cover remappable 1/2/3 and bracket actions, placement-camera travel and return, carrier-local screen anchoring, range clamps, staggered fire, airburst interception, nuclear inventory/arming/AoE/friendly fire/interception/trails, heavy carrier limits, speed-reactive engine trails, queued wing redeploy, exact runtime title/archive models, layered menu effects, pooled VFX bounds, and regression compatibility.
 
 M18 tests cover signed carrier zoom, carrier-centered flak framing, direct/tactical placement parity, remappable aggregate hangar-wing control, persistent manual target locks, orbit/approach/keep-distance geometry, collapsible command panels, the interactive overview, projected lock brackets and lead, shader-driven deep space, tapered hull construction, and all prior campaign/combat contracts.
+
+The combat-presentation upgrade tests cover 250 m flak falloff and immunity, fuse clamps and upgrades, layered pooled airbursts, propulsion-demand plume layers, Sidebay geometry and material identity, panorama integration, 1440p HUD density and menu placement, every relative-navigation distance and clear command, all eight tutorial lessons, live bindings, typewriter completion, pose selection, blink/mouth timing, and clean repeated entry.
 
 Presentation tests cover menu-first startup, continuous background battle motion, accessibility settings, title-to-campaign fades, manual-save Continue, and return-to-title state preservation.
 
@@ -416,3 +428,4 @@ Each `/goal` owns exactly one milestone. Before work begins, read this bible and
 - **2026-07-12:** Completed M15 implementation with nine deterministic sector layouts, bespoke Acheron/Vesper/Crucible command phases, structured playtest telemetry and debriefing, role-readable ship/fighter geometry and damage VFX, atomic backup-recoverable autosaves, overwrite confirmation, remappable controls, independent audio buses, an adaptive procedural score, and ten authored operational events. Nine automated suites, menu/normal/stress performance gates, and both release exports pass; external first-time-player sessions now drive post-M15 balance evidence.
 - **2026-07-12:** Completed M16 with a compact bottom title command row, a reframed fleet engagement, intent-driven helm controls, double-click vector flight, persistent throttle, an asymmetric military HUD, faction-specific surface refits, and updated landing-page media. Replaced the blurry panorama with a crisp procedural sky after direct-render visual QA. All thirteen regression suites, normal/stress/menu performance gates, both release exports, and the packaged-build smoke check pass.
 - **2026-07-12:** Completed M17 with a unified visible-pointer command view, heavy carrier inertia, carrier-relative placed flak screening, guided and nuclear ordnance hotkeys, physical post-service wing redeploy, speed-reactive trails, layered bounded impacts/explosions, exact runtime models in the title engagement, and direct Godot model renders in the public fleet archive. Fourteen suites and normal/stress/menu gates pass; release exports and live-site verification are the remaining packaging checks.
+- **2026-07-12:** Completed the combat-presentation and tutorial upgrade: 3.2 km/250 m flak airbursts, demand-driven layered carrier exhaust, the dark gunmetal Sidebay silhouette refit, a seam-feathered galaxy panorama, 2560×1440 output with a 75% HUD, carrier right-click relative-navigation distances, and an eight-part animated Commander Mara Voss tutorial.

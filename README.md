@@ -16,7 +16,7 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 - A unified command-interface style groups carrier telemetry, air-group state, fire control, target data, radar, notifications, and controls into compact scalable panels. The four primary command panels and tactical overview are collapsible.
 - A four-craft Raptor interceptor wing, three Watcher scout drones, and the commandable missile frigate `ISS Resolute`.
 - Visible launch, engagement, recall, side-bay recovery, servicing, relaunch, and armored bay-retraction cycles with a closed-bay jump interlock.
-- An infinite shader-driven deep-space sky with multi-scale stars, galactic structure, nebula color, and dust lanes, plus foreground parallax stars and a pulsing tactical radar.
+- A seam-feathered galaxy-arm panorama blended into the shader-driven deep-space sky, retaining sector palettes, procedural stars, foreground parallax, and a pulsing tactical radar.
 - Refit capital ships with faction-specific hull atlases, layered plating, modeled hardpoints, recognition lighting and wear; low-node fighter geometry, pooled combat flashes, missile exhaust, shield/hull feedback, and saved Low/Medium/High graphics profiles remain shared by Windows and Web.
 - Strict sensor fog with uncertain contacts, active emissions, identification requirements, stale tracks, and command-link loss.
 - Live 3D fleet command with selection, move, attack, intercept, escort, hold, recall, withdraw, stances, formations, and queued orders.
@@ -27,7 +27,7 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 - Persistent salvage stock with fixed supply, fuel, and requisition conversions plus three route logistics postures with explicit travel tradeoffs.
 - Six objective types: command strike, interception, extraction, defense, escort, and capture.
 - Withdrawal pursuit, jump-range stragglers, recoverable escape pods, and an after-action rescue/salvage/departure choice with persistent consequences.
-- A compact bottom command row over a continuously simulated battle built from the current textured runtime ships and fighters, with New Operation, Continue, persistent settings, credits, and return-to-title navigation.
+- A compact bottom command row over a continuously simulated battle built from the current textured runtime ships and fighters, with New Operation, Continue, an eight-part animated communications tutorial, persistent settings, credits, and return-to-title navigation.
 - A six-step first-operation orientation that teaches helm translation, active sensors, flight operations, the live tactical map, and intent-level orders without pausing combat.
 - Three sector-specific hostile fleets—Acheron, Vesper, and Crucible—with different capital roles, fighter complements, opening formations, weapons, pursuit identities, and battlefield palettes.
 - Three deterministic layouts per sector plus bespoke command battles: Acheron command-net screening, Vesper shield-break pincers, and the Crucible's anchored multi-phase strategic core.
@@ -54,7 +54,7 @@ All listed keyboard actions can be remapped from **Settings → Remap Controls**
 
 - `W/S`: increase/decrease persistent throttle; `Ctrl`: full stop; `Shift`: boost
 - Mouse: visible unified command cursor; double-click empty space for a full-cruise heading, middle-drag to orbit, and use the wheel for signed zoom. The authored carrier framing is 0%; the camera can zoom farther out to -100% or in to +100%.
-- `1`: enter or relocate the carrier-centered flak-screen placement view from direct combat or the tactical overlay; left-click confirms, right-click or `Esc` cancels, and `Shift+1` ceases the active screen. `[`/`]` adjust its 0.8–2.4 km fuse distance.
+- `1`: enter or relocate the carrier-centered flak-screen placement view from direct combat or the tactical overlay; left-click confirms, right-click or `Esc` cancels, and `Shift+1` ceases the active screen. `[`/`]` adjust its 1.0–3.2 km fuse distance in 250 m steps; the flak-director upgrade extends the maximum to 4 km.
 - `2`: fire a four-weapon guided missile salvo at the identified lock. Right mouse remains a compatibility shortcut.
 - `3`: fire the single 10 km nuclear torpedo. It arms after 1.2 km, has a 650 m falloff blast, can be intercepted, and damages friendlies.
 - `P`: active sensor ping
@@ -62,7 +62,7 @@ All listed keyboard actions can be remapped from **Settings → Remap Controls**
 - `B`: deploy/open both hangar wings, or recall both air groups and retract the galleries once recovery is complete
 - `Tab`: live tactical map
 - Tactical map: `F1–F4` groups, `1` flak placement, left-click select/confirm, right-click context order/cancel, `I` intercept, `E` escort carrier, Shift queue, `Q` stance, `F` formation, `R` recall, `H` hold, `X` withdraw, middle-drag orbit, wheel zoom
-- Tactical overview: select an identified contact, then Lock, Approach, Orbit, or Keep 2.5K. Rows expose range, closing speed, and identification state; manual locks persist outside the mouse aim cone.
+- Tactical overview: select the carrier, then right-click an identified contact marker or overview row for Lock, Approach 500 m, Orbit, Keep at Distance, or Clear Relative Navigation. Orbit and Keep offer 500 m, 5 km, 10 km, and 25 km distances; empty-space and wing/escort right-click orders retain their existing behavior.
 - `V`: begin jump preparation and wing recall; press again to emergency-seal the bays and risk stragglers
 - `Esc`: pause/settings; `Enter`: restart or return to the campaign
 
@@ -82,6 +82,7 @@ godot --headless --path . --script tests/run_main_menu_layout_tests.gd
 godot --headless --path . --script tests/run_ship_surface_tests.gd
 godot --headless --path . --script tests/run_space_hud_readability_tests.gd
 godot --headless --path . --script tests/run_ordnance_screen_tests.gd
+godot --headless --path . --script tests/run_tutorial_tests.gd
 godot --headless --path . --script tests/profile_combat_stress.gd
 godot --path . --script tests/profile_menu.gd
 godot --headless --path . --export-release "Web"

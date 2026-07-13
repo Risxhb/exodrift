@@ -68,6 +68,14 @@ func _capture() -> void:
 	var flight_1080 := await _capture_best_frame(8)
 	flight_1080.save_png(ProjectSettings.globalize_path("res://build/flight-preview-1080.png"))
 	flight_1080.save_png(ProjectSettings.globalize_path("res://build/flight-preview.png"))
+	root.size = Vector2i(2560, 1440)
+	for _frame in 8:
+		await process_frame
+	var flight_1440 := await _capture_best_frame(8)
+	flight_1440.save_png(ProjectSettings.globalize_path("res://build/flight-preview-1440.png"))
+	root.size = Vector2i(1920, 1080)
+	for _frame in 4:
+		await process_frame
 	scene.carrier.request_bays_closed()
 	for _frame in 160:
 		await physics_frame
@@ -78,6 +86,17 @@ func _capture() -> void:
 		await process_frame
 	var tactical_image := await _capture_best_frame(6)
 	tactical_image.save_png(ProjectSettings.globalize_path("res://build/tactical-preview-1080.png"))
+	root.size = Vector2i(2560, 1440)
+	for _frame in 8:
+		await process_frame
+	var tactical_1440 := await _capture_best_frame(6)
+	tactical_1440.save_png(ProjectSettings.globalize_path("res://build/tactical-preview-1440.png"))
+	scene.tactical.select_commandable(scene.carrier)
+	scene.hud.open_target_context_menu(Vector2(1780.0, 330.0), &"hostile_command")
+	for _frame in 3:
+		await process_frame
+	var context_1440 := await _capture_best_frame(4)
+	context_1440.save_png(ProjectSettings.globalize_path("res://build/tactical-context-preview-1440.png"))
 	quit(0)
 
 func _capture_best_frame(sample_count: int) -> Image:

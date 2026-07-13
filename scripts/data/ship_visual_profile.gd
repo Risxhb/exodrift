@@ -127,9 +127,20 @@ static func for_ship(role: StringName, faction: StringName, identity: StringName
 		profile.core_aft_taper = minf(1.0, profile.core_aft_taper * 1.04)
 	match identity:
 		&"cvn_sidebay":
-			profile.marking_color = Color(0.93, 0.96, 0.88)
-			profile.accent_color = Color(0.3, 0.78, 0.94)
-			profile.armor_rib_count = 6
+			profile.hull_texture_path = "res://assets/textures/sidebay_gunmetal_hull.svg"
+			profile.core_scale = Vector3(0.76, 0.72, 0.82)
+			profile.dorsal_scale = Vector3(0.54, 0.3, 0.58)
+			profile.shoulder_scale = Vector3(0.2, 0.58, 0.62)
+			profile.bow_scale = Vector3(0.66, 0.7, 0.34)
+			profile.marking_color = Color(0.86, 0.96, 0.98)
+			profile.accent_color = Color(0.18, 0.76, 0.9)
+			profile.surface_metallic = 0.72
+			profile.surface_roughness = 0.36
+			profile.albedo_lift = 0.22
+			profile.texture_scale = 3.6
+			profile.wear_level = 0.32
+			profile.rim_strength = 0.22
+			profile.armor_rib_count = 8
 			profile.turret_count = 4
 		&"cvn_vanguard":
 			profile.core_scale = Vector3(0.74, 0.64, 0.86)
