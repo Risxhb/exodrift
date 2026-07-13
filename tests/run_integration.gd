@@ -74,6 +74,7 @@ func _run() -> void:
 	carrier.flak_cooldown = 0.0
 	var flak_before := _source_projectile_count(carrier.stable_entity_id)
 	_assert_true(carrier.fire_flak(), "manual flak barrage fires when its cycle is ready")
+	carrier._process_flak_salvo_queue(1.0)
 	_assert_true(_source_projectile_count(carrier.stable_entity_id) - flak_before == carrier.flak_burst_count, "manual flak creates the full seven-round defensive burst")
 	var flak_visuals: Array[SidebayProjectile] = []
 	for candidate in get_nodes_in_group("projectiles"):
@@ -94,7 +95,7 @@ func _run() -> void:
 	_assert_true(carrier.missile_weapon.range_m == 8500.0 and _source_projectile_count(carrier.stable_entity_id) - missile_before == carrier.missile_salvo_count, "carrier launches four independently tracked long-range missiles")
 	_clear_source_projectiles(carrier.stable_entity_id)
 	await process_frame
-	_assert_true(game.hud.weapon_label.text.contains("FLAK CURTAIN") and game.hud.weapon_label.text.contains("MISSILE SALVO") and game.hud.weapon_label.text.contains("RELOAD"), "combat HUD exposes flak cycle, salvo reload, weapon counts, and missile range")
+	_assert_true(game.hud.weapon_label.text.contains("[1] FLAK") and game.hud.weapon_label.text.contains("[2] MISSILES") and game.hud.weapon_label.text.contains("[3] NUCLEAR") and game.hud.weapon_label.text.contains("RELOAD"), "combat HUD exposes flak fuse, salvo reload, strategic inventory, counts, and weapon ranges")
 	# Tactical mode is live and preserves the carrier's current velocity.
 	carrier.velocity = Vector3(0.0, 0.0, -140.0)
 	var before := carrier.global_position

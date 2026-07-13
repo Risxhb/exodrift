@@ -72,11 +72,11 @@ func _build_world() -> void:
 	var environment_node := WorldEnvironment.new()
 	var environment := Environment.new()
 	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color(0.004, 0.012, 0.03)
-	sky_material.sky_horizon_color = Color(0.035, 0.12, 0.2)
+	sky_material.sky_top_color = Color(0.006, 0.018, 0.045)
+	sky_material.sky_horizon_color = Color(0.055, 0.17, 0.28)
 	sky_material.sky_curve = 0.1
-	sky_material.ground_bottom_color = Color(0.004, 0.012, 0.03)
-	sky_material.ground_horizon_color = Color(0.035, 0.12, 0.2)
+	sky_material.ground_bottom_color = Color(0.006, 0.018, 0.045)
+	sky_material.ground_horizon_color = Color(0.055, 0.17, 0.28)
 	sky_material.ground_curve = 0.16
 	sky_material.sun_angle_max = 1.0
 	sky_material.sun_curve = 0.06
@@ -85,10 +85,10 @@ func _build_world() -> void:
 	sky.sky_material = sky_material
 	environment.background_mode = Environment.BG_SKY
 	environment.sky = sky
-	environment.background_energy_multiplier = 1.08
+	environment.background_energy_multiplier = 1.28
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(0.12, 0.2, 0.36)
-	environment.ambient_light_energy = 0.64
+	environment.ambient_light_color = Color(0.19, 0.3, 0.52)
+	environment.ambient_light_energy = 1.05
 	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	environment_node.environment = environment
@@ -96,16 +96,22 @@ func _build_world() -> void:
 	var key_light := DirectionalLight3D.new()
 	key_light.rotation_degrees = Vector3(-32.0, -38.0, 0.0)
 	key_light.light_color = Color(0.58, 0.74, 1.0)
-	key_light.light_energy = 1.7
+	key_light.light_energy = 2.65
 	world_root.add_child(key_light)
 	var hostile_light := DirectionalLight3D.new()
 	hostile_light.rotation_degrees = Vector3(22.0, 138.0, 0.0)
 	hostile_light.light_color = Color(1.0, 0.18, 0.06)
-	hostile_light.light_energy = 0.65
+	hostile_light.light_energy = 1.25
 	world_root.add_child(hostile_light)
+	var camera_fill := DirectionalLight3D.new()
+	camera_fill.name = "FleetReadabilityFill"
+	camera_fill.rotation_degrees = Vector3(18.0, 28.0, 0.0)
+	camera_fill.light_color = Color(0.42, 0.66, 1.0)
+	camera_fill.light_energy = 1.85
+	world_root.add_child(camera_fill)
 	_build_stars()
-	_add_menu_nebula_card(Vector3(-5400.0, 1500.0, -11800.0), Vector2(7200.0, 3600.0), Color(0.08, 0.38, 0.62, 0.38))
-	_add_menu_nebula_card(Vector3(5900.0, -1200.0, -13200.0), Vector2(6200.0, 3100.0), Color(0.68, 0.18, 0.06, 0.28))
+	_add_menu_nebula_card(Vector3(-5400.0, 1500.0, -11800.0), Vector2(7200.0, 3600.0), Color(0.08, 0.42, 0.7, 0.5))
+	_add_menu_nebula_card(Vector3(5900.0, -1200.0, -13200.0), Vector2(6200.0, 3100.0), Color(0.74, 0.2, 0.055, 0.38))
 	camera = Camera3D.new()
 	camera.fov = 51.0
 	camera.far = 30000.0
@@ -116,18 +122,20 @@ func _build_world() -> void:
 	# The menu battle is composed as two readable formations instead of a loose
 	# collection of ships. Sidebay owns the near-left foreground while the enemy
 	# command group holds the high-right distance, leaving the center as a firing lane.
-	_add_ship("Sidebay Carrier", Vector3(-395.0, -82.0, -470.0), Color(0.12, 0.48, 0.72), Vector3(190.0, 48.0, 520.0), true, 0.0)
-	_add_ship("Resolute", Vector3(-665.0, 105.0, -810.0), Color(0.15, 0.58, 0.8), Vector3(72.0, 29.0, 218.0), false, 1.8)
-	_add_ship("Harrier", Vector3(-175.0, 145.0, -1010.0), Color(0.11, 0.68, 0.88), Vector3(56.0, 22.0, 168.0), false, 2.5)
-	_add_ship("Bulwark", Vector3(-720.0, -180.0, -1140.0), Color(0.18, 0.44, 0.7), Vector3(94.0, 38.0, 238.0), false, 4.0)
-	_add_ship("Acheron Command", Vector3(455.0, 48.0, -735.0), Color(0.7, 0.08, 0.04), Vector3(126.0, 42.0, 320.0), false, 3.1)
-	_add_ship("Acheron Spear", Vector3(725.0, -120.0, -960.0), Color(0.82, 0.12, 0.035), Vector3(68.0, 27.0, 185.0), false, 4.7)
-	_add_ship("Acheron Guard", Vector3(220.0, -205.0, -1190.0), Color(0.62, 0.055, 0.025), Vector3(84.0, 31.0, 215.0), false, 5.4)
+	_add_ship(&"cvn_sidebay", "Sidebay Carrier", "carrier", Vector3(-395.0, -82.0, -470.0), Color(0.26, 0.5, 0.66), Vector3(42.0, 20.0, 120.0), &"friendly", 3.2, 0.0)
+	_add_ship(&"iss_resolute", "Resolute", "frigate", Vector3(-665.0, 105.0, -810.0), Color(0.28, 0.52, 0.67), Vector3(24.0, 12.0, 65.0), &"friendly", 2.5, 1.8)
+	_add_ship(&"iss_harrier", "Harrier", "corvette", Vector3(-175.0, 145.0, -1010.0), Color(0.26, 0.54, 0.68), Vector3(16.0, 8.0, 42.0), &"friendly", 2.7, 2.5)
+	_add_ship(&"iss_bulwark", "Bulwark", "frigate", Vector3(-720.0, -180.0, -1140.0), Color(0.3, 0.48, 0.62), Vector3(28.0, 15.0, 70.0), &"friendly", 2.6, 4.0)
+	_add_ship(&"acheron_command_frigate", "Acheron Command", "command", Vector3(455.0, 48.0, -735.0), Color(0.55, 0.2, 0.08), Vector3(34.0, 18.0, 86.0), &"hostile", 2.9, 3.1)
+	_add_ship(&"vesper_lance_cruiser", "Vesper Spear", "cruiser", Vector3(725.0, -120.0, -960.0), Color(0.42, 0.16, 0.58), Vector3(30.0, 15.0, 80.0), &"hostile", 2.35, 4.7)
+	_add_ship(&"crucible_war_regent", "Crucible Guard", "cruiser", Vector3(220.0, -205.0, -1190.0), Color(0.29, 0.17, 0.4), Vector3(32.0, 17.0, 86.0), &"hostile", 2.35, 5.4)
 	for index in 12:
 		var friendly := index < 6
 		var phase := float(index) * 0.57
 		var origin := Vector3(-410.0 if friendly else 465.0, -25.0, -650.0 if friendly else -830.0)
-		_add_fighter(origin, Color(0.2, 0.76, 1.0) if friendly else Color(1.0, 0.2, 0.04), phase, friendly)
+		var fighter_id := (&"watcher_drone" if index % 3 == 0 else &"raptor_interceptor") if friendly else (&"crucible_talon_fighter" if index % 3 == 0 else &"acheron_interceptor")
+		var fighter_role := "drone" if fighter_id == &"watcher_drone" else "fighter"
+		_add_fighter(fighter_id, fighter_role, origin, Color(0.28, 0.62, 0.78) if friendly else Color(0.62, 0.2, 0.08), phase, friendly)
 	_build_tracers()
 	_build_explosions()
 
@@ -177,105 +185,150 @@ func _add_menu_nebula_card(position_value: Vector3, size_value: Vector2, tint: C
 	card.add_to_group("menu_nebula_veil")
 	world_root.add_child(card)
 
-func _add_ship(ship_name: String, base_position: Vector3, color: Color, dimensions: Vector3, carrier: bool, phase: float) -> void:
-	var ship := Node3D.new()
+func _add_ship(ship_id: StringName, ship_name: String, role: String, base_position: Vector3, color: Color, dimensions: Vector3, faction: StringName, cinematic_scale: float, phase: float) -> void:
+	var ship: CombatShip = PlayerCarrier.new() if ship_id == &"cvn_sidebay" else CombatShip.new()
 	ship.name = ship_name
 	world_root.add_child(ship)
+	ship.configure(_menu_ship_definition(ship_id, ship_name, role, dimensions), StringName("menu_%s" % ship_id), faction, color)
+	ship.set_physics_process(false)
+	ship.set_process(false)
+	if ship is PlayerCarrier:
+		ship.velocity = -ship.global_transform.basis.z * 105.0
+		(ship as PlayerCarrier)._update_engine_trails()
 	ship.position = base_position
-	var hull := MeshInstance3D.new()
-	var hull_mesh := BoxMesh.new()
-	hull_mesh.size = dimensions
-	hull.mesh = hull_mesh
-	hull.material_override = _material(color, 0.12)
-	ship.add_child(hull)
-	var nose := MeshInstance3D.new()
-	var nose_mesh := PrismMesh.new()
-	nose_mesh.size = Vector3(dimensions.x * 0.74, dimensions.y * 0.72, dimensions.z * 0.32)
-	nose.mesh = nose_mesh
-	nose.position.z = -dimensions.z * 0.62
-	nose.rotation.y = PI
-	nose.material_override = _material(color.lightened(0.18), 0.05)
-	ship.add_child(nose)
-	var dorsal := MeshInstance3D.new()
-	var dorsal_mesh := BoxMesh.new()
-	dorsal_mesh.size = Vector3(dimensions.x * 0.3, dimensions.y * 0.48, dimensions.z * 0.32)
-	dorsal.mesh = dorsal_mesh
-	dorsal.position = Vector3(0.0, -dimensions.y * 0.58, -dimensions.z * 0.06)
-	dorsal.material_override = _material(color.lightened(0.12), 0.04)
-	ship.add_child(dorsal)
-	for side in [-1.0, 1.0]:
-		var armor := MeshInstance3D.new()
-		var armor_mesh := BoxMesh.new()
-		armor_mesh.size = Vector3(dimensions.x * 0.12, dimensions.y * 0.7, dimensions.z * 0.58)
-		armor.mesh = armor_mesh
-		armor.position = Vector3(side * dimensions.x * 0.54, 0.0, dimensions.z * 0.04)
-		armor.material_override = _material(color.darkened(0.28), 0.03)
-		ship.add_child(armor)
-	if carrier:
-		for side in [-1.0, 1.0]:
-			var bay := MeshInstance3D.new()
-			var bay_mesh := BoxMesh.new()
-			bay_mesh.size = Vector3(34.0, 20.0, 210.0)
-			bay.mesh = bay_mesh
-			bay.position = Vector3(side * (dimensions.x * 0.62), 0.0, 18.0)
-			bay.material_override = _material(Color(0.06, 0.22, 0.32), 0.1)
-			ship.add_child(bay)
-			var gallery := MeshInstance3D.new()
-			var gallery_mesh := BoxMesh.new()
-			gallery_mesh.size = Vector3(3.0, 12.0, 156.0)
-			gallery.mesh = gallery_mesh
-			gallery.position = Vector3(side * (dimensions.x * 0.75), 0.0, 12.0)
-			gallery.material_override = _material(Color(0.05, 0.8, 1.0), 3.2)
-			ship.add_child(gallery)
-	var engine := MeshInstance3D.new()
-	var engine_mesh := BoxMesh.new()
-	engine_mesh.size = Vector3(dimensions.x * 0.56, dimensions.y * 0.38, 5.0)
-	engine.mesh = engine_mesh
-	engine.position.z = dimensions.z * 0.52
-	engine.material_override = _material(Color(0.08, 0.62, 1.0) if color.b > color.r else Color(1.0, 0.16, 0.025), 4.0)
-	ship.add_child(engine)
-	var engine_glow := OmniLight3D.new()
-	engine_glow.light_color = Color(0.08, 0.62, 1.0) if color.b > color.r else Color(1.0, 0.1, 0.02)
-	engine_glow.light_energy = 2.2
-	engine_glow.omni_range = minf(dimensions.x * 1.4, 165.0)
-	engine_glow.position.z = dimensions.z * 0.58
-	ship.add_child(engine_glow)
-	ships.append({"node": ship, "base": base_position, "phase": phase, "fighter": false, "friendly": color.b > color.r})
+	ship.scale = Vector3.ONE * cinematic_scale
+	ship.add_to_group("menu_runtime_ship")
+	ships.append({"node": ship, "base": base_position, "phase": phase, "fighter": false, "friendly": faction == &"friendly", "model_id": ship_id})
 
-func _add_fighter(origin: Vector3, color: Color, phase: float, friendly: bool) -> void:
-	var fighter := Node3D.new()
+func _add_fighter(ship_id: StringName, role: String, origin: Vector3, color: Color, phase: float, friendly: bool) -> void:
+	var fighter := FighterCraft.new()
+	fighter.name = "Menu %s" % String(ship_id).capitalize()
 	world_root.add_child(fighter)
-	var body := MeshInstance3D.new()
-	var mesh := PrismMesh.new()
-	mesh.size = Vector3(13.0, 5.0, 28.0)
-	body.mesh = mesh
-	body.rotation.y = PI
-	body.material_override = _material(color, 0.3)
-	fighter.add_child(body)
-	ships.append({"node": fighter, "base": origin, "phase": phase, "fighter": true, "friendly": friendly})
+	var dimensions := Vector3(8.0, 3.0, 14.0) if role == "fighter" else Vector3(7.0, 3.2, 12.0)
+	fighter.configure(_menu_ship_definition(ship_id, fighter.name, role, dimensions), StringName("menu_%s_%d" % [ship_id, ships.size()]), &"friendly" if friendly else &"hostile", color)
+	fighter.set_physics_process(false)
+	fighter.scale = Vector3.ONE * 1.45
+	fighter.add_to_group("menu_runtime_fighter")
+	ships.append({"node": fighter, "base": origin, "phase": phase, "fighter": true, "friendly": friendly, "model_id": ship_id})
+
+func _menu_ship_definition(ship_id: StringName, display_name: String, role: String, dimensions: Vector3) -> ShipDefinition:
+	var definition := ShipDefinition.new()
+	definition.ship_id = ship_id
+	definition.display_name = display_name
+	definition.role = role
+	definition.dimensions_m = dimensions
+	definition.damage_layers = DamageLayerDefinition.new()
+	return definition
 
 func _build_tracers() -> void:
-	for index in 22:
-		var tracer := MeshInstance3D.new()
-		var mesh := SphereMesh.new()
-		mesh.radius = 3.4 if index % 5 else 6.0
-		mesh.height = mesh.radius * 2.0
-		tracer.mesh = mesh
+	for index in 28:
+		var tracer := Node3D.new()
+		var is_missile := index % 5 == 0
+		tracer.name = "MenuMissileTrail" if is_missile else "MenuFlakTracer"
 		var friendly := index % 2 == 0
-		tracer.material_override = _material(Color(0.08, 0.78, 1.0) if friendly else Color(1.0, 0.16, 0.025), 5.0)
+		var shot_color := Color(0.1, 0.78, 1.0) if friendly else Color(1.0, 0.18, 0.025)
+		var head := MeshInstance3D.new()
+		head.name = "Warhead" if is_missile else "FlakRound"
+		var head_mesh := SphereMesh.new()
+		head_mesh.radius = 5.5 if is_missile else 2.5
+		head_mesh.height = head_mesh.radius * 2.0
+		head_mesh.radial_segments = 8
+		head_mesh.rings = 4
+		head.mesh = head_mesh
+		head.material_override = _material(shot_color.lightened(0.24), 6.0)
+		tracer.add_child(head)
+		var streak := MeshInstance3D.new()
+		streak.name = "PropellantTrail" if is_missile else "TracerStreak"
+		var streak_mesh: PrimitiveMesh
+		if is_missile:
+			var plume_mesh := PrismMesh.new()
+			plume_mesh.size = Vector3(9.0, 9.0, 105.0)
+			streak_mesh = plume_mesh
+		else:
+			var tracer_mesh := BoxMesh.new()
+			tracer_mesh.size = Vector3(2.2, 2.2, 56.0)
+			streak_mesh = tracer_mesh
+		streak.mesh = streak_mesh
+		streak.position.z = 48.0 if is_missile else 27.0
+		var trail_material := _material(shot_color, 4.4 if is_missile else 3.4)
+		trail_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		trail_material.albedo_color.a = 0.48 if is_missile else 0.68
+		streak.material_override = trail_material
+		tracer.add_child(streak)
+		if is_missile:
+			var plume_light := OmniLight3D.new()
+			plume_light.name = "MissilePlumeLight"
+			plume_light.light_color = shot_color
+			plume_light.light_energy = 1.4
+			plume_light.omni_range = 42.0
+			plume_light.position.z = 16.0
+			tracer.add_child(plume_light)
+			tracer.add_to_group("menu_missile_trail")
+		else:
+			tracer.add_to_group("menu_flak_tracer")
 		world_root.add_child(tracer)
-		tracers.append({"node": tracer, "phase": float(index) / 22.0, "friendly": friendly, "lane": index % 5})
+		tracers.append({"node": tracer, "phase": float(index) / 28.0, "friendly": friendly, "lane": index % 5, "missile": is_missile})
 
 func _build_explosions() -> void:
 	for index in 4:
-		var burst := MeshInstance3D.new()
-		var mesh := SphereMesh.new()
-		mesh.radius = 26.0
-		mesh.height = 52.0
-		burst.mesh = mesh
-		burst.material_override = _material(Color(1.0, 0.26, 0.035), 4.5)
+		var burst := Node3D.new()
+		burst.name = "MenuLayeredImpact"
+		burst.add_to_group("menu_layered_explosion")
 		world_root.add_child(burst)
-		explosions.append({"node": burst, "phase": float(index) * 2.15 + 0.7, "position": Vector3(-280.0 + index * 205.0, -90.0 + index * 55.0, -650.0 - index * 110.0)})
+		var core := _explosion_sphere(burst, "WhiteHotCore", 14.0, Color(1.0, 0.88, 0.5), 8.0)
+		var fire_shell := _explosion_sphere(burst, "Fireball", 27.0, Color(1.0, 0.18, 0.025, 0.68), 5.0)
+		var smoke := _explosion_sphere(burst, "PlasmaSmoke", 36.0, Color(0.18, 0.035, 0.018, 0.34), 0.7)
+		var shockwave := MeshInstance3D.new()
+		shockwave.name = "ShockwaveRing"
+		var ring_mesh := TorusMesh.new()
+		ring_mesh.inner_radius = 24.0
+		ring_mesh.outer_radius = 29.0
+		ring_mesh.rings = 20
+		ring_mesh.ring_segments = 8
+		shockwave.mesh = ring_mesh
+		shockwave.rotation_degrees.x = 72.0 + index * 11.0
+		var ring_material := _material(Color(1.0, 0.48, 0.12, 0.7), 5.2)
+		ring_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		shockwave.material_override = ring_material
+		burst.add_child(shockwave)
+		var sparks := MultiMeshInstance3D.new()
+		sparks.name = "DirectionalDebris"
+		var spark_mesh := BoxMesh.new()
+		spark_mesh.size = Vector3(1.4, 1.4, 18.0)
+		spark_mesh.material = _material(Color(1.0, 0.52, 0.12), 5.5)
+		var spark_multimesh := MultiMesh.new()
+		spark_multimesh.transform_format = MultiMesh.TRANSFORM_3D
+		spark_multimesh.mesh = spark_mesh
+		spark_multimesh.instance_count = 12
+		for spark_index in spark_multimesh.instance_count:
+			var angle := TAU * float(spark_index) / float(spark_multimesh.instance_count) + index * 0.37
+			var direction := Vector3(cos(angle), sin(angle * 1.7) * 0.65, sin(angle)).normalized()
+			var spark_basis := Basis.looking_at(-direction, Vector3.UP)
+			spark_multimesh.set_instance_transform(spark_index, Transform3D(spark_basis, direction * 42.0))
+		sparks.multimesh = spark_multimesh
+		burst.add_child(sparks)
+		var blast_light := OmniLight3D.new()
+		blast_light.name = "BlastLight"
+		blast_light.light_color = Color(1.0, 0.32, 0.055)
+		blast_light.light_energy = 5.0
+		blast_light.omni_range = 190.0
+		burst.add_child(blast_light)
+		explosions.append({"node": burst, "core": core, "fire": fire_shell, "smoke": smoke, "shockwave": shockwave, "sparks": sparks, "light": blast_light, "phase": float(index) * 2.15 - 0.15, "position": Vector3(-280.0 + index * 205.0, -90.0 + index * 55.0, -650.0 - index * 110.0)})
+
+func _explosion_sphere(parent: Node3D, node_name: String, radius: float, color: Color, emission_energy: float) -> MeshInstance3D:
+	var sphere := MeshInstance3D.new()
+	sphere.name = node_name
+	var mesh := SphereMesh.new()
+	mesh.radius = radius
+	mesh.height = radius * 2.0
+	mesh.radial_segments = 12
+	mesh.rings = 6
+	sphere.mesh = mesh
+	var material := _material(color, emission_energy)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	sphere.material_override = material
+	parent.add_child(sphere)
+	return sphere
 
 func _update_battle(_delta: float) -> void:
 	if camera == null:
@@ -298,21 +351,46 @@ func _update_battle(_delta: float) -> void:
 			var broadside_yaw := -0.58 if bool(ship_data.friendly) else 0.58
 			ship.rotation.y = broadside_yaw + sin(elapsed * 0.07 + phase) * 0.09
 	for tracer_data in tracers:
-		var tracer: Node3D = tracer_data.node
+		var tracer := tracer_data.node as Node3D
 		var friendly := bool(tracer_data.friendly)
-		var cycle := fposmod(elapsed * (0.22 if tracer_data.lane == 0 else 0.34) + float(tracer_data.phase), 1.0)
+		var is_missile := bool(tracer_data.missile)
+		var cycle_speed := 0.18 if is_missile else (0.26 if tracer_data.lane == 0 else 0.42)
+		var cycle := fposmod(elapsed * cycle_speed + float(tracer_data.phase), 1.0)
 		var origin := Vector3(-590.0, -35.0 + float(tracer_data.lane) * 45.0, -520.0) if friendly else Vector3(610.0, 80.0 - float(tracer_data.lane) * 38.0, -790.0)
 		var target := Vector3(610.0, 60.0, -790.0) if friendly else Vector3(-590.0, -45.0, -520.0)
-		tracer.position = origin.lerp(target, cycle) + Vector3(0.0, sin(cycle * PI) * (90.0 + tracer_data.lane * 12.0), 0.0)
+		var arc_height := (150.0 if is_missile else 72.0) + float(tracer_data.lane) * 13.0
+		var current_position := origin.lerp(target, cycle) + Vector3(0.0, sin(cycle * PI) * arc_height, sin(cycle * TAU + tracer_data.lane) * (34.0 if is_missile else 8.0))
+		var next_cycle := minf(cycle + 0.012, 1.0)
+		var next_position := origin.lerp(target, next_cycle) + Vector3(0.0, sin(next_cycle * PI) * arc_height, sin(next_cycle * TAU + tracer_data.lane) * (34.0 if is_missile else 8.0))
+		tracer.position = current_position
+		if not current_position.is_equal_approx(next_position):
+			tracer.look_at(next_position, Vector3.UP)
 		tracer.visible = cycle > 0.04 and cycle < 0.94
 	for explosion_data in explosions:
-		var burst: MeshInstance3D = explosion_data.node
+		var burst := explosion_data.node as Node3D
 		var pulse := fposmod(elapsed - float(explosion_data.phase), 8.6)
 		burst.position = explosion_data.position
-		burst.visible = pulse < 0.75
+		burst.visible = pulse < 1.15
 		if burst.visible:
-			var intensity := sin(pulse / 0.75 * PI)
-			burst.scale = Vector3.ONE * (0.25 + intensity * (1.15 if reduced_flashes else 1.8))
+			var flash_limit := 0.76 if reduced_flashes else 1.0
+			var core_fade := clampf(1.0 - pulse / 0.34, 0.0, 1.0)
+			var fire_fade := clampf(1.0 - pulse / 0.78, 0.0, 1.0)
+			var smoke_fade := clampf(1.0 - pulse / 1.15, 0.0, 1.0)
+			(explosion_data.core as MeshInstance3D).scale = Vector3.ONE * (0.35 + pulse * 2.8)
+			(explosion_data.fire as MeshInstance3D).scale = Vector3.ONE * (0.22 + pulse * 1.9)
+			(explosion_data.smoke as MeshInstance3D).scale = Vector3.ONE * (0.18 + pulse * 1.45)
+			(explosion_data.shockwave as MeshInstance3D).scale = Vector3.ONE * (0.4 + pulse * 4.6)
+			(explosion_data.sparks as MultiMeshInstance3D).scale = Vector3.ONE * (0.55 + pulse * 2.7)
+			_set_mesh_alpha(explosion_data.core, core_fade * flash_limit)
+			_set_mesh_alpha(explosion_data.fire, fire_fade * 0.76 * flash_limit)
+			_set_mesh_alpha(explosion_data.smoke, smoke_fade * 0.4)
+			_set_mesh_alpha(explosion_data.shockwave, fire_fade * 0.68 * flash_limit)
+			(explosion_data.light as OmniLight3D).light_energy = core_fade * (2.2 if reduced_flashes else 6.2)
+
+func _set_mesh_alpha(mesh_instance: MeshInstance3D, alpha: float) -> void:
+	var material := mesh_instance.material_override as StandardMaterial3D
+	if material != null:
+		material.albedo_color.a = clampf(alpha, 0.0, 1.0)
 
 func _build_interface(can_continue: bool) -> void:
 	var canvas := CanvasLayer.new()
@@ -334,13 +412,13 @@ func _build_interface(can_continue: bool) -> void:
 	var telemetry := _label(interface, Vector2(26, 22), Vector2(350, 56), 13)
 	telemetry.text = "LIVE COMBAT FEED // HELIOS REACH\nCOMMAND LINK: STANDBY"
 	var build := _label(interface, Vector2(990, 22), Vector2(260, 52), 13)
-	build.text = "HELM + PRESENTATION BUILD // M16\nSINGLE-PLAYER // PC + WEB"
+	build.text = "FLEET + ORDNANCE BUILD // M17\nSINGLE-PLAYER // PC + WEB"
 	build.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	main_panel = _command_bar()
 	var title := _label(main_panel, Vector2(22, 14), Vector2(218, 42), 30)
 	title.text = "EXODRIFT"
 	var subtitle := _label(main_panel, Vector2(23, 51), Vector2(218, 22), 11)
-	subtitle.text = "CARRIER COMMAND // M16"
+	subtitle.text = "CARRIER COMMAND // M17"
 	var divider := ColorRect.new()
 	divider.color = Color(0.08, 0.7, 0.96, 0.72)
 	divider.position = Vector2(246, 14)

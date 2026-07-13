@@ -79,9 +79,9 @@ func _build_ui() -> void:
 	wing_panel = _panel(root, Vector2(18, 164), Vector2(438, 68), Color(0.006, 0.024, 0.038, 0.68))
 	_section_heading(wing_panel, "AIR GROUP", UIStyle.CYAN)
 	wing_label = _label(wing_panel, Vector2(14, 23), Vector2(410, 40), 11)
-	weapon_panel = _panel(root, Vector2(18, 240), Vector2(402, 68), Color(0.006, 0.024, 0.038, 0.68))
+	weapon_panel = _panel(root, Vector2(18, 240), Vector2(470, 88), Color(0.006, 0.024, 0.038, 0.68))
 	_section_heading(weapon_panel, "FIRE CONTROL", UIStyle.AMBER)
-	weapon_label = _label(weapon_panel, Vector2(14, 23), Vector2(374, 40), 11)
+	weapon_label = _label(weapon_panel, Vector2(14, 23), Vector2(442, 60), 11)
 	target_panel = _panel(root, Vector2(934, 14), Vector2(328, 158), Color(0.006, 0.024, 0.038, 0.76), UIStyle.CYAN)
 	_section_heading(target_panel, "TARGET SOLUTION", UIStyle.CYAN)
 	var portrait_back := _panel(target_panel, Vector2(14, 30), Vector2(76, 66), Color(0.012, 0.065, 0.09, 0.66), UIStyle.CYAN_SOFT)
@@ -114,7 +114,7 @@ func _build_ui() -> void:
 	controls_panel = _panel(root, Vector2(84, 680), Vector2(1112, 28), Color(0.004, 0.018, 0.028, 0.62), UIStyle.CYAN_SOFT)
 	controls_label = _label(controls_panel, Vector2(10, 3), Vector2(1092, 22), 10, UIStyle.TEXT_MUTED)
 	controls_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	controls_label.text = "C PILOT  G GUN  W/S THROTTLE  DOUBLE-CLICK SPACE FULL CRUISE  LMB MODE ACTION  RMB MISSILE  P PING  Z/X WINGS  TAB MAP"
+	controls_label.text = "1 FLAK SCREEN  2 MISSILES  3 NUCLEAR  [ / ] FUSE RANGE  DOUBLE-CLICK SPACE FULL CRUISE  MMB ORBIT  WHEEL ZOOM"
 	crosshair_label = _label(root, Vector2(624, 340), Vector2(32, 32), 24)
 	crosshair_label.text = "⌖"
 	crosshair_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -146,7 +146,7 @@ func _build_ui() -> void:
 	pause_title.text = "PAUSED / SETTINGS"
 	pause_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var pause_copy := _label(pause_panel, Vector2(40, 90), Vector2(420, 160), 18)
-	pause_copy.text = "Esc — resume\n\nC: Pilot Mode — visible cursor + heading commands\nG: Gun Mode — captured flak director\nW/S: throttle  •  Ctrl: full stop  •  Shift: boost\nDouble-click empty space: full-cruise heading\nMiddle-drag: camera orbit  •  Wheel: zoom\n\nEnter — restart encounter"
+	pause_copy.text = "Esc — resume\n\n1: place / relocate flak screen  •  Shift+1: cease\n2: guided missile salvo  •  3: one nuclear torpedo\n[ / ]: flak fuse range  •  W/S: throttle\nDouble-click empty space: full-cruise heading\nMiddle-drag: camera orbit  •  Wheel: zoom\n\nEnter — restart encounter"
 	pause_copy.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pause_panel.visible = false
 	pause_veil.visible = false
@@ -160,15 +160,16 @@ func _process(delta: float) -> void:
 	hull_bar.value = layers.z * 100.0
 	status_label.text = "%s  //  SPD %4.0f m/s\nBAYS %s  //  CONTACTS %d\nSHD %3.0f%%    ARM %3.0f%%    HULL %3.0f%%" % [carrier.display_name.to_upper(), carrier.velocity.length(), carrier.bay_status(), sensors.contacts.size(), layers.x * 100.0, layers.y * 100.0, layers.z * 100.0]
 	wing_label.text = "[Z] %s  //  %s  •  %d CRAFT  •  %d AMMO  •  %.0fs\n[X] %s  //  %s  •  %d CRAFT  •  %d AMMO  •  %.0fs" % [
-		interceptor.display_name, interceptor.operation.label(), interceptor.living_craft_count(), interceptor.total_ammunition(), interceptor.average_endurance(),
-		scout.display_name, scout.operation.label(), scout.living_craft_count(), scout.total_ammunition(), scout.average_endurance()
+		interceptor.display_name, _wing_state(interceptor), interceptor.living_craft_count(), interceptor.total_ammunition(), interceptor.average_endurance(),
+		scout.display_name, _wing_state(scout), scout.living_craft_count(), scout.total_ammunition(), scout.average_endurance()
 	]
 	var flak_status := "READY" if carrier.flak_cooldown <= 0.0 else "CYCLING %.1fs" % carrier.flak_cooldown
 	var missile_status := "READY" if carrier.missile_cooldown <= 0.0 else "RELOAD %.1fs" % carrier.missile_cooldown
-	weapon_label.text = "FLAK CURTAIN  //  %s  •  %d ROUNDS\nMISSILE SALVO  //  %s  •  %d WEAPONS  •  %.1f km" % [flak_status, carrier.flak_burst_count, missile_status, carrier.missile_salvo_count, carrier.missile_weapon.range_m / 1000.0]
+	var nuclear_status := "ARMED" if carrier.nuclear_available else "EXPENDED"
+	weapon_label.text = "[1] FLAK  //  %s  •  %s  •  %.1f km  •  R %.0fm\n[2] MISSILES  //  %s  •  %d WEAPONS  •  %.1f km\n[3] NUCLEAR  //  %s  •  ARM %.1f km  •  BLAST %.0fm" % [carrier.flak_screen_status(), flak_status, carrier.flak_screen_range_m / 1000.0, carrier.flak_airburst_radius_m, missile_status, carrier.missile_salvo_count, carrier.missile_weapon.range_m / 1000.0, nuclear_status, carrier.nuclear_arming_distance_m / 1000.0, carrier.nuclear_blast_radius_m]
 	var graphics := get_node_or_null("/root/GraphicsQualityManager")
 	radar_title.text = "TACTICAL RADAR // %s" % (graphics.profile_label() if graphics != null else "ACTIVE")
-	mode_label.text = "TACTICAL MAP — LIVE" if tactical.enabled else "%s MODE  //  THROTTLE %03d%%" % [carrier.control_mode_label(), carrier.throttle_percent()]
+	mode_label.text = "TACTICAL MAP — LIVE" if tactical.enabled else "COMMAND VIEW  //  THROTTLE %03d%%" % carrier.throttle_percent()
 	_update_target_presentation()
 	if tactical.enabled:
 		telemetry_panel.visible = false
@@ -184,14 +185,14 @@ func _process(delta: float) -> void:
 		telemetry_panel.visible = true
 		wing_panel.visible = true
 		weapon_panel.visible = true
-		crosshair_label.visible = carrier.is_gun_mode()
+		crosshair_label.visible = carrier.flak_placement_active
 		if crosshair_label.visible:
 			var director_position := carrier.flak_aim_screen_position if carrier.flak_aim_uses_pointer else get_viewport().get_visible_rect().size * 0.5
 			crosshair_label.position = director_position - crosshair_label.size * 0.5
 		objective_panel.visible = true
 		map_info_panel.visible = false
 		mode_panel.visible = true
-		controls_label.text = "C PILOT   G GUN   W/S THROTTLE   DOUBLE-CLICK EMPTY SPACE FULL CRUISE   LMB %s   RMB MISSILES   P PING   Z/X WINGS   V JUMP   TAB MAP" % ("FLAK" if carrier.is_gun_mode() else "HEADING")
+		controls_label.text = "1 FLAK   2 MISSILES   3 NUCLEAR   [ / ] RANGE   %s   DOUBLE-CLICK HELM   MMB ORBIT   Z/X WINGS   TAB MAP" % ("LMB CONFIRM / RMB CANCEL" if carrier.flak_placement_active else "SHIFT+1 CEASE")
 	if notification_time > 0.0:
 		notification_time -= delta
 		if notification_time <= 0.0:
@@ -202,6 +203,9 @@ func notify(message: String) -> void:
 	notification_label.text = message
 	notification_time = 3.5
 	notification_panel.visible = true
+
+func _wing_state(wing: SidebaySquadron) -> String:
+	return "%s → REDEPLOY" % wing.operation.label() if wing.redeploy_requested else wing.operation.label()
 
 func set_objective(message: String) -> void:
 	objective_label.text = "OBJECTIVE  %s" % message

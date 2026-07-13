@@ -31,12 +31,13 @@ The defining experience is moving continuously between two forms of command:
 
 ### Carrier control `[LOCKED]`
 
-- Third-person carrier control with an independent mouse-look combat director. The chase camera remains centered on the carrier, mouse movement never rotates the hull, manual flak follows the camera/cursor director, and wheel zoom remains available. `[LOCKED]`
+- Third-person carrier control uses one visible-pointer command view. Double-clicking empty space sets a full-cruise heading, middle-drag orbits the chase camera, and the wheel zooms; weapon use never requires a camera/control-mode switch. `[LOCKED]`
 - Heavy inertia and slow rotation communicate scale; braking assist and practical lateral/vertical thrust prevent sluggish controls from becoming frustrating.
 - Keyboard thrust: fore/aft, lateral, vertical, boost, and brake.
 - The vertical combat volume is capped at ±1,400 meters on the Godot Y axis for every capital ship and craft; outward velocity is canceled at the boundary. `[PROVISIONAL]`
 - The carrier keeps its current velocity or assigned autopilot destination while the tactical map is open.
-- Manual flak fires dense seven-round curtains from distributed hull emplacements and is suited to fighters, drones, and projectile interception.
+- Flak is a carrier-relative area-denial screen. `1` opens a temporary placement view, the pointer places a visible 150 m airburst volume 0.8–2.4 km from the carrier, and distributed batteries sustain staggered seven-round curtains into that volume until ceased or relocated.
+- `2` fires the four-round identified-lock missile salvo. `3` fires one interceptable nuclear torpedo per battle; it arms after 1.2 km and applies a 650 m falloff blast to friendly and hostile ships.
 - Missiles lock identified targets and launch four-weapon salvos for deliberate anti-ship attacks out to 8.5 kilometers.
 - Automated close defense throws visible three-round flak curtains at interceptable projectiles and remains active while the tactical map is open.
 - Durability resolves through shields, then armor, then hull. Hull reaching zero destroys the ship.
@@ -129,7 +130,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 
 ### Friendly force `[LOCKED]`
 
-- One player carrier with mirrored side bays, manual flak, lock-on missiles, automated point defense, layered durability, passive sensors, and active ping.
+- One player carrier with mirrored side bays, placed sustained flak, lock-on missiles, one nuclear torpedo, automated point defense, layered durability, passive sensors, and active ping.
 - Port bay: one four-craft interceptor squadron.
 - Starboard bay: one three-craft scout-drone squadron.
 - One commandable missile frigate escort.
@@ -192,7 +193,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 
 ## 8. Milestones and acceptance gates
 
-**Implementation status (2026-07-12):** M1–M16 are implemented. Contract, campaign, integrated battle, encounter, onboarding, playtest-reporting, save/settings, ship-readability, audio/narrative, helm/presentation, normal-performance, menu-performance, and sustained-combat stress tests pass. The M16 600-frame combat gate measures 144.9 FPS at 1920×1080 with p95 7.29 ms/p99 7.35 ms. The sustained all-wings/flak/missile/point-defense gate measures 144.9 FPS with p95 9.34 ms/p99 9.75 ms, and the animated menu measures 165.0 effective FPS on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
+**Implementation status (2026-07-12):** M1–M17 are implemented. Fourteen contract, campaign, integrated battle, encounter, onboarding, playtest-reporting, save/settings, ship-readability, audio/narrative, helm/presentation, and ordnance suites pass. The M17 600-frame combat gate measures 144.9 FPS at 1920×1080 with p95 7.19 ms/p99 7.28 ms. The sustained all-wings/flak/missile/nuclear/point-defense gate measures 144.9 FPS with p95 8.83 ms/p99 9.37 ms and zero dropped effects; the full-runtime-model animated menu measures 165.0 effective FPS on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
 
 ### M1 — Canonical bible and Godot foundation `[IMPLEMENTED]`
 
@@ -309,12 +310,21 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 ### M16 — Helm and presentation refit `[IMPLEMENTED]`
 
 - The title screen uses a compact bottom horizontal command row over a reframed seven-capital, twelve-fighter live engagement. Secondary panels remain centered and the browser build omits the desktop-only Quit action without leaving a gap.
-- `C` enters Pilot mode and `G` enters Gun mode. Pilot clicks set a heading, double-clicking empty space sets the camera-ray heading at full cruise, `W/S` adjust persistent throttle, `Ctrl` stops, and `Shift` boosts. Removed lateral/vertical strafe inputs are no longer read.
-- Gun mode preserves pointer-directed flak and identified-target missiles. Cursor capture/visibility transitions remain correct across desktop, Web, tactical command, and pause states.
+- Intent-driven heading commands, persistent throttle, and removed lateral/vertical strafe inputs established the heavy-carrier helm foundation. M17 supersedes the temporary split-mode interaction with one visible-pointer command view.
 - The stretched bitmap panorama was rejected during visual QA. A resolution-independent procedural sky dome, vector nebula veils, tiered stars/dust, and sector palettes now provide crisp space at native resolution without a hard horizon seam.
-- The combat HUD uses compact asymmetric rails, clipped corners, a dedicated Pilot/Gun and throttle readout, and a Web-safe gun cursor while preserving objective, telemetry, air-group, fire-control, target, radar, notification, and command information.
+- The combat HUD uses compact asymmetric rails, clipped corners, a command/throttle readout, and a Web-safe placement cursor while preserving objective, telemetry, air-group, fire-control, target, radar, notification, and command information.
 - Navy, Acheron, Vesper, and Crucible ships use dedicated surface atlases, material response, faction wear, recognition lighting, and additional modeled hull features within capital/fighter node budgets. Current build captures and the M16 milestone are reflected on the public landing page.
 - Dedicated helm-control, main-menu-layout, ship-surface, and space/HUD-readability suites pass. The final normal/stress/menu gates measure 144.9 FPS (p95 7.29 ms/p99 7.35 ms), 144.9 FPS (p95 9.34 ms/p99 9.75 ms), and 165.0 effective FPS respectively on the development RTX 3060.
+
+### M17 — Fleet authenticity and strategic ordnance `[IMPLEMENTED]`
+
+- Direct combat uses one visible-pointer command view: double-click sets full-cruise heading, middle-drag orbits, wheel zooms, and `W/S`, `Ctrl`, and `Shift` operate persistent heavy-carrier throttle, stop, and boost. Acceleration is 14 m/s² times frame profile and turn response is 0.30 rad/s times frame profile.
+- `1` opens a temporary camera move toward a visible carrier-relative flak volume. Left click confirms, right click or `Esc` cancels, `Shift+1` ceases, and brackets adjust a 0.8–2.4 km range in 0.2 km steps. Confirmed screens retain their local bearing as the carrier moves and turns and sustain staggered seven-round fire into a 150 m interception/airburst radius.
+- `2` fires four guided missiles at an identified lock. `3` fires the battle's single 10 km nuclear torpedo, which arms after 1.2 km, can be intercepted, leaves a two-stage trail, and applies a 650 m falloff blast with friendly fire.
+- Missile, nuclear, fighter, and carrier engine trails plus layered hull hits, ship detonations, shock rings, cores, and debris use the existing quality-scaled 80-slot pool. Reduced-flash behavior and zero-drop stress acceptance remain intact.
+- Pressing `Z` or `X` during servicing queues the surviving wing to physically relaunch as soon as deck turnaround completes; the HUD exposes the queued state.
+- The title battle instantiates the exact playable carrier plus current textured capital/fighter builders against the procedural sky, with 22 flak tracers, six arcing missile plumes, and four layered explosion rigs. The public fleet archive replaces seven CSS glyphs with 900×506 direct Godot renders of the actual Sidebay, Resolute, Raptor, Watcher, Acheron, Vesper, and Crucible models.
+- Fourteen automated suites pass. Normal combat measures 144.9 FPS (p95 7.19 ms/p99 7.28 ms), sustained maximum ordnance measures 144.9 FPS (p95 8.83 ms/p99 9.37 ms, zero dropped effects), and the runtime-model menu measures 165.0 effective FPS on the development RTX 3060.
 
 ## 9. Test matrix
 
@@ -332,11 +342,13 @@ M14 tests cover ship visual profiles, immediate quality switching, backdrop tier
 
 M15 tests cover deterministic onboarding progression and minimum card dwell, active-ping timing, nine deterministic layout variants, all bespoke boss phases, first-time-player telemetry/debrief output, atomic-save recovery, overwrite confirmation, input rebinding, independent audio buses, named-ship/fighter silhouettes, damage presentation, faction VFX, adaptive sector audio, ten operational events, and campaign/integration compatibility.
 
-M16 tests cover Pilot/Gun mode transitions, click and double-click navigation, persistent throttle and stop/boost behavior, removed strafe bindings, cursor state restoration, the compact adaptive bottom menu, live engagement composition, faction surface atlases/material response/modeling budgets, procedural-sky construction, nebula/star readability, asymmetric HUD styling, and control-strip copy.
+M16 tests cover heading navigation, persistent throttle and stop/boost behavior, removed strafe bindings, cursor restoration, the compact adaptive bottom menu, live engagement composition, faction surface atlases/material response/modeling budgets, procedural-sky construction, nebula/star readability, asymmetric HUD styling, and control-strip copy.
+
+M17 tests cover remappable 1/2/3 and bracket actions, placement-camera travel and return, carrier-local screen anchoring, range clamps, staggered fire, airburst interception, nuclear inventory/arming/AoE/friendly fire/interception/trails, heavy carrier limits, speed-reactive engine trails, queued wing redeploy, exact runtime title/archive models, layered menu effects, pooled VFX bounds, and regression compatibility.
 
 Presentation tests cover menu-first startup, continuous background battle motion, accessibility settings, title-to-campaign fades, manual-save Continue, and return-to-title state preservation.
 
-Carrier-combat integration tests cover carrier-centered independent camera framing, mouse-directed flak without hull rotation, seven-round manual flak, four-missile long-range salvos, pulsing contact radar, layered deep-space backdrop, flight-operation locks, emergency sealing, pursuit exposure, and the closed-bay jump interlock.
+Carrier-combat integration tests cover unified mouse heading/camera control without hull snap, placed seven-round flak screening, four-missile salvos, nuclear safety behavior, pulsing contact radar, layered deep-space backdrop, flight-operation locks and redeploy, emergency sealing, pursuit exposure, and the closed-bay jump interlock.
 
 Verbose headless integration exits without leaked ObjectDB instances; procedural tones and score generation are skipped only under the headless display driver so desktop and Web audio remain unchanged.
 
@@ -387,4 +399,5 @@ Each `/goal` owns exactly one milestone. Before work begins, read this bible and
 - **2026-07-12:** Completed M14 with an original modular/textured carrier combat presentation, role/faction ship profiles, shared and pooled GL-compatible VFX, saved live quality profiles, a maintained combat registry, 10 Hz radar contact caching, tiered parallax space, direct-render captures, and normal/stress performance gates. Carrier rules, bay/jump safety, sensors, and damage remain unchanged.
 - **2026-07-12:** Began M15 with a six-step first-operation orientation, three sector-specific enemy fleets and battlefield palettes, original navy/raider/alien hull plating, and expanded capital-ship silhouettes with readable functional detail. Contract, campaign, integration, and dedicated onboarding suites pass; bespoke bosses and external playtest validation remain open.
 - **2026-07-12:** Completed M15 implementation with nine deterministic sector layouts, bespoke Acheron/Vesper/Crucible command phases, structured playtest telemetry and debriefing, role-readable ship/fighter geometry and damage VFX, atomic backup-recoverable autosaves, overwrite confirmation, remappable controls, independent audio buses, an adaptive procedural score, and ten authored operational events. Nine automated suites, menu/normal/stress performance gates, and both release exports pass; external first-time-player sessions now drive post-M15 balance evidence.
-- **2026-07-12:** Completed M16 with a compact bottom title command row, a reframed fleet engagement, intent-driven Pilot/Gun modes, double-click vector flight, persistent throttle, an asymmetric military HUD, faction-specific surface refits, and updated landing-page media. Replaced the blurry panorama with a crisp procedural sky after direct-render visual QA. All thirteen regression suites, normal/stress/menu performance gates, both release exports, and the packaged-build smoke check pass.
+- **2026-07-12:** Completed M16 with a compact bottom title command row, a reframed fleet engagement, intent-driven helm controls, double-click vector flight, persistent throttle, an asymmetric military HUD, faction-specific surface refits, and updated landing-page media. Replaced the blurry panorama with a crisp procedural sky after direct-render visual QA. All thirteen regression suites, normal/stress/menu performance gates, both release exports, and the packaged-build smoke check pass.
+- **2026-07-12:** Completed M17 with a unified visible-pointer command view, heavy carrier inertia, carrier-relative placed flak screening, guided and nuclear ordnance hotkeys, physical post-service wing redeploy, speed-reactive trails, layered bounded impacts/explosions, exact runtime models in the title engagement, and direct Godot model renders in the public fleet archive. Fourteen suites and normal/stress/menu gates pass; release exports and live-site verification are the remaining packaging checks.

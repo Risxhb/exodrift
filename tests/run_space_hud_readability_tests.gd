@@ -18,21 +18,21 @@ func _run() -> void:
 	var stars := scene.get_node_or_null("DeepStarfield") as MultiMeshInstance3D
 	_assert_true(stars != null and stars.multimesh.instance_count == 360, "bounded procedural parallax stars layer over the panorama")
 	var hud := scene.hud as SidebayHUD
-	_assert_true(hud != null and hud.mode_panel.visible, "flight mode and throttle remain continuously readable")
-	_assert_true(hud.mode_label.text.contains("PILOT") and hud.mode_label.text.contains("THROTTLE"), "HUD identifies pilot mode and throttle")
+	_assert_true(hud != null and hud.mode_panel.visible, "command view and throttle remain continuously readable")
+	_assert_true(hud.mode_label.text.contains("COMMAND VIEW") and hud.mode_label.text.contains("THROTTLE"), "HUD identifies the unified command view and throttle")
 	var military_frames := 0
 	for candidate in hud.get_children():
 		military_frames += _count_military_frames(candidate)
 	_assert_true(military_frames >= 10, "HUD uses the asymmetric military frame language throughout")
 	var panel_style := hud.telemetry_panel.get_theme_stylebox("panel") as StyleBoxFlat
 	_assert_true(panel_style != null and panel_style.border_width_left > panel_style.border_width_right and panel_style.corner_radius_top_right > panel_style.corner_radius_top_left, "HUD frames use asymmetrical rails instead of uniform boxes")
-	scene.carrier.set_gun_mode()
+	scene.carrier.begin_flak_placement(scene.get_viewport().get_visible_rect().size * 0.5)
 	await process_frame
-	_assert_true(hud.crosshair_label.visible and hud.mode_label.text.contains("GUN"), "gun mode exposes the flak director and mode state")
+	_assert_true(hud.crosshair_label.visible and hud.weapon_label.text.contains("PLACEMENT"), "flak placement exposes the director and fuse state")
 	scene.queue_free()
 	await process_frame
 	if failures.is_empty():
-		print("PASS: M16 panoramic space and military HUD readability")
+		print("PASS: M17 panoramic space, unified command view, and military HUD readability")
 		quit(0)
 	else:
 		for failure in failures:

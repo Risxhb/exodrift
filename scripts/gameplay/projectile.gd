@@ -15,6 +15,12 @@ var distance_travelled_m: float = 0.0
 var expired: bool = false
 var projectile_role: String = ""
 var source_visual_id: StringName = &""
+var airburst_distance_m: float = 0.0
+var blast_radius_m: float = 0.0
+var arming_distance_m: float = 0.0
+var radial_warhead: bool = false
+var friendly_fire: bool = false
+var detonate_on_expiry: bool = false
 
 func configure(
 	projectile_team: StringName,
@@ -76,14 +82,21 @@ func _physics_process(delta: float) -> void:
 	global_position += direction * travel
 	look_at(global_position + direction, Vector3.UP)
 	distance_travelled_m += travel
-	if _check_target_hit() or _check_proximity_hit() or distance_travelled_m >= maximum_distance_m:
-		expire()
+	var contact_hit := _check_target_hit() or _check_proximity_hit()
+	var reached_airburst := airburst_distance_m > 0.0 and distance_travelled_m >= airburst_distance_m
+	var reached_maximum := distance_travelled_m >= maximum_distance_m
+	if contact_hit or reached_airburst or reached_maximum:
+		if (radial_warhead or airburst_distance_m > 0.0) and distance_travelled_m >= arming_distance_m and (not reached_maximum or detonate_on_expiry or reached_airburst or contact_hit):
+			detonate()
+		else:
+			expire("missile" if radial_warhead and not is_armed() else "")
 
 func _check_target_hit() -> bool:
 	if not is_instance_valid(target) or target.is_destroyed:
 		return false
 	if global_position.distance_to(target.global_position) <= collision_radius_m + target.collision_radius_m:
-		target.receive_damage(damage, source_entity_id)
+		if not radial_warhead and airburst_distance_m <= 0.0:
+			target.receive_damage(damage, source_entity_id)
 		return true
 	return false
 
@@ -95,19 +108,61 @@ func _check_proximity_hit() -> bool:
 	for candidate in candidates:
 		if candidate is CombatShip and candidate.team != team and not candidate.is_destroyed:
 			if global_position.distance_to(candidate.global_position) <= collision_radius_m + candidate.collision_radius_m:
-				candidate.receive_damage(damage, source_entity_id)
+				if not radial_warhead and airburst_distance_m <= 0.0:
+					candidate.receive_damage(damage, source_entity_id)
 				return true
 	return false
 
+func configure_airburst(distance_m: float, radius_m: float) -> void:
+	airburst_distance_m = clampf(distance_m, 1.0, maximum_distance_m)
+	blast_radius_m = maxf(1.0, radius_m)
+	detonate_on_expiry = true
+
+func configure_warhead(arming_distance: float, radius_m: float, harms_friendlies: bool, explode_at_max_range: bool) -> void:
+	arming_distance_m = maxf(0.0, arming_distance)
+	blast_radius_m = maxf(1.0, radius_m)
+	radial_warhead = true
+	friendly_fire = harms_friendlies
+	detonate_on_expiry = explode_at_max_range
+
+func is_armed() -> bool:
+	return distance_travelled_m >= arming_distance_m
+
+func detonate() -> void:
+	if expired:
+		return
+	expired = true
+	var registry := _combat_registry()
+	var projectiles: Array = registry.active_projectiles() if registry != null else get_tree().get_nodes_in_group("projectiles")
+	for candidate in projectiles:
+		if candidate is SidebayProjectile and candidate != self and candidate.team != team and candidate.can_be_intercepted:
+			if global_position.distance_to(candidate.global_position) <= blast_radius_m:
+				candidate.intercept()
+	var entities: Array = registry.active_combat_entities() if registry != null else get_tree().get_nodes_in_group("combat_entities")
+	for candidate in entities:
+		if not (candidate is CombatShip) or candidate.is_destroyed:
+			continue
+		if not friendly_fire and candidate.team == team:
+			continue
+		var distance := global_position.distance_to(candidate.global_position)
+		if distance > blast_radius_m + candidate.collision_radius_m:
+			continue
+		var falloff := lerpf(1.0, 0.18, clampf(distance / blast_radius_m, 0.0, 1.0))
+		candidate.receive_damage(damage * falloff, source_entity_id)
+	var vfx := _combat_vfx()
+	if vfx != null:
+		vfx.spawn_faction_burst(projectile_role, global_position, team, source_visual_id, 4.8 if projectile_role == "nuclear" else 1.15)
+	queue_free()
+
 func intercept() -> void:
 	if can_be_intercepted:
-		expire()
+		expire("missile" if projectile_role == "nuclear" else projectile_role)
 
-func expire() -> void:
+func expire(effect_role: String = "") -> void:
 	if expired:
 		return
 	expired = true
 	var vfx := _combat_vfx()
 	if vfx != null:
-		vfx.spawn_faction_burst(projectile_role, global_position, team, source_visual_id)
+		vfx.spawn_faction_burst(effect_role if not effect_role.is_empty() else projectile_role, global_position, team, source_visual_id)
 	queue_free()

@@ -12,7 +12,7 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 
 ## Current playable
 
-- Carrier-centered third-person flight with assisted movement, seven-round flak curtains, four-missile long-range salvos, visible automated defense, and shields → armor → hull damage.
+- Heavy carrier flight with persistent throttle and inertia, carrier-relative placed flak screens, four-missile guided salvos, one nuclear torpedo per battle, visible automated defense, and shields → armor → hull damage.
 - A unified command-interface style groups carrier telemetry, air-group state, fire control, target data, radar, notifications, and controls into compact scalable panels across combat and campaign screens.
 - A four-craft Raptor interceptor wing, three Watcher scout drones, and the commandable missile frigate `ISS Resolute`.
 - Visible launch, engagement, recall, side-bay recovery, servicing, relaunch, and armored bay-retraction cycles with a closed-bay jump interlock.
@@ -27,7 +27,7 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 - Persistent salvage stock with fixed supply, fuel, and requisition conversions plus three route logistics postures with explicit travel tradeoffs.
 - Six objective types: command strike, interception, extraction, defense, escort, and capture.
 - Withdrawal pursuit, jump-range stragglers, recoverable escape pods, and an after-action rescue/salvage/departure choice with persistent consequences.
-- A compact bottom command row over a continuously simulated carrier battle, with New Operation, Continue, persistent settings, credits, and return-to-title navigation.
+- A compact bottom command row over a continuously simulated battle built from the current textured runtime ships and fighters, with New Operation, Continue, persistent settings, credits, and return-to-title navigation.
 - A six-step first-operation orientation that teaches helm translation, active sensors, flight operations, the live tactical map, and intent-level orders without pausing combat.
 - Three sector-specific hostile fleets—Acheron, Vesper, and Crucible—with different capital roles, fighter complements, opening formations, weapons, pursuit identities, and battlefield palettes.
 - Three deterministic layouts per sector plus bespoke command battles: Acheron command-net screening, Vesper shield-break pincers, and the Crucible's anchored multi-phase strategic core.
@@ -52,12 +52,13 @@ The packaged Windows build is generated at `build/ProjectSidebay.exe`. The GitHu
 
 All listed keyboard actions can be remapped from **Settings → Remap Controls**.
 
-- `C`: Pilot mode; `G`: Gun mode
-- Pilot mode: click empty space to set a heading; double-click empty space for full-cruise vector flight
 - `W/S`: increase/decrease persistent throttle; `Ctrl`: full stop; `Shift`: boost
-- Mouse: orbit the carrier-centered camera; wheel: zoom. In Gun mode, hold left mouse for a directed flak barrage; right mouse fires an identified-target missile salvo.
+- Mouse: visible unified command cursor; double-click empty space for a full-cruise heading, middle-drag to orbit, and use the wheel to zoom.
+- `1`: enter or relocate the flak-screen placement view; left-click confirms, right-click or `Esc` cancels, and `Shift+1` ceases the active screen. `[`/`]` adjust its 0.8–2.4 km fuse distance.
+- `2`: fire a four-weapon guided missile salvo at the identified lock. Right mouse remains a compatibility shortcut.
+- `3`: fire the single 10 km nuclear torpedo. It arms after 1.2 km, has a 650 m falloff blast, can be intercepted, and damages friendlies.
 - `P`: active sensor ping
-- `Z`, `X`: launch/recall interceptor and scout wings
+- `Z`, `X`: launch/recall interceptor and scout wings; pressing during servicing queues an automatic physical redeploy when turnaround completes
 - `Tab`: live tactical map
 - Tactical map: `1–4` groups, left-click select, right-click context move/attack, `I` intercept, `E` escort carrier, Shift queue, `Q` stance, `F` formation, `R` recall, `H` hold, `X` withdraw, middle-drag orbit, wheel zoom
 - `V`: begin jump preparation and wing recall; press again to emergency-seal the bays and risk stragglers
@@ -78,16 +79,17 @@ godot --headless --path . --script tests/run_eve_flight_control_tests.gd
 godot --headless --path . --script tests/run_main_menu_layout_tests.gd
 godot --headless --path . --script tests/run_ship_surface_tests.gd
 godot --headless --path . --script tests/run_space_hud_readability_tests.gd
+godot --headless --path . --script tests/run_ordnance_screen_tests.gd
 godot --headless --path . --script tests/profile_combat_stress.gd
 godot --path . --script tests/profile_menu.gd
 godot --headless --path . --export-release "Web"
 godot --headless --path . --export-release "Windows Desktop"
 ```
 
-The M16 automated 600-frame combat gate measures 144.9 FPS at 1920×1080 with p95 7.29 ms and p99 7.35 ms. The sustained all-wings/flak/missile/point-defense stress gate measures 144.9 FPS with p95 9.34 ms and p99 9.75 ms; the animated menu measures 165.0 effective FPS on the development RTX 3060. See [GAME_BIBLE.md](GAME_BIBLE.md) for acceptance evidence and hardware-target caveats.
+The M17 automated 600-frame combat gate measures 144.9 FPS at 1920×1080 with p95 7.19 ms and p99 7.28 ms. The sustained all-wings/flak/missile/nuclear/point-defense stress gate measures 144.9 FPS with p95 8.83 ms and p99 9.37 ms with zero dropped effects; the full-runtime-model animated menu measures 165.0 effective FPS on the development RTX 3060. See [GAME_BIBLE.md](GAME_BIBLE.md) for acceptance evidence and hardware-target caveats.
 
 ## GitHub Pages
 
 The checked-in workflow at `.github/workflows/deploy-pages.yml` publishes `web/` when the site changes. In the repository’s **Settings → Pages**, select **GitHub Actions** as the source, then run the workflow or push to `main`.
 
-All currently defined milestones M1–M16 are implemented. M16 adds intent-driven Pilot/Gun controls, persistent throttle, a compact bottom title menu, crisp procedural space, an angular military HUD, and faction-specific ship surface refits. External first-time-player sessions remain the evidence-gathering step for subsequent balance tuning.
+All currently defined milestones M1–M17 are implemented. M17 unifies mouse command and camera control, adds placed sustained flak, guided and nuclear hotkeys, heavy carrier handling, physical wing redeploy, richer bounded combat effects, exact runtime models in the title battle, and model-accurate fleet archive cards. External first-time-player sessions remain the evidence-gathering step for subsequent balance tuning.

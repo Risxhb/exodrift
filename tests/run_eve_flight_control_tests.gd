@@ -12,19 +12,15 @@ func _run() -> void:
 		await process_frame
 	var carrier: PlayerCarrier = game.carrier
 	_assert_true(InputMap.has_action("accelerate") and InputMap.has_action("decelerate"), "W/S throttle actions are registered")
-	_assert_true(InputMap.has_action("pilot_mode") and InputMap.has_action("gun_mode"), "Pilot and Gun mode hotkeys are registered")
+	_assert_true(InputMap.has_action("flak_screen") and InputMap.has_action("missile_salvo") and InputMap.has_action("nuclear_torpedo"), "1/2/3 ordnance actions are registered")
 	_assert_true(not ExodriftInputSettings.ACTION_LABELS.has("move_left") and not ExodriftInputSettings.ACTION_LABELS.has("move_up"), "lateral and vertical strafe bindings are removed from player controls")
-	_assert_true(ExodriftInputSettings.action_key("pilot_mode") == KEY_C and ExodriftInputSettings.action_key("gun_mode") == KEY_G, "C and G provide Web-safe Pilot and Gun mode hotkeys")
+	_assert_true(not ExodriftInputSettings.DEFAULT_KEYS.values().has(KEY_C) and not ExodriftInputSettings.DEFAULT_KEYS.values().has(KEY_G), "obsolete camera-mode keys are absent from command bindings")
+	_assert_true(ExodriftInputSettings.action_key("flak_screen") == KEY_1 and ExodriftInputSettings.action_key("missile_salvo") == KEY_2 and ExodriftInputSettings.action_key("nuclear_torpedo") == KEY_3, "1/2/3 provide remappable flak, missile, and nuclear controls")
 
-	var observed_modes: Array[String] = []
 	var observed_throttles: Array[float] = []
 	var observed_vectors: Array[Vector3] = []
-	carrier.control_mode_changed.connect(func(_mode: PlayerCarrier.ControlMode, label: String) -> void: observed_modes.append(label))
 	carrier.throttle_changed.connect(func(value: float) -> void: observed_throttles.append(value))
 	carrier.navigation_commanded.connect(func(direction: Vector3, _full_cruise: bool) -> void: observed_vectors.append(direction))
-	carrier.set_gun_mode()
-	carrier.set_pilot_mode()
-	_assert_true(observed_modes == ["GUN", "PILOT"] and carrier.is_pilot_mode(), "mode API and signal expose deterministic Pilot/Gun state")
 
 	carrier.set_throttle(0.4)
 	Input.action_press("accelerate")
@@ -67,7 +63,7 @@ func _run() -> void:
 	double_click.double_click = true
 	double_click.position = empty_screen_point
 	game._unhandled_input(double_click)
-	_assert_true(carrier.is_pilot_mode() and carrier.throttle_percent() == 100, "battle input routes a Pilot-mode double-click to full-cruise navigation")
+	_assert_true(carrier.throttle_percent() == 100, "battle input routes a command-view double-click to full-cruise navigation")
 
 	carrier.velocity = Vector3.ZERO
 	carrier.global_transform.basis = Basis.IDENTITY
@@ -78,28 +74,13 @@ func _run() -> void:
 	var forward := -carrier.global_transform.basis.z.normalized()
 	_assert_true(carrier.velocity.length() > 1.0 and carrier.velocity.normalized().dot(forward) > 0.96, "carrier accelerates along its steered heading without side or vertical translation inputs")
 
-	var gun_event := InputEventKey.new()
-	gun_event.keycode = KEY_G
-	gun_event.physical_keycode = KEY_G
-	gun_event.pressed = true
-	game._unhandled_input(gun_event)
-	_assert_true(carrier.is_gun_mode(), "G routing selects Gun mode in the battle scene")
-	var pilot_event := InputEventKey.new()
-	pilot_event.keycode = KEY_C
-	pilot_event.physical_keycode = KEY_C
-	pilot_event.pressed = true
-	game._unhandled_input(pilot_event)
-	_assert_true(carrier.is_pilot_mode(), "C routing restores Pilot mode in the battle scene")
-	carrier.flak_cooldown = 0.0
-	_assert_true(not carrier.fire_primary() and is_zero_approx(carrier.flak_cooldown), "primary click cannot fire flak while Pilot mode owns helm input")
-	carrier.set_gun_mode()
-	_assert_true(carrier.fire_primary() and carrier.flak_cooldown > 0.0, "primary click fires flak after switching to Gun mode")
+	_assert_true(Input.mouse_mode == Input.MOUSE_MODE_VISIBLE, "the unified command view retains a visible pointer")
 
 	game.queue_free()
 	await process_frame
 	await process_frame
 	if failures.is_empty():
-		print("PASS: EVE-style heading, throttle, space-command, and Pilot/Gun controls")
+		print("PASS: heavy heading, throttle, and unified command-view controls")
 		quit(0)
 	else:
 		for failure in failures:
