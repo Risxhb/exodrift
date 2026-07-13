@@ -32,7 +32,7 @@ func _run() -> void:
 
 	_assert_step(onboarding, OnboardingController.Step.WELCOME, "configure starts at welcome")
 	_assert_true(onboarding.panel != null and onboarding.panel.visible, "configure builds and shows the onboarding overlay")
-	_assert_true(onboarding.progress_label.text == "ORIENTATION   [F1] HIDE", "welcome is labeled separately from the six guided milestones")
+	_assert_true(onboarding.progress_label.text == "ORIENTATION   [F3] HIDE", "welcome is labeled separately from the six guided milestones")
 
 	onboarding._process(2.99)
 	_assert_step(onboarding, OnboardingController.Step.WELCOME, "welcome remains visible for its full duration")
@@ -103,7 +103,7 @@ func _assert_step(onboarding: CanvasLayer, expected: int, message: String) -> vo
 
 
 func _assert_progress(onboarding: CanvasLayer, expected: int, message: String) -> void:
-	_assert_true(onboarding.progress_label.text == "%d / 6   [F1] HIDE" % expected, "%s (got %s)" % [message, onboarding.progress_label.text])
+	_assert_true(onboarding.progress_label.text == "%d / 6   [F3] HIDE" % expected, "%s (got %s)" % [message, onboarding.progress_label.text])
 
 
 func _assert_true(value: bool, message: String) -> void:

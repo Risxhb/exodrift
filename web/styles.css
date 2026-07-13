@@ -107,6 +107,12 @@ nav a:hover { color: var(--blue); }
 .fleet { background:linear-gradient(180deg,#03070b,#08121a 55%,#03070b); overflow:hidden; }
 .fleet::after { content:"FLEET"; position:absolute; right:-2vw; top:35px; font-size:18vw; font-weight:900; color:rgba(255,255,255,.018); pointer-events:none; }
 .fleet-tabs { display:flex; gap:8px; margin-bottom:24px; }
+.fleet-live-capture { margin:0 0 28px; min-height:360px; position:relative; overflow:hidden; border:1px solid rgba(53,200,255,.28); background:#02070b; box-shadow:0 25px 70px rgba(0,0,0,.38); }
+.fleet-live-capture::after { content:"LIVE MODEL FEED"; position:absolute; top:16px; right:18px; color:var(--blue); font-size:9px; font-weight:900; letter-spacing:.2em; }
+.fleet-live-capture img { display:block; width:100%; height:520px; object-fit:cover; object-position:center 48%; filter:contrast(1.08) saturate(1.06); }
+.fleet-live-capture figcaption { position:absolute; inset:auto 0 0; display:grid; grid-template-columns:auto 1fr auto; gap:24px; align-items:center; padding:18px 22px; background:linear-gradient(90deg,rgba(2,9,14,.97),rgba(4,18,27,.88)); border-top:1px solid rgba(53,200,255,.3); }
+.fleet-live-capture figcaption b,.fleet-live-capture figcaption i { color:var(--blue); font-size:10px; letter-spacing:.12em; font-style:normal; }
+.fleet-live-capture figcaption span { color:var(--muted); font-size:12px; }
 .fleet-tabs button { background:transparent; color:var(--muted); border:1px solid var(--line); padding:13px 25px; text-transform:uppercase; font-size:10px; font-weight:900; letter-spacing:.15em; cursor:pointer; }
 .fleet-tabs button.active { background:var(--blue); color:#00101a; border-color:var(--blue); }
 .ship-carousel { display:grid; grid-template-columns:repeat(4,minmax(230px,1fr)); gap:16px; position:relative; z-index:1; }
@@ -203,6 +209,8 @@ footer { display:flex; align-items:center; gap:30px; justify-content:space-betwe
   .pillar-grid,.ship-carousel,.department-grid { grid-template-columns:1fr; }
   .ship-card { min-height:480px; }
   .fleet-tabs { overflow-x:auto; }
+  .fleet-live-capture img { height:420px; }
+  .fleet-live-capture figcaption { grid-template-columns:1fr; gap:7px; }
   .gallery figure,.gallery figure.gallery-main { min-height:280px; }
   .timeline-item { grid-template-columns:48px 1fr; gap:14px; }
   .other-game-grid { grid-template-columns:1fr; }

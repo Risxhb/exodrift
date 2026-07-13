@@ -88,8 +88,8 @@ func _test_ship_visual_profiles() -> void:
 	var vanta := ShipVisualProfile.for_ship(&"cruiser", &"hostile", &"vanta_command_cruiser")
 	_assert_true(friendly.engine_color.b > friendly.engine_color.r, "friendly visual profile keeps cool engine identification")
 	_assert_true(hostile.engine_color.r > hostile.engine_color.b and hostile.shoulder_scale.x > friendly.shoulder_scale.x, "hostile corvette profile exposes a distinct hot-engine, broad-shoulder silhouette")
-	_assert_true(friendly.hull_texture_path.ends_with("navy_hull.svg") and hostile.hull_texture_path.ends_with("raider_hull.svg"), "human factions use distinct authored hull-plating textures")
-	_assert_true(vanta.faction_style == &"vanta" and vanta.hull_texture_path.ends_with("vanta_hull.svg") and vanta.turret_count == 4, "Vanta cruisers use a layered alien capital-ship profile")
+	_assert_true(friendly.hull_texture_path.ends_with("navy_refit_hull.svg") and hostile.hull_texture_path.ends_with("acheron_forged_hull.svg"), "human factions use distinct refit and forged hull-plating textures")
+	_assert_true(vanta.faction_style == &"crucible" and vanta.hull_texture_path.ends_with("crucible_basalt_hull.svg") and vanta.turret_count == 4, "legacy Vanta IDs migrate to the layered Crucible capital-ship profile")
 
 func _assert_true(value: bool, message: String) -> void:
 	if not value:

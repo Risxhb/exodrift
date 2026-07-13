@@ -19,6 +19,7 @@ func _build_visual() -> void:
 		_build_crucible_talon()
 	else:
 		_build_interceptor(identity.begins_with("acheron_"))
+	_build_craft_surface_details(identity)
 	_add_engine_trails(identity)
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
@@ -38,6 +39,8 @@ func _build_interceptor(hostile: bool) -> void:
 	for side in [-1.0, 1.0]:
 		var wing := _add_visual_block("SweptWing", Vector3(side * definition.dimensions_m.x * 0.3, 0.0, definition.dimensions_m.z * 0.12), Vector3(definition.dimensions_m.x * 0.58, definition.dimensions_m.y * 0.15, definition.dimensions_m.z * 0.48), visual_color.darkened(0.08))
 		wing.rotation_degrees.y = side * (-16.0 if hostile else 22.0)
+		var leading_edge := _add_visual_block("InterceptorLeadingEdge", Vector3(side * definition.dimensions_m.x * 0.42, definition.dimensions_m.y * 0.06, -definition.dimensions_m.z * 0.02), Vector3(definition.dimensions_m.x * 0.22, definition.dimensions_m.y * 0.035, definition.dimensions_m.z * 0.2), visual_profile.marking_color, 0.32)
+		leading_edge.rotation_degrees.y = side * (-16.0 if hostile else 22.0)
 	_add_visual_block("FighterEngine", Vector3(0.0, 0.0, definition.dimensions_m.z * 0.48), Vector3(definition.dimensions_m.x * 0.22, definition.dimensions_m.y * 0.24, 1.0), Color(1.0, 0.22, 0.04) if hostile else Color(0.12, 0.72, 1.0), 3.4)
 
 func _build_watcher_drone() -> void:
@@ -64,7 +67,7 @@ func _build_vesper_lance() -> void:
 	needle_mesh.size = Vector3(definition.dimensions_m.x * 0.26, definition.dimensions_m.y * 0.58, definition.dimensions_m.z * 1.12)
 	needle.mesh = needle_mesh
 	needle.rotation.y = PI
-	needle.material_override = _make_material(visual_color, 0.1)
+	needle.material_override = _make_material(visual_color, 0.1, visual_profile.hull_texture_path)
 	add_child(needle)
 	for side in [-1.0, 1.0]:
 		var blade := _add_visual_block("VesperBladeWing", Vector3(side * definition.dimensions_m.x * 0.34, 0.0, definition.dimensions_m.z * 0.18), Vector3(definition.dimensions_m.x * 0.68, definition.dimensions_m.y * 0.1, definition.dimensions_m.z * 0.36), visual_color.lightened(0.04))
@@ -78,14 +81,32 @@ func _build_crucible_talon() -> void:
 	body_mesh.size = Vector3(definition.dimensions_m.x * 0.58, definition.dimensions_m.y * 0.76, definition.dimensions_m.z)
 	body.mesh = body_mesh
 	body.rotation.y = PI
-	body.material_override = _make_material(visual_color, 0.1, "res://assets/textures/vanta_hull.svg")
+	body.material_override = _make_material(visual_color, 0.1, visual_profile.hull_texture_path)
 	add_child(body)
-	var delta_wing := _add_visual_block("CrucibleDeltaWing", Vector3(0.0, 0.0, definition.dimensions_m.z * 0.16), Vector3(definition.dimensions_m.x, definition.dimensions_m.y * 0.16, definition.dimensions_m.z * 0.56), visual_color.darkened(0.08), 0.0, "res://assets/textures/vanta_hull.svg")
+	var delta_wing := _add_visual_block("CrucibleDeltaWing", Vector3(0.0, 0.0, definition.dimensions_m.z * 0.16), Vector3(definition.dimensions_m.x, definition.dimensions_m.y * 0.16, definition.dimensions_m.z * 0.56), visual_color.darkened(0.08), 0.0, visual_profile.hull_texture_path)
 	delta_wing.rotation_degrees.z = 5.0
 	for side in [-1.0, 1.0]:
-		var fin := _add_visual_block("CrucibleTalonFin", Vector3(side * definition.dimensions_m.x * 0.28, definition.dimensions_m.y * 0.3, definition.dimensions_m.z * 0.22), Vector3(definition.dimensions_m.x * 0.08, definition.dimensions_m.y * 0.72, definition.dimensions_m.z * 0.32), visual_color.lightened(0.06), 0.0, "res://assets/textures/vanta_hull.svg")
+		var fin := _add_visual_block("CrucibleTalonFin", Vector3(side * definition.dimensions_m.x * 0.28, definition.dimensions_m.y * 0.3, definition.dimensions_m.z * 0.22), Vector3(definition.dimensions_m.x * 0.08, definition.dimensions_m.y * 0.72, definition.dimensions_m.z * 0.32), visual_color.lightened(0.06), 0.0, visual_profile.hull_texture_path)
 		fin.rotation_degrees.z = side * 18.0
 	_add_visual_block("CrucibleDrive", Vector3(0.0, 0.0, definition.dimensions_m.z * 0.5), Vector3(definition.dimensions_m.x * 0.24, definition.dimensions_m.y * 0.22, 1.0), Color(0.68, 0.18, 1.0), 3.8)
+
+func _build_craft_surface_details(identity: String) -> void:
+	if definition.role != "drone":
+		_add_visual_block("CanopyOrSensorShroud", Vector3(0.0, definition.dimensions_m.y * 0.38, -definition.dimensions_m.z * 0.25), Vector3(definition.dimensions_m.x * 0.16, definition.dimensions_m.y * 0.12, definition.dimensions_m.z * 0.22), visual_profile.bridge_color, 1.0)
+	_add_visual_block("CraftRecognitionMark", Vector3(0.0, definition.dimensions_m.y * 0.42, definition.dimensions_m.z * 0.08), Vector3(definition.dimensions_m.x * 0.18, definition.dimensions_m.y * 0.026, definition.dimensions_m.z * 0.24), visual_profile.marking_color, 0.55)
+	match visual_profile.faction_style:
+		&"acheron":
+			for side in [-1.0, 1.0]:
+				var tooth := _add_visual_block("AcheronWingTooth", Vector3(side * definition.dimensions_m.x * 0.38, -definition.dimensions_m.y * 0.11, -definition.dimensions_m.z * 0.17), Vector3(definition.dimensions_m.x * 0.2, definition.dimensions_m.y * 0.08, definition.dimensions_m.z * 0.2), visual_color.darkened(0.18), 0.0, visual_profile.hull_texture_path)
+				tooth.rotation_degrees.y = side * 24.0
+		&"vesper":
+			for side in [-1.0, 1.0]:
+				var vein := _add_visual_block("VesperPhaseVein", Vector3(side * definition.dimensions_m.x * 0.24, definition.dimensions_m.y * 0.12, definition.dimensions_m.z * 0.03), Vector3(definition.dimensions_m.x * 0.025, definition.dimensions_m.y * 0.025, definition.dimensions_m.z * 0.58), visual_profile.marking_color, 1.45)
+				vein.rotation_degrees.y = side * 9.0
+		&"crucible":
+			for side in [-1.0, 1.0]:
+				var facet := _add_visual_block("CrucibleWingFacet", Vector3(side * definition.dimensions_m.x * 0.3, definition.dimensions_m.y * 0.12, definition.dimensions_m.z * 0.12), Vector3(definition.dimensions_m.x * 0.3, definition.dimensions_m.y * 0.045, definition.dimensions_m.z * 0.28), visual_color.lightened(0.03), 0.0, visual_profile.hull_texture_path)
+				facet.rotation_degrees.y = side * 12.0
 
 func _add_engine_trails(identity: String) -> void:
 	var trail_color := Color(0.12, 0.72, 1.0, 0.52)

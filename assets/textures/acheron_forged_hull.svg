@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" fill="#211e1b"/>
+  <g fill="#332c26" stroke="#0c0a09" stroke-width="6">
+    <path d="M-8 3H82L98 18L88 60H-8ZM96 3H264V60H104L94 46ZM-8 67H130L146 87L132 127H-8ZM148 67H264V127H138L151 91ZM-8 134H72L91 153L78 191H-8ZM94 134H264V191H84L98 158ZM-8 198H138L153 219L141 263H-8ZM156 198H264V263H147L159 222Z"/>
+  </g>
+  <g stroke="#705642" stroke-width="2" fill="none" opacity=".78">
+    <path d="M0 56H82L93 19M110 56H256M0 123H126L139 88M159 72H256M0 187H72L84 154M105 139H256M0 251H133L146 220M166 203H256"/>
+  </g>
+  <g stroke="#d16d2b" stroke-width="2.2" fill="none" opacity=".8">
+    <path d="M5 62L81 62L98 48M137 130L150 93L256 93M0 194L76 194L93 160M143 195L156 219L143 256"/>
+  </g>
+  <g fill="#b68b64" opacity=".63">
+    <circle cx="10" cy="12" r="2.5"/><circle cx="76" cy="12" r="2.5"/><circle cx="113" cy="12" r="2.5"/><circle cx="246" cy="12" r="2.5"/>
+    <circle cx="10" cy="50" r="2.5"/><circle cx="82" cy="50" r="2.5"/><circle cx="113" cy="50" r="2.5"/><circle cx="246" cy="50" r="2.5"/>
+    <circle cx="10" cy="78" r="2.5"/><circle cx="124" cy="78" r="2.5"/><circle cx="162" cy="78" r="2.5"/><circle cx="246" cy="78" r="2.5"/>
+    <circle cx="10" cy="116" r="2.5"/><circle cx="128" cy="116" r="2.5"/><circle cx="162" cy="116" r="2.5"/><circle cx="246" cy="116" r="2.5"/>
+    <circle cx="10" cy="145" r="2.5"/><circle cx="66" cy="145" r="2.5"/><circle cx="109" cy="145" r="2.5"/><circle cx="246" cy="145" r="2.5"/>
+    <circle cx="10" cy="180" r="2.5"/><circle cx="73" cy="180" r="2.5"/><circle cx="109" cy="180" r="2.5"/><circle cx="246" cy="180" r="2.5"/>
+    <circle cx="10" cy="209" r="2.5"/><circle cx="132" cy="209" r="2.5"/><circle cx="170" cy="209" r="2.5"/><circle cx="246" cy="209" r="2.5"/>
+    <circle cx="10" cy="244" r="2.5"/><circle cx="137" cy="244" r="2.5"/><circle cx="170" cy="244" r="2.5"/><circle cx="246" cy="244" r="2.5"/>
+  </g>
+  <path d="M16 24H62L76 37H16ZM190 71H251V84H176ZM14 154H57L70 167H14ZM181 205H251V218H168Z" fill="#b84920"/>
+  <path d="M19 27H34L45 37H30M49 24H62L75 37H61M197 71H214L202 84H185M224 71H243L232 84H215" fill="none" stroke="#f3a63a" stroke-width="5"/>
+  <path d="M24 47L57 40M118 26L180 15M40 112L101 99M166 177L235 158M22 239L67 228" stroke="#b7906f" stroke-width="1.6" opacity=".3"/>
+  <path d="M38 51L62 55M127 107L111 114M194 146L229 151M66 214L103 207" stroke="#060504" stroke-width="2.6" opacity=".7"/>
+</svg>

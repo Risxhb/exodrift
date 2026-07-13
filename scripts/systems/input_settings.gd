@@ -2,15 +2,15 @@ class_name ExodriftInputSettings
 extends RefCounted
 
 const ACTION_LABELS := {
-	"move_forward": "Forward", "move_backward": "Reverse", "move_left": "Strafe Left", "move_right": "Strafe Right",
-	"move_up": "Vertical Up", "move_down": "Vertical Down", "boost": "Boost", "brake": "Brake",
+	"accelerate": "Increase Throttle", "decelerate": "Decrease Throttle", "boost": "Boost", "brake": "Full Stop",
+	"pilot_mode": "Pilot Mode", "gun_mode": "Gun Mode",
 	"toggle_tactical": "Tactical Map", "sensor_ping": "Active Ping", "interceptor_wing": "Interceptor Wing",
 	"scout_wing": "Scout Wing", "jump_prep": "Jump Preparation"
 }
 
 const DEFAULT_KEYS := {
-	"move_forward": KEY_W, "move_backward": KEY_S, "move_left": KEY_A, "move_right": KEY_D,
-	"move_up": KEY_SPACE, "move_down": KEY_C, "boost": KEY_SHIFT, "brake": KEY_CTRL,
+	"accelerate": KEY_W, "decelerate": KEY_S, "boost": KEY_SHIFT, "brake": KEY_CTRL,
+	"pilot_mode": KEY_C, "gun_mode": KEY_G,
 	"toggle_tactical": KEY_TAB, "sensor_ping": KEY_P, "interceptor_wing": KEY_Z,
 	"scout_wing": KEY_X, "jump_prep": KEY_V
 }
