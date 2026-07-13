@@ -39,10 +39,10 @@ func apply_damage(amount: float) -> Dictionary:
 			destroyed.emit()
 	return result
 
-func tick(delta: float) -> void:
+func tick(delta: float, regeneration_multiplier: float = 1.0) -> void:
 	shield_regen_delay = maxf(0.0, shield_regen_delay - delta)
-	if shield_regen_delay <= 0.0 and shields < definition.max_shields:
-		shields = minf(definition.max_shields, shields + definition.shield_regeneration_per_second * delta)
+	if shield_regen_delay <= 0.0 and shields < definition.max_shields and regeneration_multiplier > 0.0:
+		shields = minf(definition.max_shields, shields + definition.shield_regeneration_per_second * regeneration_multiplier * delta)
 
 func normalized_layers() -> Vector3:
 	return Vector3(
@@ -50,4 +50,3 @@ func normalized_layers() -> Vector3:
 		armor / maxf(1.0, definition.max_armor),
 		hull / maxf(1.0, definition.max_hull)
 	)
-

@@ -6,7 +6,8 @@ const ACTION_LABELS := {
 	"flak_screen": "Place Flak Screen", "missile_salvo": "Missile Salvo", "nuclear_torpedo": "Nuclear Torpedo",
 	"flak_range_decrease": "Flak Range Down", "flak_range_increase": "Flak Range Up",
 	"toggle_tactical": "Tactical Map", "sensor_ping": "Active Ping", "interceptor_wing": "Interceptor Wing",
-	"scout_wing": "Scout Wing", "toggle_all_wings": "All Wings / Hangars", "jump_prep": "Jump Preparation"
+	"scout_wing": "Scout Wing", "toggle_all_wings": "All Wings / Hangars", "jump_prep": "Jump Preparation",
+	"carrier_operations": "Carrier Operations"
 }
 
 const DEFAULT_KEYS := {
@@ -14,7 +15,8 @@ const DEFAULT_KEYS := {
 	"flak_screen": KEY_1, "missile_salvo": KEY_2, "nuclear_torpedo": KEY_3,
 	"flak_range_decrease": KEY_BRACKETLEFT, "flak_range_increase": KEY_BRACKETRIGHT,
 	"toggle_tactical": KEY_TAB, "sensor_ping": KEY_P, "interceptor_wing": KEY_Z,
-	"scout_wing": KEY_X, "toggle_all_wings": KEY_B, "jump_prep": KEY_V
+	"scout_wing": KEY_X, "toggle_all_wings": KEY_B, "jump_prep": KEY_V,
+	"carrier_operations": KEY_C
 }
 
 static func ensure_actions() -> void:

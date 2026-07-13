@@ -8,6 +8,7 @@ const TargetLockReticle := preload("res://scripts/ui/target_lock_reticle.gd")
 signal target_lock_requested(entity_id: StringName)
 signal target_command_requested(command: StringName, entity_id: StringName)
 signal target_navigation_requested(command: StringName, entity_id: StringName, distance_m: float)
+signal carrier_operations_requested
 
 const HUD_SCALE := 0.75
 const CONTEXT_LOCK := 1
@@ -75,6 +76,10 @@ var hud_root: Control
 var target_context_menu: PopupMenu
 var context_target_id: StringName = &""
 var scaled_hud_panels: Array[Control] = []
+var carrier_operations_state: Object
+var carrier_operations_panel: Panel
+var carrier_operations_label: Label
+var carrier_operations_button: Button
 
 func configure(
 	player_carrier: PlayerCarrier,
@@ -117,6 +122,15 @@ func _build_ui() -> void:
 	_collapsible_heading(weapon_panel, "FIRE CONTROL", UIStyle.AMBER)
 	weapon_label = _label(weapon_panel, Vector2(14, 23), Vector2(442, 60), 11)
 	_register_collapsible(weapon_panel)
+	carrier_operations_panel = _panel(root, Vector2(18, 336), Vector2(438, 74), Color(0.006, 0.024, 0.038, 0.7), UIStyle.AMBER)
+	_collapsible_heading(carrier_operations_panel, "CARRIER OPERATIONS", UIStyle.AMBER)
+	carrier_operations_label = _label(carrier_operations_panel, Vector2(14, 25), Vector2(304, 40), 11)
+	carrier_operations_label.text = "%s BALANCED  //  8 / 8 POWER\nCREW 240  //  STORES NOMINAL" % _operations_key_tag()
+	carrier_operations_button = _overview_button(carrier_operations_panel, Vector2(326, 29), Vector2(96, 30), 10)
+	carrier_operations_button.text = "OPEN %s" % _operations_key_tag()
+	carrier_operations_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	carrier_operations_button.pressed.connect(func() -> void: carrier_operations_requested.emit())
+	_register_collapsible(carrier_operations_panel)
 	target_panel = _panel(root, Vector2(934, 14), Vector2(328, 158), Color(0.006, 0.024, 0.038, 0.76), UIStyle.CYAN)
 	_collapsible_heading(target_panel, "TARGET SOLUTION", UIStyle.CYAN)
 	target_label = _label(target_panel, Vector2(14, 29), Vector2(300, 68), 11)
@@ -166,7 +180,7 @@ func _build_ui() -> void:
 	controls_panel = _panel(root, Vector2(84, 680), Vector2(1112, 28), Color(0.004, 0.018, 0.028, 0.62), UIStyle.CYAN_SOFT)
 	controls_label = _label(controls_panel, Vector2(10, 3), Vector2(1092, 22), 10, UIStyle.TEXT_MUTED)
 	controls_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	controls_label.text = "1 FLAK SCREEN  2 MISSILES  3 NUCLEAR  B HANGAR WINGS  [ / ] FUSE RANGE  MMB ORBIT  WHEEL ZOOM"
+	controls_label.text = "1 FLAK SCREEN  2 MISSILES  3 NUCLEAR  %s CARRIER OPS  B HANGAR WINGS  [ / ] FUSE RANGE  MMB ORBIT  WHEEL ZOOM" % _operations_key_label()
 	crosshair_label = _label(root, Vector2(624, 340), Vector2(32, 32), 24)
 	crosshair_label.text = "⌖"
 	crosshair_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -198,11 +212,11 @@ func _build_ui() -> void:
 	pause_title.text = "PAUSED / SETTINGS"
 	pause_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var pause_copy := _label(pause_panel, Vector2(40, 90), Vector2(420, 160), 18)
-	pause_copy.text = "Esc - resume\n\n1: place / relocate flak screen  /  Shift+1: cease\n2: guided missile salvo  /  3: one nuclear torpedo\nB: deploy or retract hangar wings  /  Z/X: individual air groups\n[ / ]: flak fuse range  /  W/S: throttle\nDouble-click empty space: full-cruise heading\nMiddle-drag: camera orbit  /  Wheel: signed zoom\n\nEnter - restart encounter"
+	pause_copy.text = "Esc - resume\n\n1: place / relocate flak screen  /  Shift+1: cease\n2: guided missile salvo  /  3: one nuclear torpedo\n%s: live carrier operations console\nB: deploy or retract hangar wings  /  Z/X: individual air groups\n[ / ]: flak fuse range  /  W/S: throttle\nDouble-click empty space: full-cruise heading\nMiddle-drag: camera orbit  /  Wheel: signed zoom\n\nEnter - restart encounter" % _operations_key_label()
 	pause_copy.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pause_panel.visible = false
 	pause_veil.visible = false
-	scaled_hud_panels = [objective_panel, telemetry_panel, wing_panel, weapon_panel, target_panel, overview_panel, map_info_panel, radar_panel, mode_panel, notification_panel, controls_panel]
+	scaled_hud_panels = [objective_panel, telemetry_panel, wing_panel, weapon_panel, carrier_operations_panel, target_panel, overview_panel, map_info_panel, radar_panel, mode_panel, notification_panel, controls_panel]
 	_layout_scaled_hud()
 
 func _build_target_context_menu(root: Control) -> void:
@@ -237,6 +251,7 @@ func _layout_scaled_hud() -> void:
 	telemetry_panel.position = Vector2(18.0, 49.0)
 	wing_panel.position = Vector2(18.0, 131.0)
 	weapon_panel.position = Vector2(18.0, 190.0)
+	carrier_operations_panel.position = Vector2(18.0, 262.0)
 	map_info_panel.position = Vector2(18.0, 49.0)
 	target_panel.position = Vector2(viewport_size.x - 18.0 - target_panel.size.x * HUD_SCALE, 14.0)
 	overview_panel.position = Vector2(viewport_size.x - 18.0 - overview_panel.size.x * HUD_SCALE, 141.0)
@@ -261,6 +276,7 @@ func _process(delta: float) -> void:
 	var missile_status := "READY" if carrier.missile_cooldown <= 0.0 else "RELOAD %.1fs" % carrier.missile_cooldown
 	var nuclear_status := "ARMED" if carrier.nuclear_available else "EXPENDED"
 	weapon_label.text = "[1] FLAK  //  %s  •  %s  •  %.1f km  •  R %.0fm\n[2] MISSILES  //  %s  •  %d WEAPONS  •  %.1f km\n[3] NUCLEAR  //  %s  •  ARM %.1f km  •  BLAST %.0fm" % [carrier.flak_screen_status(), flak_status, carrier.flak_screen_range_m / 1000.0, carrier.flak_airburst_radius_m, missile_status, carrier.missile_salvo_count, carrier.missile_weapon.range_m / 1000.0, nuclear_status, carrier.nuclear_arming_distance_m / 1000.0, carrier.nuclear_blast_radius_m]
+	_update_carrier_operations_summary()
 	var graphics := get_node_or_null("/root/GraphicsQualityManager")
 	radar_title.text = "TACTICAL RADAR // %s" % (graphics.profile_label() if graphics != null else "ACTIVE")
 	mode_label.text = "TACTICAL MAP - LIVE" if tactical.enabled else "COMMAND VIEW  //  THROTTLE %03d%%  //  ZOOM %+d%%" % [carrier.throttle_percent(), carrier.chase_zoom_percent()]
@@ -273,6 +289,7 @@ func _process(delta: float) -> void:
 		telemetry_panel.visible = false
 		wing_panel.visible = false
 		weapon_panel.visible = false
+		carrier_operations_panel.visible = true
 		crosshair_label.visible = carrier.flak_placement_active
 		if crosshair_label.visible:
 			crosshair_label.position = get_viewport().get_mouse_position() - crosshair_label.size * 0.5
@@ -280,11 +297,12 @@ func _process(delta: float) -> void:
 		map_info_panel.visible = true
 		mode_panel.visible = true
 		map_info_label.text = _map_information()
-		controls_label.text = "1 FLAK   F1-F4 GROUPS   LMB SELECT/CONFIRM   RMB NAV/ORDER   I INTERCEPT   E ESCORT   SHIFT QUEUE   B WINGS   WHEEL ZOOM"
+		controls_label.text = "1 FLAK   %s CARRIER OPS   F1-F4 GROUPS   LMB SELECT/CONFIRM   RMB NAV/ORDER   I INTERCEPT   E ESCORT   SHIFT QUEUE   B WINGS   WHEEL ZOOM" % _operations_key_label()
 	else:
 		telemetry_panel.visible = true
 		wing_panel.visible = true
 		weapon_panel.visible = true
+		carrier_operations_panel.visible = true
 		crosshair_label.visible = carrier.flak_placement_active
 		if crosshair_label.visible:
 			var director_position := carrier.flak_aim_screen_position if carrier.flak_aim_uses_pointer else get_viewport().get_visible_rect().size * 0.5
@@ -292,12 +310,86 @@ func _process(delta: float) -> void:
 		objective_panel.visible = true
 		map_info_panel.visible = false
 		mode_panel.visible = true
-		controls_label.text = "1 FLAK   2 MISSILES   3 NUCLEAR   [ / ] RANGE   %s   DOUBLE-CLICK HELM   MMB ORBIT   B HANGAR   Z/X AIR GROUPS   TAB MAP" % ("LMB CONFIRM / RMB CANCEL" if carrier.flak_placement_active else "SHIFT+1 CEASE")
+		controls_label.text = "1 FLAK   2 MISSILES   3 NUCLEAR   %s OPS   [ / ] RANGE   %s   DOUBLE-CLICK HELM   MMB ORBIT   B HANGAR   Z/X AIR GROUPS   TAB MAP" % [_operations_key_label(), "LMB CONFIRM / RMB CANCEL" if carrier.flak_placement_active else "SHIFT+1 CEASE"]
 	if notification_time > 0.0:
 		notification_time -= delta
 		if notification_time <= 0.0:
 			notification_label.text = ""
 			notification_panel.visible = false
+
+func bind_carrier_operations(state: Object) -> void:
+	carrier_operations_state = state
+	if carrier_operations_state != null and carrier_operations_state.has_signal(&"changed"):
+		var callback := Callable(self, "_on_carrier_operations_changed")
+		if not carrier_operations_state.is_connected(&"changed", callback):
+			carrier_operations_state.connect(&"changed", callback)
+	_update_carrier_operations_summary()
+
+func _on_carrier_operations_changed(_reason: StringName = &"") -> void:
+	_update_carrier_operations_summary()
+
+func _update_carrier_operations_summary() -> void:
+	if carrier_operations_label == null:
+		return
+	carrier_operations_button.text = "OPEN %s" % _operations_key_tag()
+	if carrier_operations_state == null:
+		carrier_operations_label.text = "%s BALANCED  //  8 / 8 POWER\nCREW 240  //  STORES NOMINAL" % _operations_key_tag()
+		return
+	var preset := String(_operations_value([&"current_power_preset", &"power_preset", &"current_preset"], "balanced")).replace("_", " ").to_upper()
+	var available := int(_operations_value([&"available_power_points", &"available_power", &"available_reactor_points", &"power_budget"], 8))
+	var crew := int(_operations_value([&"crew", &"surviving_crew", &"crew_current"], 240))
+	var hazards = _operations_value([&"hazards", &"active_hazards"], {})
+	var hazard_count := 0
+	if hazards is Dictionary:
+		for value in hazards.values():
+			if value is Array:
+				hazard_count += value.size()
+			elif value is Dictionary:
+				for active in value.values():
+					hazard_count += 1 if bool(active) else 0
+			elif value != null and bool(value):
+				hazard_count += 1
+	var trapped := _active_operations_incident()
+	if not trapped.is_empty():
+		carrier_operations_label.text = "%s %s  //  %d / 8 POWER\nRESCUE %s // %s // %.1fs" % [
+			_operations_key_tag(), preset, available,
+			String(trapped.get("display_name", "OFFICER")).to_upper(),
+			String(trapped.get("subsystem", "SYSTEM")).replace("_", " ").to_upper(),
+			maxf(0.0, float(trapped.get("time_remaining", 0.0))),
+		]
+		carrier_operations_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.22))
+	else:
+		var warning := "STORES / INTERNALS NOMINAL" if hazard_count == 0 else "%d INTERNAL WARNING%s" % [hazard_count, "" if hazard_count == 1 else "S"]
+		carrier_operations_label.text = "%s %s  //  %d / 8 POWER\nCREW %d  //  %s" % [_operations_key_tag(), preset, available, crew, warning]
+		carrier_operations_label.add_theme_color_override("font_color", UIStyle.TEXT_PRIMARY if hazard_count == 0 else UIStyle.AMBER)
+
+func _active_operations_incident() -> Dictionary:
+	var incidents = _operations_value([&"officer_incidents"], [])
+	if incidents is Array:
+		for incident in incidents:
+			if incident is Dictionary and String((incident as Dictionary).get("outcome", "")) == "trapped":
+				return incident
+	return {}
+
+
+func _operations_key_label() -> String:
+	return ExodriftInputSettings.key_label("carrier_operations")
+
+
+func _operations_key_tag() -> String:
+	return "[%s]" % _operations_key_label()
+
+func _operations_value(names: Array[StringName], fallback):
+	for entry in carrier_operations_state.get_property_list():
+		var property_name := StringName(entry.name)
+		if names.has(property_name):
+			var value = carrier_operations_state.get(property_name)
+			if value != null:
+				return value
+	for method_name in names:
+		if carrier_operations_state.has_method(method_name):
+			return carrier_operations_state.call(method_name)
+	return fallback
 
 func notify(message: String) -> void:
 	notification_label.text = message

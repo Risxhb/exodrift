@@ -21,14 +21,14 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 - Strict sensor fog with uncertain contacts, active emissions, identification requirements, stale tracks, and command-link loss.
 - Live 3D fleet command with selection, move, attack, intercept, escort, hold, recall, withdraw, stances, formations, and queued orders.
 - An 18-node, three-sector run map with fuel, supplies, intel, forecasts, combat transitions, and manual versioned saves.
-- Persistent carrier condition, wing losses and ammunition, escort survival, fleet servicing, and five authored module slots.
+- Persistent carrier condition, 240-person crew, eight damageable subsystems, finite combat/aviation stores, damage-control spares, wing losses and packages, escort survival, exact fleet-service actions, and five authored module slots.
 - Three fixed escort identities with requisition acquisition, sector-gated suppliers, reserve selection, unique permanent losses, and distinct tactical profiles.
 - Three carrier-frame sidegrades and three refittable air-group complements with fixed 4/3, 5/2, and 3/4 interceptor/scout allocations.
 - Persistent salvage stock with fixed supply, fuel, and requisition conversions plus three route logistics postures with explicit travel tradeoffs.
 - Six objective types: command strike, interception, extraction, defense, escort, and capture.
 - Withdrawal pursuit, jump-range stragglers, recoverable escape pods, and an after-action rescue/salvage/departure choice with persistent consequences.
-- A compact bottom command row over a continuously simulated battle built from the current textured runtime ships and fighters, with New Operation, Continue, an eight-part animated communications tutorial, persistent settings, credits, and return-to-title navigation.
-- A six-step first-operation orientation that teaches helm translation, active sensors, flight operations, the live tactical map, and intent-level orders without pausing combat.
+- A compact bottom command row over a continuously simulated battle built from the current textured runtime ships and fighters, with New Operation, Continue, a nine-part animated communications tutorial, persistent settings, credits, and return-to-title navigation.
+- A seven-step first-operation orientation that teaches helm translation, active sensors, flight operations, carrier engineering, the live tactical map, and intent-level orders without pausing combat.
 - Three sector-specific hostile fleets—Acheron, Vesper, and Crucible—with different capital roles, fighter complements, opening formations, weapons, pursuit identities, and battlefield palettes.
 - Three deterministic layouts per sector plus bespoke command battles: Acheron command-net screening, Vesper shield-break pincers, and the Crucible's anchored multi-phase strategic core.
 - Textured, layered capital ships with faction hull plating, tapered armor, command towers, bridge windows, sensor masts, visible turrets, housed engines, and navy/raider/alien silhouette language.
@@ -58,6 +58,7 @@ All listed keyboard actions can be remapped from **Settings → Remap Controls**
 - `2`: fire a four-weapon guided missile salvo at the identified lock. Right mouse remains a compatibility shortcut.
 - `3`: fire the single 10 km nuclear torpedo. It arms after 1.2 km, has a 650 m falloff blast, can be intercepted, and damages friendlies.
 - `P`: active sensor ping
+- `C`: open the live, non-pausing Carrier Operations console for reactor allocation, subsystem triage, damage-control assignments, crew/stores, deck priorities, and wing packages
 - `Z`, `X`: launch/recall interceptor and scout wings; pressing during servicing queues an automatic physical redeploy when turnaround completes
 - `B`: deploy/open both hangar wings, or recall both air groups and retract the galleries once recovery is complete
 - `Tab`: live tactical map
@@ -83,16 +84,21 @@ godot --headless --path . --script tests/run_ship_surface_tests.gd
 godot --headless --path . --script tests/run_space_hud_readability_tests.gd
 godot --headless --path . --script tests/run_ordnance_screen_tests.gd
 godot --headless --path . --script tests/run_tutorial_tests.gd
+godot --headless --path . --script tests/run_carrier_operations_state_tests.gd
+godot --headless --path . --script tests/run_carrier_combat_integration_tests.gd
+godot --headless --path . --script tests/run_deck_logistics_tests.gd
+godot --headless --path . --script tests/run_carrier_operations_ui_tests.gd
+godot --headless --path . --script tests/run_carrier_service_ui_tests.gd
 godot --headless --path . --script tests/profile_combat_stress.gd
 godot --path . --script tests/profile_menu.gd
 godot --headless --path . --export-release "Web"
 godot --headless --path . --export-release "Windows Desktop"
 ```
 
-The M18 automated 600-frame combat gate measures 144.9 FPS at 1920×1080 with p95 7.40 ms and p99 7.59 ms. The sustained all-wings/flak/missile/nuclear/point-defense stress gate measures 144.9 FPS with p95 9.57 ms and p99 9.99 ms with zero dropped effects; the full-runtime-model animated menu measures 144.9 effective FPS on the development RTX 3060. See [GAME_BIBLE.md](GAME_BIBLE.md) for acceptance evidence and hardware-target caveats.
+The M19 automated combat gate measures 145.0 effective FPS at 2560×1440 with p95 7.50 ms and p99 7.72 ms. The sustained carrier-incident/all-wings/ordnance stress gate measures 145.0 effective FPS at 2560×1440 with p95 10.14 ms and p99 10.60 ms while keeping nodes and the 80-slot VFX pool bounded; the full-runtime-model menu measures 144.9 effective FPS. These are development RTX 3060 measurements. See [GAME_BIBLE.md](GAME_BIBLE.md) for acceptance evidence and hardware-target caveats.
 
 ## GitHub Pages
 
 The checked-in workflow at `.github/workflows/deploy-pages.yml` publishes `web/` when the site changes. In the repository’s **Settings → Pages**, select **GitHub Actions** as the source, then run the workflow or push to `main`.
 
-All currently defined milestones M1–M18 are implemented. M18 keeps flak placement carrier-centered, expands signed zoom, enables tactical-overlay screening, adds aggregate hangar-wing control, collapsible command panels, persistent interactive target locks and approach/orbit/keep-distance orders, a true deep-space sky, and more readable faceted capital hulls. External first-time-player sessions remain the evidence-gathering step for subsequent balance tuning.
+All currently defined milestones M1–M19 are implemented. M19 adds live carrier engineering triage, persistent crew and subsystem consequences, finite magazines and aviation stores, explicit per-bay service queues, six data-driven wing packages, exact campaign service actions, and the non-pausing Carrier Operations console. External first-time-player sessions and release hardening are the next gate.

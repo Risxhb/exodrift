@@ -13,10 +13,11 @@ const LESSON_TITLES := [
 	"FIRE CONTROL",
 	"HANGAR AND AIR GROUPS",
 	"LIVE TACTICAL COMMAND",
+	"CARRIER OPERATIONS",
 	"OPERATIONAL CAMPAIGN",
 	"ORIENTATION COMPLETE",
 ]
-const POSE_ROWS := [0, 0, 0, 1, 1, 1, 2, 2]
+const POSE_ROWS := [0, 0, 0, 1, 1, 1, 1, 2, 2]
 
 var root: Control
 var portrait: TextureRect
@@ -194,6 +195,8 @@ func _lesson_text(index: int) -> String:
 		5:
 			return "Open the live tactical map with %s. Select the carrier, then right-click an identified track for Approach, Orbit, or Keep-at-Distance orders from 500 meters to 25 kilometers. Wings and escorts retain attack and intercept context orders; Shift queues fleet orders." % _key("toggle_tactical")
 		6:
+			return "Press %s for the live Carrier Operations console; the battle continues behind it. Use Balanced, Strike, Evasive, or Recovery power, and assign either damage-control team to fires, breaches, or disabled systems. Set each deck to Rapid Turn, Balanced, or Repair First, watch finite weapon and aviation stores, and act before a trapped officer's rescue countdown expires." % _key("carrier_operations")
+		7:
 			return "Between engagements, choose connected campaign nodes and watch fuel, supplies, and intel. Service damage before it compounds, assign officers to strengthen departments, and use manual saves before committing to a dangerous route."
 		_:
 			return "That is the command picture. Keep Sidebay mobile, use flak to shape incoming fire, and treat every air-group recovery as part of the battle. The tutorial remains available from the title screen whenever you need it."

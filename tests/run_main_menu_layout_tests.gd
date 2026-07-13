@@ -6,12 +6,15 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	root.size = Vector2i(2560, 1440)
 	var menu := ExodriftMainMenu.new()
 	root.add_child(menu)
 	menu.configure(false)
 	await process_frame
 	_assert_true(menu.main_panel.size.y <= 110.0, "primary menu is a compact command bar")
 	_assert_true(is_equal_approx(menu.main_panel.anchor_top, 1.0) and menu.main_panel.offset_top < 0.0, "primary menu is bottom anchored")
+	var menu_rect := menu.main_panel.get_global_rect()
+	_assert_true(menu_rect.position.x >= 18.0 and menu_rect.end.x <= root.size.x - 18.0 and menu_rect.position.y >= 18.0 and menu_rect.end.y <= root.size.y - 18.0, "1440p command bar remains inside safe margins")
 	var command_buttons: Array[Button] = []
 	for child in menu.main_panel.get_children():
 		if child is Button:
@@ -42,9 +45,11 @@ func _run() -> void:
 	_assert_true(nebula_veils.size() == 2, "menu battle layers two scalable vector nebula veils")
 	menu._show_tutorial()
 	await process_frame
-	_assert_true(is_instance_valid(menu.tutorial_screen) and menu.tutorial_screen.LESSON_TITLES.size() == 8, "main-menu tutorial opens an eight-lesson communications sequence")
+	_assert_true(is_instance_valid(menu.tutorial_screen) and menu.tutorial_screen.LESSON_TITLES.size() == 9, "main-menu tutorial opens a nine-lesson communications sequence")
 	if is_instance_valid(menu.tutorial_screen):
 		var tutorial := menu.tutorial_screen
+		var communications_frame := tutorial.root.find_child("CommunicationsFrame", true, false) as Control
+		_assert_true(communications_frame != null and communications_frame.get_global_rect().position.x >= 18.0 and communications_frame.get_global_rect().end.x <= root.size.x - 18.0 and communications_frame.get_global_rect().position.y >= 18.0 and communications_frame.get_global_rect().end.y <= root.size.y - 18.0, "tutorial communications frame stays within 1440p safe margins")
 		_assert_true(tutorial.portrait.texture is AtlasTexture and tutorial.dialogue_label.visible_characters >= 0 and tutorial.dialogue_label.visible_characters < tutorial.full_text.length(), "tutorial starts with the generated portrait atlas and typewriter text")
 		tutorial._advance()
 		_assert_true(tutorial.dialogue_label.visible_characters == -1 and not tutorial.mouth_open, "first advance completes the current transmission without skipping a lesson")

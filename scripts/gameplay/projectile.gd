@@ -96,7 +96,7 @@ func _check_target_hit() -> bool:
 		return false
 	if global_position.distance_to(target.global_position) <= collision_radius_m + target.collision_radius_m:
 		if not radial_warhead and airburst_distance_m <= 0.0:
-			target.receive_damage(damage, source_entity_id)
+			target.receive_damage(damage, source_entity_id, _impact_context())
 		return true
 	return false
 
@@ -109,7 +109,7 @@ func _check_proximity_hit() -> bool:
 		if candidate is CombatShip and candidate.team != team and not candidate.is_destroyed:
 			if global_position.distance_to(candidate.global_position) <= collision_radius_m + candidate.collision_radius_m:
 				if not radial_warhead and airburst_distance_m <= 0.0:
-					candidate.receive_damage(damage, source_entity_id)
+					candidate.receive_damage(damage, source_entity_id, _impact_context())
 				return true
 	return false
 
@@ -148,7 +148,7 @@ func detonate() -> void:
 		if distance > blast_radius_m + candidate.collision_radius_m:
 			continue
 		var falloff := lerpf(1.0, 0.18, clampf(distance / blast_radius_m, 0.0, 1.0))
-		candidate.receive_damage(damage * falloff, source_entity_id)
+		candidate.receive_damage(damage * falloff, source_entity_id, _impact_context(distance, falloff))
 	var vfx := _combat_vfx()
 	if vfx != null:
 		if projectile_role == "flak" and vfx.has_method("spawn_flak_airburst"):
@@ -156,6 +156,18 @@ func detonate() -> void:
 		else:
 			vfx.spawn_faction_burst(projectile_role, global_position, team, source_visual_id, 4.8 if projectile_role == "nuclear" else 1.15)
 	queue_free()
+
+func _impact_context(distance_from_blast_m: float = 0.0, radial_falloff: float = 1.0) -> Dictionary:
+	return {
+		"position": global_position,
+		"weapon_role": projectile_role,
+		"projectile_damage": damage,
+		"source_visual_id": source_visual_id,
+		"projectile_direction": direction,
+		"distance_from_blast_m": distance_from_blast_m,
+		"radial_falloff": radial_falloff,
+		"radial_warhead": radial_warhead or airburst_distance_m > 0.0,
+	}
 
 func intercept() -> void:
 	if can_be_intercepted:

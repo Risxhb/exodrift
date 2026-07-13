@@ -1,11 +1,11 @@
 class_name SidebayRunState
 extends RefCounted
 
-const SAVE_VERSION := 9
+const SAVE_VERSION := 10
 const MAX_INTERCEPTOR_CRAFT := 4
 const MAX_SCOUT_CRAFT := 3
 const BASE_INTERCEPTOR_AMMO := 112
-const BASE_SCOUT_AMMO := 54
+const BASE_SCOUT_AMMO := 36
 
 var run_id: String = ""
 var seed: int = 0
@@ -64,22 +64,23 @@ var personnel_event_log: Array[String] = []
 var recruitment_pool: Array[SidebayPersonnelRecord] = []
 var pending_operational_event: Dictionary = {}
 var resolved_operational_event_ids: Array[StringName] = []
+var carrier_operations: CarrierOperationsState = CarrierOperationsState.new()
 
 static func departments() -> Array[StringName]:
 	return [&"Command", &"Flight", &"Gunnery", &"Engineering", &"Sensors", &"Medical"]
 
 static func module_catalog() -> Array[Dictionary]:
 	return [
-		{"id": &"siege_missile_cell", "slot": "weapon", "name": "Siege Missile Cell", "effect": "+20% carrier missile damage"},
+		{"id": &"siege_missile_cell", "slot": "weapon", "name": "Siege Missile Cell", "effect": "+20% missile damage and +8 guided missiles"},
 		{"id": &"flak_director", "slot": "weapon", "name": "Aegis Flak Director", "effect": "+25% flak range"},
 		{"id": &"aegis_relay", "slot": "defense", "name": "Aegis Shield Relay", "effect": "+20% carrier shields"},
 		{"id": &"ablative_citadel", "slot": "defense", "name": "Ablative Citadel", "effect": "+20% carrier armor"},
 		{"id": &"longwatch_array", "slot": "sensor", "name": "Longwatch Array", "effect": "+20% passive and active sensor range"},
 		{"id": &"command_uplink", "slot": "sensor", "name": "Command Uplink", "effect": "+25% command-link range"},
-		{"id": &"fleet_repair_drones", "slot": "support", "name": "Fleet Repair Drones", "effect": "-20% fleet service cost"},
+		{"id": &"fleet_repair_drones", "slot": "support", "name": "Fleet Repair Drones", "effect": "+20 damage-control spares and -20% repair cost"},
 		{"id": &"field_fabricator", "slot": "support", "name": "Field Fabricator", "effect": "+15% carrier hull"},
 		{"id": &"rapid_turnaround_deck", "slot": "hangar", "name": "Rapid Turnaround Deck", "effect": "-25% wing service time"},
-		{"id": &"expanded_magazines", "slot": "hangar", "name": "Expanded Magazines", "effect": "+25% wing ammunition"}
+		{"id": &"expanded_magazines", "slot": "hangar", "name": "Expanded Magazines", "effect": "+25% aviation and flak capacity"}
 	]
 
 static func module_data(module_id: StringName) -> Dictionary:
@@ -246,6 +247,7 @@ static func create_new(run_seed: int = 0) -> SidebayRunState:
 	state.run_id = "%s-%s" % [state.seed, Time.get_ticks_msec()]
 	state._initialize_authored_personnel()
 	state._initialize_recruitment_pool()
+	state._sync_carrier_operations_configuration(true)
 	return state
 
 func _initialize_authored_personnel() -> void:
@@ -919,6 +921,7 @@ func select_hangar_complement(complement_id: StringName) -> String:
 	if not spend_supplies(cost):
 		return "Deck refit rejected: %d supplies required." % cost
 	active_hangar_complement_id = complement_id
+	_sync_carrier_operations_configuration(true)
 	interceptor_craft_count = maximum_interceptor_craft()
 	scout_craft_count = maximum_scout_craft()
 	interceptor_ammunition = maximum_interceptor_ammunition()
@@ -1004,14 +1007,17 @@ func maximum_scout_craft() -> int:
 	return int(active_hangar_complement_data().get("scout_craft", MAX_SCOUT_CRAFT))
 
 func maximum_interceptor_ammunition() -> int:
-	var per_craft := int(active_hangar_complement_data().get("interceptor_ammo_per_craft", BASE_INTERCEPTOR_AMMO / MAX_INTERCEPTOR_CRAFT))
-	return int(round(maximum_interceptor_craft() * per_craft * (1.25 if installed_modules.get("hangar", "") == "expanded_magazines" else 1.0)))
+	var loadout := carrier_operations.wing_loadout(&"interceptor") if carrier_operations != null else null
+	var per_craft := loadout.ammunition_per_craft if loadout != null else int(active_hangar_complement_data().get("interceptor_ammo_per_craft", BASE_INTERCEPTOR_AMMO / MAX_INTERCEPTOR_CRAFT))
+	return maximum_interceptor_craft() * per_craft
 
 func maximum_scout_ammunition() -> int:
-	var per_craft := int(active_hangar_complement_data().get("scout_ammo_per_craft", BASE_SCOUT_AMMO / MAX_SCOUT_CRAFT))
-	return int(round(maximum_scout_craft() * per_craft * (1.25 if installed_modules.get("hangar", "") == "expanded_magazines" else 1.0)))
+	var loadout := carrier_operations.wing_loadout(&"scout") if carrier_operations != null else null
+	var per_craft := loadout.ammunition_per_craft if loadout != null else int(active_hangar_complement_data().get("scout_ammo_per_craft", BASE_SCOUT_AMMO / MAX_SCOUT_CRAFT))
+	return maximum_scout_craft() * per_craft
 
 func fleet_snapshot() -> Dictionary:
+	_sync_carrier_operations_configuration(false)
 	return {
 		"carrier_shields": carrier_shields,
 		"carrier_armor": carrier_armor,
@@ -1029,13 +1035,19 @@ func fleet_snapshot() -> Dictionary:
 		"acquired_escort_ids": acquired_escort_ids.map(func(value: StringName) -> String: return String(value)),
 		"lost_escort_ids": lost_escort_ids.map(func(value: StringName) -> String: return String(value)),
 		"installed_modules": installed_modules.duplicate(true),
-		"personnel_bonuses": personnel_bonuses()
+		"personnel_bonuses": personnel_bonuses(),
+		"carrier_operations": carrier_operations.to_dictionary()
 	}
 
 func apply_battle_report(report: Dictionary) -> void:
 	carrier_shields = clampf(float(report.get("carrier_shields", carrier_shields)), 0.0, 1.0)
 	carrier_armor = clampf(float(report.get("carrier_armor", carrier_armor)), 0.0, 1.0)
 	carrier_hull = clampf(float(report.get("carrier_hull", carrier_hull)), 0.0, 1.0)
+	var operations_report: Dictionary = report.get("carrier_operations", {})
+	if not operations_report.is_empty():
+		_apply_carrier_operations_personnel_outcomes(operations_report)
+		carrier_operations.apply_battle_report(operations_report)
+		_sync_carrier_operations_configuration(false)
 	interceptor_craft_count = clampi(int(report.get("interceptor_craft_count", interceptor_craft_count)), 0, maximum_interceptor_craft())
 	interceptor_ammunition = clampi(int(report.get("interceptor_ammunition", interceptor_ammunition)), 0, maximum_interceptor_ammunition())
 	scout_craft_count = clampi(int(report.get("scout_craft_count", scout_craft_count)), 0, maximum_scout_craft())
@@ -1044,30 +1056,84 @@ func apply_battle_report(report: Dictionary) -> void:
 	if not escort_active and not bool(report.get("escort_straggler", false)):
 		lose_active_escort()
 
-func service_cost() -> int:
-	var damage_cost := ceili((1.0 - carrier_shields) * 12.0 + (1.0 - carrier_armor) * 18.0 + (1.0 - carrier_hull) * 30.0)
-	var craft_cost := (maximum_interceptor_craft() - interceptor_craft_count + maximum_scout_craft() - scout_craft_count) * 12
-	var ammo_missing := maximum_interceptor_ammunition() - interceptor_ammunition + maximum_scout_ammunition() - scout_ammunition
-	var ammo_cost := ceili(float(ammo_missing) / 18.0)
-	var total := damage_cost + craft_cost + ammo_cost
+func service_cost_breakdown() -> Dictionary:
+	_sync_carrier_operations_configuration(false)
+	var layer_damage := ceili((1.0 - carrier_shields) * 12.0 + (1.0 - carrier_armor) * 18.0 + (1.0 - carrier_hull) * 30.0)
+	var condition_deficit := 0.0
+	for value in carrier_operations.subsystem_condition.values():
+		condition_deficit += 1.0 - clampf(float(value), 0.0, 1.0)
+	var subsystem_repair := ceili(condition_deficit * 15.0)
+	var spare_restock := ceili(float(carrier_operations.damage_control_spares_capacity - carrier_operations.damage_control_spares) / 5.0)
+	var repair_subtotal := layer_damage + subsystem_repair + spare_restock
 	if installed_modules.get("support", "") == "fleet_repair_drones":
-		total = ceili(total * 0.8)
-	return maxi(0, total)
+		repair_subtotal = ceili(float(repair_subtotal) * 0.8)
 
-func service_fleet() -> bool:
-	var cost := service_cost()
+	var flak_restock := ceili(float(carrier_operations.store_capacity(&"flak_rounds") - int(carrier_operations.stores.get("flak_rounds", 0))) / 140.0)
+	var missile_restock := (carrier_operations.store_capacity(&"guided_missiles") - int(carrier_operations.stores.get("guided_missiles", 0))) * 2
+	var nuclear_restock := (carrier_operations.store_capacity(&"nuclear_torpedoes") - int(carrier_operations.stores.get("nuclear_torpedoes", 0))) * 20
+	var rearm_subtotal := flak_restock + missile_restock + nuclear_restock
+
+	var craft_replacement := (maximum_interceptor_craft() - interceptor_craft_count + maximum_scout_craft() - scout_craft_count) * 12
+	var legacy_ammo_missing := maximum_interceptor_ammunition() - interceptor_ammunition + maximum_scout_ammunition() - scout_ammunition
+	var wing_ammunition := ceili(float(legacy_ammo_missing) / 18.0)
+	var aviation_restock := ceili(float(carrier_operations.store_capacity(&"aviation_ordnance") - int(carrier_operations.stores.get("aviation_ordnance", 0))) / 18.0)
+	var refuel_restock := (carrier_operations.store_capacity(&"craft_refuel") - int(carrier_operations.stores.get("craft_refuel", 0))) * 2
+	var air_group_subtotal := craft_replacement + wing_ammunition + aviation_restock + refuel_restock
+	return {
+		"repair": {
+			"layers": layer_damage, "subsystems": subsystem_repair,
+			"damage_control_spares": spare_restock, "subtotal": maxi(0, repair_subtotal)
+		},
+		"rearm": {
+			"flak_rounds": flak_restock, "guided_missiles": missile_restock,
+			"nuclear_torpedoes": nuclear_restock, "subtotal": maxi(0, rearm_subtotal)
+		},
+		"air_group": {
+			"craft": craft_replacement, "wing_ammunition": wing_ammunition,
+			"aviation_ordnance": aviation_restock, "craft_refuel": refuel_restock,
+			"subtotal": maxi(0, air_group_subtotal)
+		},
+		"full_service": maxi(0, repair_subtotal + rearm_subtotal + air_group_subtotal)
+	}
+
+func service_action_cost(action: StringName = &"full_service") -> int:
+	var breakdown := service_cost_breakdown()
+	match action:
+		&"repair": return int((breakdown.repair as Dictionary).subtotal)
+		&"rearm": return int((breakdown.rearm as Dictionary).subtotal)
+		&"air_group": return int((breakdown.air_group as Dictionary).subtotal)
+		_: return int(breakdown.full_service)
+
+func service_cost(action: StringName = &"full_service") -> int:
+	return service_action_cost(action)
+
+func service_fleet(action: StringName = &"full_service") -> bool:
+	var cost := service_action_cost(action)
 	if cost == 0:
 		return true
 	if not spend_supplies(cost):
 		return false
-	carrier_shields = 1.0
-	carrier_armor = 1.0
-	carrier_hull = 1.0
-	interceptor_craft_count = maximum_interceptor_craft()
-	interceptor_ammunition = maximum_interceptor_ammunition()
-	scout_craft_count = maximum_scout_craft()
-	scout_ammunition = maximum_scout_ammunition()
+	if action == &"repair" or action == &"full_service":
+		carrier_shields = 1.0
+		carrier_armor = 1.0
+		carrier_hull = 1.0
+		carrier_operations.repair_all_subsystems()
+		carrier_operations.replenish_damage_control_spares()
+	if action == &"rearm" or action == &"full_service":
+		carrier_operations.refill_store(&"flak_rounds")
+		carrier_operations.refill_store(&"guided_missiles")
+		carrier_operations.refill_store(&"nuclear_torpedoes")
+	if action == &"air_group" or action == &"full_service":
+		interceptor_craft_count = maximum_interceptor_craft()
+		interceptor_ammunition = maximum_interceptor_ammunition()
+		scout_craft_count = maximum_scout_craft()
+		scout_ammunition = maximum_scout_ammunition()
+		carrier_operations.refill_store(&"aviation_ordnance")
+		carrier_operations.refill_store(&"craft_refuel")
 	return true
+
+func restore_crew_at_repair_node(maximum_replacements: int = 24) -> int:
+	return carrier_operations.restore_crew_at_repair_node(maximum_replacements)
 
 func cycle_module(slot: String) -> StringName:
 	var choices: Array[StringName] = []
@@ -1082,6 +1148,7 @@ func cycle_module(slot: String) -> StringName:
 	installed_modules[slot] = String(next_id)
 	interceptor_ammunition = mini(interceptor_ammunition, maximum_interceptor_ammunition())
 	scout_ammunition = mini(scout_ammunition, maximum_scout_ammunition())
+	carrier_operations.configure_modules(installed_modules, true)
 	return next_id
 
 func unlock_next_module() -> StringName:
@@ -1090,6 +1157,61 @@ func unlock_next_module() -> StringName:
 			unlocked_module_ids.append(module.id)
 			return module.id
 	return &""
+
+func _sync_carrier_operations_configuration(fill_added_capacity: bool) -> void:
+	if carrier_operations == null:
+		carrier_operations = CarrierOperationsState.new()
+	carrier_operations.configure_air_group(maximum_interceptor_craft(), maximum_scout_craft(), fill_added_capacity)
+	carrier_operations.configure_modules(installed_modules, fill_added_capacity)
+	var leads: Dictionary = {}
+	for department in CarrierOperationsState.SUBSYSTEM_DEPARTMENTS.values():
+		var department_id := StringName(department)
+		if leads.has(String(department_id)):
+			continue
+		var lead := assigned_person(department_id)
+		if lead == null:
+			leads[String(department_id)] = {
+				"personnel_id": "", "display_name": "UNASSIGNED", "status": "unavailable"
+			}
+		else:
+			leads[String(department_id)] = {
+				"personnel_id": String(lead.personnel_id),
+				"display_name": lead.display_name,
+				"status": _personnel_status_key(lead),
+				"injury_severity": lead.injury_severity
+			}
+	carrier_operations.set_department_leads(leads)
+
+func _personnel_status_key(person: SidebayPersonnelRecord) -> String:
+	match person.status:
+		SidebayPersonnelRecord.Status.INJURED: return "injured"
+		SidebayPersonnelRecord.Status.MISSING: return "missing"
+		SidebayPersonnelRecord.Status.DECEASED: return "deceased"
+		_: return "active"
+
+func _apply_carrier_operations_personnel_outcomes(operations_report: Dictionary) -> void:
+	var outcomes: Array = operations_report.get("officer_incident_outcomes", [])
+	for value in outcomes:
+		if not value is Dictionary:
+			continue
+		var incident: Dictionary = value
+		var person := get_personnel(StringName(incident.get("personnel_id", "")))
+		if person == null or not person.is_alive():
+			continue
+		var subsystem_name := str(incident.get("subsystem", "carrier subsystem")).replace("_", " ")
+		person.injure("Trapped during %s casualty" % subsystem_name, 3)
+		var outcome := str(incident.get("outcome", "rescued"))
+		if outcome == "killed":
+			person.mark_deceased()
+			personnel_lost += 1
+			for bond_id in person.bonds:
+				var bonded_person := get_personnel(bond_id)
+				if bonded_person != null and bonded_person.is_alive() and not bonded_person.traits.has("Grieving"):
+					bonded_person.traits.append("Grieving")
+			personnel_event_log.append("%s was killed during the %s incident. Immediate department succession enacted." % [person.display_name, subsystem_name])
+		else:
+			personnel_event_log.append("%s was rescued from %s with severity-3 injuries." % [person.display_name, subsystem_name])
+	_repair_department_assignments()
 
 func mark_completed(node_id: StringName, node_sector: int) -> void:
 	if not completed_node_ids.has(node_id):
@@ -1141,6 +1263,7 @@ static func from_dictionary(data: Dictionary) -> SidebayRunState:
 	if version < 1 or version > SAVE_VERSION:
 		return null
 	var state := SidebayRunState.new()
+	var fleet: Dictionary = data.get("fleet", {})
 	state.run_id = str(data.get("run_id", ""))
 	state.seed = int(data.get("seed", 0))
 	state.sector_index = int(data.get("sector_index", 0))
@@ -1169,7 +1292,6 @@ static func from_dictionary(data: Dictionary) -> SidebayRunState:
 	state.run_completed = bool(data.get("run_completed", false))
 	state.run_failed = bool(data.get("run_failed", false))
 	if version >= 2:
-		var fleet: Dictionary = data.get("fleet", {})
 		if version >= 8:
 			state.active_carrier_id = StringName(fleet.get("active_carrier_id", "cvn_sidebay"))
 			state.acquired_carrier_ids.clear()
@@ -1233,4 +1355,10 @@ static func from_dictionary(data: Dictionary) -> SidebayRunState:
 			state.resolved_operational_event_ids.append(StringName(event_id))
 	if state.recruitment_pool.is_empty() and version < 6:
 		state._initialize_recruitment_pool()
+	if version >= 10:
+		state.carrier_operations = CarrierOperationsState.from_dictionary(fleet.get("carrier_operations", {}), state.installed_modules)
+	else:
+		state.carrier_operations = CarrierOperationsState.new()
+		state.carrier_operations.configure_modules(state.installed_modules, true)
+	state._sync_carrier_operations_configuration(false)
 	return state

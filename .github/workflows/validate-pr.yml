@@ -1,0 +1,53 @@
+name: Validate pull request
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  headless-suites:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download Godot 4.7
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "godot-4.7.zip"
+          $destination = Join-Path $env:RUNNER_TEMP "godot-4.7"
+          Invoke-WebRequest `
+            -Uri "https://github.com/godotengine/godot/releases/download/4.7-stable/Godot_v4.7-stable_win64.exe.zip" `
+            -OutFile $archive
+          Expand-Archive -Path $archive -DestinationPath $destination
+          "GODOT_CONSOLE=$destination\Godot_v4.7-stable_win64_console.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Import project
+        shell: pwsh
+        run: '& $env:GODOT_CONSOLE --headless --editor --path . --quit'
+
+      - name: Run every headless suite
+        shell: pwsh
+        run: |
+          $suites = @(
+            Get-Item "tests/run_tests.gd"
+            Get-Item "tests/run_integration.gd"
+            Get-ChildItem "tests/run_*_tests.gd" | Sort-Object Name
+            Get-ChildItem "tests/profile_*.gd" | Sort-Object Name
+          ) | Select-Object -Unique
+          foreach ($suite in $suites) {
+            Write-Host "::group::$($suite.Name)"
+            $env:APPDATA = Join-Path $env:RUNNER_TEMP "godot-$($suite.BaseName)"
+            New-Item -ItemType Directory -Force -Path $env:APPDATA | Out-Null
+            & $env:GODOT_CONSOLE --headless --path . --script $suite.FullName
+            $exitCode = $LASTEXITCODE
+            Write-Host "::endgroup::"
+            if ($exitCode -ne 0) {
+              throw "$($suite.Name) failed with exit code $exitCode"
+            }
+          }

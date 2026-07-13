@@ -403,13 +403,13 @@ func _build_interface(can_continue: bool) -> void:
 	var telemetry := _label(interface, Vector2(26, 22), Vector2(350, 56), 13)
 	telemetry.text = "LIVE COMBAT FEED // HELIOS REACH\nCOMMAND LINK: STANDBY"
 	var build := _label(interface, Vector2(990, 22), Vector2(260, 52), 13)
-	build.text = "TACTICAL INTERFACE BUILD // M18\nSINGLE-PLAYER // PC + WEB"
+	build.text = "INTEGRATED CARRIER OPERATIONS // M19\nSINGLE-PLAYER // PC + WEB"
 	build.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	main_panel = _command_bar()
 	var title := _label(main_panel, Vector2(22, 14), Vector2(218, 42), 30)
 	title.text = "EXODRIFT"
 	var subtitle := _label(main_panel, Vector2(23, 51), Vector2(218, 22), 11)
-	subtitle.text = "CARRIER COMMAND // M18"
+	subtitle.text = "CARRIER COMMAND // M19"
 	var divider := ColorRect.new()
 	divider.color = Color(0.08, 0.7, 0.96, 0.72)
 	divider.position = Vector2(246, 14)

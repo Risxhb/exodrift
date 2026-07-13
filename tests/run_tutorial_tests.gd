@@ -10,7 +10,7 @@ func _run() -> void:
 	root.add_child(tutorial)
 	tutorial.configure()
 	await process_frame
-	_assert_true(tutorial.LESSON_TITLES.size() == 8, "tutorial contains all eight lessons")
+	_assert_true(tutorial.LESSON_TITLES.size() == 9, "tutorial contains all nine lessons")
 	_assert_true(tutorial.full_text.contains("CVN Sidebay"), "orientation opens with the authored command-link briefing")
 	_assert_true(tutorial.dialogue_label.visible_characters == 0, "typewriter begins with hidden text")
 	tutorial._process(0.1)
@@ -24,6 +24,9 @@ func _run() -> void:
 	var instruction_frame := tutorial.portrait.texture as AtlasTexture
 	_assert_true(instruction_frame != null and is_equal_approx(instruction_frame.region.position.y, 400.0), "fire-control lesson selects the instruction pose")
 	tutorial._show_lesson(6)
+	_assert_true(tutorial.full_text.contains(ExodriftInputSettings.key_label("carrier_operations")), "carrier-operations lesson resolves its live binding")
+	_assert_true(tutorial.full_text.contains("damage-control") and tutorial.full_text.contains("rescue countdown"), "carrier-operations lesson covers triage and officer rescue")
+	tutorial._show_lesson(7)
 	var alert_frame := tutorial.portrait.texture as AtlasTexture
 	_assert_true(alert_frame != null and is_equal_approx(alert_frame.region.position.y, 800.0), "campaign lesson selects the alert encouragement pose")
 	tutorial.next_blink = 0.0

@@ -5,6 +5,7 @@ signal bay_state_changed(status: String)
 signal throttle_changed(normalized_throttle: float)
 signal navigation_commanded(direction: Vector3, full_cruise: bool)
 signal flak_screen_changed(active: bool, range_m: float)
+signal carrier_operations_message(message: String)
 
 enum TargetNavigationMode {
 	NONE,
@@ -80,9 +81,13 @@ var target_navigation_mode: TargetNavigationMode = TargetNavigationMode.NONE
 var target_navigation_target: CombatShip
 var target_navigation_distance_m: float = 1200.0
 var orbit_clockwise: bool = true
+var carrier_operations: CarrierOperationsState
+var last_missile_salvo_count: int = 0
 
 func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: StringName, color: Color) -> void:
 	super.configure(ship_definition, entity_id, faction, color)
+	if carrier_operations == null:
+		carrier_operations = CarrierOperationsState.new()
 	commanded_heading = -global_transform.basis.z.normalized()
 	for weapon in definition.weapons:
 		if weapon.role == "flak":
@@ -94,6 +99,23 @@ func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: 
 	if flak_weapon != null:
 		flak_screen_max_range_m = flak_weapon.range_m
 		flak_screen_range_m = clampf(flak_screen_range_m, flak_screen_min_range_m, flak_screen_max_range_m)
+	_connect_carrier_operations_feedback()
+
+func configure_carrier_operations(persisted_state: Dictionary, installed_modules: Dictionary = {}, department_leads: Dictionary = {}) -> void:
+	carrier_operations = CarrierOperationsState.from_dictionary(persisted_state, installed_modules)
+	carrier_operations.set_department_leads(department_leads)
+	carrier_operations.reset_for_battle()
+	_connect_carrier_operations_feedback()
+	nuclear_available = int(carrier_operations.stores.get(&"nuclear_torpedoes", 0)) > 0
+
+func _connect_carrier_operations_feedback() -> void:
+	if carrier_operations == null:
+		return
+	if not carrier_operations.store_rejected.is_connected(_on_store_rejected):
+		carrier_operations.store_rejected.connect(_on_store_rejected)
+
+func _on_store_rejected(_store_id: StringName, message: String) -> void:
+	carrier_operations_message.emit(message)
 
 func _build_visual() -> void:
 	var dimensions := definition.dimensions_m
@@ -328,10 +350,14 @@ func _add_bay_door(parent: Node3D, side: float, z_position: float) -> MeshInstan
 func _physics_process(delta: float) -> void:
 	if is_destroyed:
 		return
-	damage_state.tick(delta)
-	flak_cooldown = maxf(0.0, flak_cooldown - delta)
-	missile_cooldown = maxf(0.0, missile_cooldown - delta)
-	point_defense_cooldown = maxf(0.0, point_defense_cooldown - delta)
+	if carrier_operations != null:
+		carrier_operations.tick(delta)
+	damage_state.tick(delta, _operations_multiplier(&"defense", &"shield_grid"))
+	var weapon_delta := delta * _operations_multiplier(&"weapons", &"fire_control")
+	var defense_delta := delta * _operations_multiplier(&"defense", &"shield_grid")
+	flak_cooldown = maxf(0.0, flak_cooldown - weapon_delta)
+	missile_cooldown = maxf(0.0, missile_cooldown - weapon_delta)
+	point_defense_cooldown = maxf(0.0, point_defense_cooldown - defense_delta)
 	_process_flak_salvo_queue(delta)
 	_update_bay_retraction(delta)
 	if target_navigation_mode != TargetNavigationMode.NONE:
@@ -352,10 +378,11 @@ func _process_player_flight(delta: float) -> void:
 	_process_throttle_input(delta)
 	if has_commanded_heading:
 		_steer_toward(commanded_heading, delta)
-	var desired := -global_transform.basis.z.normalized() * definition.maximum_speed_mps * throttle_setting
+	var propulsion_output := _operations_multiplier(&"propulsion", &"propulsion")
+	var desired := -global_transform.basis.z.normalized() * definition.maximum_speed_mps * throttle_setting * clampf(0.55 + propulsion_output * 0.45, 0.25, 1.35)
 	if Input.is_action_pressed("boost"):
 		desired *= 1.6
-	velocity = velocity.move_toward(desired, definition.acceleration_mps2 * delta)
+	velocity = velocity.move_toward(desired, definition.acceleration_mps2 * propulsion_output * delta)
 	move_and_slide()
 
 func _process_throttle_input(delta: float) -> void:
@@ -380,22 +407,24 @@ func _steer_toward(direction_value: Vector3, delta: float) -> void:
 	look_yaw = rotation.y
 
 func _process_autopilot(delta: float) -> void:
+	var propulsion_output := _operations_multiplier(&"propulsion", &"propulsion")
 	var distance := global_position.distance_to(autopilot_destination)
 	if distance < collision_radius_m:
 		autopilot_active = false
-		velocity = velocity.move_toward(Vector3.ZERO, definition.acceleration_mps2 * delta)
+		velocity = velocity.move_toward(Vector3.ZERO, definition.acceleration_mps2 * propulsion_output * delta)
 		move_and_slide()
 		return
-	var desired := global_position.direction_to(autopilot_destination) * definition.maximum_speed_mps
-	velocity = velocity.move_toward(desired, definition.acceleration_mps2 * delta)
+	var desired := global_position.direction_to(autopilot_destination) * definition.maximum_speed_mps * clampf(0.55 + propulsion_output * 0.45, 0.25, 1.35)
+	velocity = velocity.move_toward(desired, definition.acceleration_mps2 * propulsion_output * delta)
 	if desired.length_squared() > 1.0:
 		_steer_toward(desired, delta)
 	move_and_slide()
 
 func _process_target_navigation(delta: float) -> void:
+	var propulsion_output := _operations_multiplier(&"propulsion", &"propulsion")
 	if not is_instance_valid(target_navigation_target) or target_navigation_target.is_destroyed:
 		clear_target_navigation()
-		velocity = velocity.move_toward(Vector3.ZERO, definition.acceleration_mps2 * delta)
+		velocity = velocity.move_toward(Vector3.ZERO, definition.acceleration_mps2 * propulsion_output * delta)
 		move_and_slide()
 		return
 	var offset := target_navigation_target.global_position - global_position
@@ -423,7 +452,7 @@ func _process_target_navigation(delta: float) -> void:
 			desired_velocity += orbit_direction * definition.maximum_speed_mps * 0.68
 	if desired_velocity.length() > definition.maximum_speed_mps * 1.15:
 		desired_velocity = desired_velocity.normalized() * definition.maximum_speed_mps * 1.15
-	velocity = velocity.move_toward(desired_velocity, definition.acceleration_mps2 * delta)
+	velocity = velocity.move_toward(desired_velocity, definition.acceleration_mps2 * propulsion_output * delta)
 	if velocity.length_squared() > 1.0:
 		_steer_toward(velocity.normalized(), delta)
 	move_and_slide()
@@ -541,9 +570,15 @@ func chase_zoom_percent() -> int:
 func fire_flak() -> bool:
 	if flak_weapon == null or flak_cooldown > 0.0:
 		return false
+	var rounds_to_fire := mini(flak_burst_count, _available_store(&"flak_rounds", flak_burst_count))
+	if rounds_to_fire <= 0:
+		_consume_store(&"flak_rounds", flak_burst_count)
+		return false
+	if not _consume_store(&"flak_rounds", rounds_to_fire):
+		return false
 	var target_point := flak_screen_world_position() if flak_screen_active else global_position + aim_direction * flak_screen_range_m
 	var shot_distance := global_position.distance_to(target_point)
-	_queue_flak_barrage(global_position.direction_to(target_point), flak_burst_count, 0.52, shot_distance, flak_airburst_radius_m)
+	_queue_flak_barrage(global_position.direction_to(target_point), rounds_to_fire, 0.52, shot_distance, flak_airburst_radius_m)
 	flak_cooldown = flak_weapon.cooldown_seconds
 	return true
 
@@ -552,7 +587,14 @@ func fire_missile(target_ship: CombatShip) -> bool:
 		return false
 	if global_position.distance_to(target_ship.global_position) > missile_weapon.range_m:
 		return false
-	for index in missile_salvo_count:
+	last_missile_salvo_count = mini(missile_salvo_count, _available_store(&"guided_missiles", missile_salvo_count))
+	if last_missile_salvo_count <= 0:
+		_consume_store(&"guided_missiles", 1)
+		return false
+	if not _consume_store(&"guided_missiles", last_missile_salvo_count):
+		last_missile_salvo_count = 0
+		return false
+	for index in last_missile_salvo_count:
 		var side := -1.0 if index % 2 == 0 else 1.0
 		var rack := index / 2
 		var local_offset := Vector3(side * (14.0 + rack * 4.0), 11.0 + rack * 5.0, -32.0 + rack * 8.0)
@@ -566,6 +608,9 @@ func fire_nuclear(target_ship: CombatShip) -> bool:
 	if nuclear_weapon == null or not nuclear_available or not is_instance_valid(target_ship):
 		return false
 	if global_position.distance_to(target_ship.global_position) > nuclear_weapon.range_m:
+		return false
+	if not _consume_store(&"nuclear_torpedoes", 1):
+		nuclear_available = false
 		return false
 	var start := global_transform * Vector3(0.0, 5.0, -42.0)
 	var torpedo := spawn_projectile(nuclear_weapon, start, start.direction_to(target_ship.global_position), target_ship)
@@ -749,10 +794,56 @@ func _process_point_defense() -> void:
 	for candidate in projectiles:
 		if candidate is SidebayProjectile and candidate.team != team and candidate.can_be_intercepted:
 			if global_position.distance_to(candidate.global_position) <= 900.0:
-				_spawn_flak_barrage(global_position.direction_to(candidate.global_position), 3, 0.28)
+				var rounds_to_fire := mini(3, _available_store(&"flak_rounds", 3))
+				if rounds_to_fire <= 0 or not _consume_store(&"flak_rounds", rounds_to_fire):
+					return
+				_spawn_flak_barrage(global_position.direction_to(candidate.global_position), rounds_to_fire, 0.28)
 				candidate.intercept()
 				point_defense_cooldown = 0.28
 				return
+
+func receive_damage(amount: float, source_entity_id: StringName = &"", impact_context: Dictionary = {}) -> Dictionary:
+	var localized_context := impact_context.duplicate(true)
+	var world_impact: Vector3 = localized_context.get("position", global_position)
+	localized_context["position"] = to_local(world_impact)
+	localized_context["world_position"] = world_impact
+	var layer_damage := super.receive_damage(amount, source_entity_id, impact_context)
+	if carrier_operations != null and float(layer_damage.get("hull", 0.0)) > 0.0:
+		carrier_operations.apply_hull_impact(layer_damage, localized_context)
+	return layer_damage
+
+func _operations_multiplier(channel: StringName, subsystem: StringName) -> float:
+	if carrier_operations == null:
+		return 1.0
+	return carrier_operations.power_multiplier(channel) * carrier_operations.subsystem_multiplier(subsystem)
+
+func flight_operations_multiplier(side: StringName) -> float:
+	var deck_id := &"port_deck" if side == &"port" else &"starboard_deck"
+	if carrier_operations == null:
+		return 1.0
+	return _operations_multiplier(&"flight", deck_id) * carrier_operations.crew_efficiency_multiplier(&"deck")
+
+
+func effective_command_range_m() -> float:
+	if carrier_operations == null:
+		return definition.command_range_m
+	var command_health := carrier_operations.subsystem_multiplier(&"command_cic")
+	var crew_effect := carrier_operations.crew_efficiency_multiplier(&"general")
+	return definition.command_range_m * maxf(0.1, command_health * crew_effect)
+
+func is_flight_deck_operational(side: StringName) -> bool:
+	if carrier_operations == null:
+		return true
+	var deck_id := &"port_deck" if side == &"port" else &"starboard_deck"
+	return carrier_operations.subsystem_multiplier(deck_id) >= 0.2
+
+func _available_store(store_id: StringName, fallback: int) -> int:
+	if carrier_operations == null:
+		return fallback
+	return maxi(0, int(carrier_operations.stores.get(store_id, 0)))
+
+func _consume_store(store_id: StringName, amount: int) -> bool:
+	return carrier_operations == null or carrier_operations.consume_store(store_id, amount)
 
 func set_autopilot(destination: Vector3) -> void:
 	clear_target_navigation()

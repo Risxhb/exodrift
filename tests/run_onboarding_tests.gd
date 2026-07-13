@@ -52,29 +52,37 @@ func _run() -> void:
 	onboarding._process(1.24)
 	_assert_step(onboarding, OnboardingController.Step.SENSOR, "sensor remains readable briefly after an active ping")
 	onboarding._process(0.01)
-	_assert_step(onboarding, OnboardingController.Step.FLIGHT, "sensor advances after an active ping")
-	_assert_progress(onboarding, 3, "flight reports the third guided milestone")
+	_assert_step(onboarding, OnboardingController.Step.OPERATIONS, "sensor advances to carrier operations after an active ping")
+	_assert_progress(onboarding, 3, "carrier operations reports the third guided milestone")
+	_assert_true(onboarding.instruction_label.text.contains("power preset") and onboarding.instruction_label.text.contains("rescue timer"), "carrier operations covers power, triage, and officer rescue")
+
+	onboarding.notify_operations_console_opened()
+	onboarding._process(1.24)
+	_assert_step(onboarding, OnboardingController.Step.OPERATIONS, "carrier operations remains readable briefly after the console opens")
+	onboarding._process(0.01)
+	_assert_step(onboarding, OnboardingController.Step.FLIGHT, "carrier operations advances after the console is observed")
+	_assert_progress(onboarding, 4, "flight reports the fourth guided milestone")
 
 	interceptor.operation.state = BayOperation.State.QUEUED
 	onboarding._process(1.24)
 	_assert_step(onboarding, OnboardingController.Step.FLIGHT, "flight remains readable briefly after a launch begins")
 	onboarding._process(0.01)
 	_assert_step(onboarding, OnboardingController.Step.COMMAND, "flight advances when either wing leaves ready state")
-	_assert_progress(onboarding, 4, "command reports the fourth guided milestone")
+	_assert_progress(onboarding, 5, "command reports the fifth guided milestone")
 
 	tactical.enabled = true
 	onboarding._process(1.24)
 	_assert_step(onboarding, OnboardingController.Step.COMMAND, "command remains readable briefly after tactical mode opens")
 	onboarding._process(0.01)
 	_assert_step(onboarding, OnboardingController.Step.ORDERS, "command advances when the tactical map is enabled")
-	_assert_progress(onboarding, 5, "orders report the fifth guided milestone")
+	_assert_progress(onboarding, 6, "orders report the sixth guided milestone")
 
 	carrier.autopilot_active = true
 	onboarding._process(1.24)
 	_assert_step(onboarding, OnboardingController.Step.ORDERS, "orders remains readable briefly after an order is issued")
 	onboarding._process(0.01)
 	_assert_step(onboarding, OnboardingController.Step.COMPLETE, "orders advance when a player order is observed")
-	_assert_progress(onboarding, 6, "completion reports all six guided milestones")
+	_assert_progress(onboarding, 7, "completion reports all seven guided milestones")
 	_assert_true(not onboarding.dismissed and onboarding.panel.visible, "completion remains visible before its dismissal delay")
 
 	onboarding._process(6.99)
@@ -85,7 +93,7 @@ func _run() -> void:
 	fixture.queue_free()
 	await process_frame
 	if failures.is_empty():
-		print("PASS: guided onboarding progresses deterministically through all six milestones")
+		print("PASS: guided onboarding progresses deterministically through all seven milestones")
 		quit(0)
 	else:
 		for failure in failures:
@@ -103,7 +111,7 @@ func _assert_step(onboarding: CanvasLayer, expected: int, message: String) -> vo
 
 
 func _assert_progress(onboarding: CanvasLayer, expected: int, message: String) -> void:
-	_assert_true(onboarding.progress_label.text == "%d / 6   [F3] HIDE" % expected, "%s (got %s)" % [message, onboarding.progress_label.text])
+	_assert_true(onboarding.progress_label.text == "%d / 7   [F3] HIDE" % expected, "%s (got %s)" % [message, onboarding.progress_label.text])
 
 
 func _assert_true(value: bool, message: String) -> void:

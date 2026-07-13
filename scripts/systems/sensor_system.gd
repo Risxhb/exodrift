@@ -28,24 +28,27 @@ func perform_passive_scan() -> void:
 	if not is_instance_valid(carrier) or carrier.is_destroyed:
 		return
 	var observers := _observer_positions()
+	var operations_multiplier := _carrier_sensor_multiplier()
+	var scout_gain_multiplier := _scout_identification_multiplier()
 	for target_data in _hostile_targets():
 		var target_position: Vector3 = target_data.position
 		var best_distance := INF
 		for observer in observers:
 			best_distance = minf(best_distance, observer.distance_to(target_position))
 		var target_signature: float = target_data.signature
-		var effective_range := carrier.definition.passive_sensor_range_m * passive_range_multiplier * clampf(target_signature, 0.55, 1.5)
+		var effective_range := carrier.definition.passive_sensor_range_m * passive_range_multiplier * operations_multiplier * clampf(target_signature, 0.55, 1.5)
 		if best_distance <= effective_range:
 			var quality := clampf(1.0 - best_distance / effective_range, 0.04, 1.0)
-			_update_contact(target_data, 0.08 + quality * 0.16, best_distance <= 1200.0)
+			_update_contact(target_data, (0.08 + quality * 0.16) * scout_gain_multiplier, best_distance <= 1200.0)
 
 func emit_active_ping() -> void:
 	if not is_instance_valid(carrier):
 		return
+	var active_range := carrier.definition.active_sensor_range_m * _carrier_sensor_multiplier()
 	for target_data in _hostile_targets():
-		if carrier.global_position.distance_to(target_data.position) <= carrier.definition.active_sensor_range_m:
+		if carrier.global_position.distance_to(target_data.position) <= active_range:
 			_update_contact(target_data, 1.0, true)
-	active_ping_emitted.emit(carrier.global_position, carrier.definition.active_sensor_range_m)
+	active_ping_emitted.emit(carrier.global_position, active_range)
 
 func _update_contact(target_data: Dictionary, confidence_gain: float, force_identified: bool) -> void:
 	var entity_id: StringName = target_data.entity_id
@@ -58,7 +61,7 @@ func _update_contact(target_data: Dictionary, confidence_gain: float, force_iden
 	contact.classification = target_data.classification
 	contact.estimated_velocity = target_data.velocity
 	contact.confidence = 1.0 if force_identified else clampf(contact.confidence + confidence_gain, 0.0, 1.0)
-	var uncertainty_target := lerpf(900.0, 35.0, contact.confidence) * uncertainty_multiplier
+	var uncertainty_target := lerpf(900.0, 35.0, contact.confidence) * uncertainty_multiplier * _scout_uncertainty_multiplier()
 	contact.uncertainty_radius_m = lerpf(contact.uncertainty_radius_m, uncertainty_target, 0.45)
 	var noise_seed := float(String(entity_id).hash() % 997) + elapsed_seconds * 0.2
 	var noise := Vector3(sin(noise_seed), sin(noise_seed * 1.71) * 0.35, cos(noise_seed * 0.83)) * contact.uncertainty_radius_m * 0.3
@@ -74,6 +77,25 @@ func _observer_positions() -> Array[Vector3]:
 			if group.operation.state == BayOperation.State.DEPLOYED:
 				observers.append(group.representative_position())
 	return observers
+
+func _carrier_sensor_multiplier() -> float:
+	if not is_instance_valid(carrier) or carrier.carrier_operations == null:
+		return 1.0
+	return carrier.carrier_operations.subsystem_multiplier(&"sensors") * carrier.carrier_operations.crew_efficiency_multiplier(&"sensors")
+
+func _scout_identification_multiplier() -> float:
+	var multiplier := 1.0
+	for group in get_tree().get_nodes_in_group("squadrons"):
+		if group is SidebaySquadron and group.team == carrier.team and group.definition.role == "scout" and group.operation.state == BayOperation.State.DEPLOYED:
+			multiplier = maxf(multiplier, group.identification_gain_multiplier())
+	return multiplier
+
+func _scout_uncertainty_multiplier() -> float:
+	var multiplier := 1.0
+	for group in get_tree().get_nodes_in_group("squadrons"):
+		if group is SidebaySquadron and group.team == carrier.team and group.definition.role == "scout" and group.operation.state == BayOperation.State.DEPLOYED:
+			multiplier = minf(multiplier, group.uncertainty_multiplier())
+	return multiplier
 
 func _hostile_targets() -> Array[Dictionary]:
 	var targets: Array[Dictionary] = []

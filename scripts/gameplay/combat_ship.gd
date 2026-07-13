@@ -542,22 +542,25 @@ func spawn_projectile(weapon: WeaponDefinition, start: Vector3, fire_direction: 
 		vfx.spawn_burst("muzzle", start, 1.25 if weapon.role == "nuclear" else (0.72 if weapon.role == "missile" else 0.42))
 	return projectile
 
-func receive_damage(amount: float, source_entity_id: StringName = &"") -> void:
+func receive_damage(amount: float, source_entity_id: StringName = &"", impact_context: Dictionary = {}) -> Dictionary:
+	var layer_damage := {"shields": 0.0, "armor": 0.0, "hull": 0.0}
 	if is_destroyed:
-		return
+		return layer_damage
 	var resolved_amount := maxf(0.0, amount * incoming_damage_multiplier)
 	if resolved_amount <= 0.0:
 		var blocked_vfx := _combat_vfx()
 		if blocked_vfx != null:
 			blocked_vfx.spawn_damage_effect(global_position, true, 0.45)
-		return
+		return layer_damage
 	var shielded := damage_state.shields > 0.0
-	damage_state.apply_damage(resolved_amount)
+	layer_damage = damage_state.apply_damage(resolved_amount)
 	_update_damage_presentation()
 	var vfx := _combat_vfx()
 	if vfx != null:
-		vfx.spawn_damage_effect(global_position, shielded, clampf(resolved_amount / 24.0, 0.55, 1.8))
+		var effect_position: Vector3 = impact_context.get("position", global_position)
+		vfx.spawn_damage_effect(effect_position, shielded, clampf(resolved_amount / 24.0, 0.55, 1.8))
 	damage_received.emit(stable_entity_id, source_entity_id, resolved_amount)
+	return layer_damage
 
 func resolve_entity(entity_id: StringName) -> CombatShip:
 	var registry := _combat_registry()

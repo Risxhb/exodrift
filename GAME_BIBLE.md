@@ -189,11 +189,13 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - `FleetOrder`: order type, target entity ID or 3D position, issue time, queue state, stance, and command-link requirement.
 - `SensorContact`: contact ID, classification, estimated position/velocity, confidence, uncertainty radius, identification state, and last update.
 - `CommandLinkState`: linked, delayed, or disconnected, including the last confirmed order.
-- `BayOperation`: queued, launching, deployed, returning, approach, docking, servicing, or ready.
+- `BayOperation`: queued, launching, deployed, returning, approach, docking, repairing, refueling, rearming, or ready; the former aggregate servicing state remains migration-compatible.
+- `CarrierOperationsState`: power, subsystem condition, hazards, damage-control teams, crew, stores, deck priorities, selected wing packages, battle incidents, and persistent reporting.
+- `WingLoadoutDefinition`: data-driven package ammunition and combat/sensor/rescue behavior for one interceptor or scout role.
 
 ## 8. Milestones and acceptance gates
 
-**Implementation status (2026-07-12):** M1–M18 are implemented. Fourteen contract, campaign, integrated battle, encounter, onboarding, playtest-reporting, save/settings, ship-readability, audio/narrative, helm/presentation, and ordnance suites pass. The M18 600-frame combat gate measures 144.9 FPS at 1920×1080 with p95 7.40 ms/p99 7.59 ms. The sustained all-wings/flak/missile/nuclear/point-defense gate measures 144.9 FPS with p95 9.57 ms/p99 9.99 ms and zero dropped effects; the full-runtime-model animated menu measures 144.9 effective FPS on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
+**Implementation status (2026-07-13):** M1–M19 are implemented. Twenty functional, integration, campaign, carrier-operations, onboarding, presentation, and regression suites pass. At 2560×1440, the normal gate measures 145.0 effective FPS with p95 7.50 ms/p99 7.72 ms; the carrier-incident/all-wings/ordnance stress gate measures 145.0 effective FPS with p95 10.14 ms/p99 10.60 ms and bounded nodes/VFX, and the full-runtime-model menu measures 144.9 effective FPS on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
 
 ### M1 — Canonical bible and Godot foundation `[IMPLEMENTED]`
 
@@ -349,11 +351,22 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - Right-clicking an identified contact marker or Tactical Overview row with the carrier selected opens one menu for lock, 500 m approach, 500 m/5 km/10 km/25 km orbit, the same keep-at-distance values, and clear relative navigation. Empty-space moves and wing/escort orders retain their established behavior.
 - The title menu includes an eight-lesson standalone communications tutorial with Commander Mara Voss. It resolves live key bindings and uses three consistent poses, four eye/mouth facial states per pose, 36-character-per-second text, punctuation pauses, speaking-only mouth animation, and randomized blinks.
 
+### M19 — Integrated Carrier Operations `[IMPLEMENTED]`
+
+- Version-10 run state persists eight subsystem conditions, surviving generic crew, finite carrier/aviation stores, damage-control spares, and selected wing packages while resetting power, hazards, and team assignments safely at battle start. Versions 1–9 migrate to the canonical full state.
+- Eight reactor points feed propulsion, defense, weapons, and flight operations through four presets or manual allocation. Reactor damage reduces the budget and deterministically sheds excess allocation; subsystem condition and emergency damage-control functionality independently modify the corresponding systems.
+- Hull penetrations deterministically map impact location and weapon role into reactor, propulsion, shield grid, fire control, sensors, command/CIC, or either deck. Two four-second-transit teams contain fires/breaches before spending persistent spares on repairs; uncontained hazards cause deterministic crew casualties.
+- The carrier consumes 2,100 flak rounds, 24 guided missiles, one nuclear torpedo, one selected-air-group reload, and 14 refuel units. Siege cells, expanded magazines, fleet repair drones, and rapid turnaround decks modify their exact authored systems.
+- Both decks run explicit repair, refuel, and rearm queues with Rapid Turn, Balanced, or Repair First priority, partial service, and disabled-deck emergency recovery. Raptor CAP/Multirole/Strike and Watcher Recon/Screen/Rescue are data-driven packages changeable only while aboard before rearming.
+- Severe uncontained subsystem incidents trap the assigned department lead behind a ten-second rescue countdown. Rescue or death produces immediate severity-three injury, succession, bond, telemetry, and after-action consequences; unresolved battle-end incidents receive a deterministic emergency recovery and cannot disappear.
+- Remappable `C` opens a responsive, non-pausing Carrier Operations console from direct or tactical view. A compact collapsible HUD summary shows the live binding, power preset, warnings, and officer countdown. Mara Voss's tutorial now has nine lessons and first-operation onboarding has seven steps.
+- Fleet logistics separates repair, rearm, air-group restoration, and full service with exact supply breakdowns. Repair nodes restore at most 24 missing generic crew; routine fleet service never replaces casualties.
+
 ## 9. Test matrix
 
 Automated tests cover damage-layer transitions, missile-lock eligibility, FIFO order queues, sensor confidence decay and track drift, command-link transitions, and every valid bay-state transition.
 
-Campaign and integration tests also cover all six objective assignments, defense/escort/capture success conditions, withdrawal pursuit, jump-range stragglers, escape-pod accounting, after-action rescue and salvage choices, persistent consequences, and save migration through version 9.
+Campaign and integration tests also cover all six objective assignments, defense/escort/capture success conditions, withdrawal pursuit, jump-range stragglers, escape-pod accounting, after-action rescue and salvage choices, persistent consequences, and save migration through version 10.
 
 M11 tests cover camera orbit independence, vertical bounds, authored roster construction, all department cards, assignment changes, tactical skill modifiers, named risk previews, injuries, medical mitigation, recovery, succession, bonds, permanent death, and version-4 roster migration.
 
@@ -372,6 +385,8 @@ M17 tests cover remappable 1/2/3 and bracket actions, placement-camera travel an
 M18 tests cover signed carrier zoom, carrier-centered flak framing, direct/tactical placement parity, remappable aggregate hangar-wing control, persistent manual target locks, orbit/approach/keep-distance geometry, collapsible command panels, the interactive overview, projected lock brackets and lead, shader-driven deep space, tapered hull construction, and all prior campaign/combat contracts.
 
 The combat-presentation upgrade tests cover 250 m flak falloff and immunity, fuse clamps and upgrades, layered pooled airbursts, propulsion-demand plume layers, Sidebay geometry and material identity, panorama integration, 1440p HUD density and menu placement, every relative-navigation distance and clear command, all eight tutorial lessons, live bindings, typewriter completion, pose selection, blink/mouth timing, and clean repeated entry.
+
+M19 tests cover reactor budgets and shedding, all subsystem effects, deterministic impacts and hazard propagation, team transit/containment/repair/spare depletion, casualties and crew penalties, officer rescue/death/battle-end resolution/succession, every carrier and aviation store, partial deck service, all priorities and six packages, disabled-deck recovery, dynamic air-group reload capacity, exact service costs, version-10 migration/round trips, remapped responsive operations UI, nine tutorial lessons, seven onboarding steps, and non-pausing repeated entry.
 
 Presentation tests cover menu-first startup, continuous background battle motion, accessibility settings, title-to-campaign fades, manual-save Continue, and return-to-title state preservation.
 
@@ -429,3 +444,4 @@ Each `/goal` owns exactly one milestone. Before work begins, read this bible and
 - **2026-07-12:** Completed M16 with a compact bottom title command row, a reframed fleet engagement, intent-driven helm controls, double-click vector flight, persistent throttle, an asymmetric military HUD, faction-specific surface refits, and updated landing-page media. Replaced the blurry panorama with a crisp procedural sky after direct-render visual QA. All thirteen regression suites, normal/stress/menu performance gates, both release exports, and the packaged-build smoke check pass.
 - **2026-07-12:** Completed M17 with a unified visible-pointer command view, heavy carrier inertia, carrier-relative placed flak screening, guided and nuclear ordnance hotkeys, physical post-service wing redeploy, speed-reactive trails, layered bounded impacts/explosions, exact runtime models in the title engagement, and direct Godot model renders in the public fleet archive. Fourteen suites and normal/stress/menu gates pass; release exports and live-site verification are the remaining packaging checks.
 - **2026-07-12:** Completed the combat-presentation and tutorial upgrade: 3.2 km/250 m flak airbursts, demand-driven layered carrier exhaust, the dark gunmetal Sidebay silhouette refit, a seam-feathered galaxy panorama, 2560×1440 output with a 75% HUD, carrier right-click relative-navigation distances, and an eight-part animated Commander Mara Voss tutorial.
+- **2026-07-13:** Completed M19 Integrated Carrier Operations with version-10 persistence, engineering triage, power distribution, deterministic internal hazards, damage-control teams, persistent crew survival, finite magazines and aviation stores, explicit deck logistics, six wing packages, officer rescue/succession, exact fleet-service actions, a responsive live operations console, nine tutorial lessons, and seven-step first-operation onboarding. Twenty functional suites and all 1080p/1440p performance profiles pass.

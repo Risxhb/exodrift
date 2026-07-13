@@ -39,7 +39,7 @@ func _build_shell() -> void:
 	add_child(panel)
 	var title := _label(panel, Vector2(34, 22), Vector2(880, 40), 28)
 	title.text = "EXODRIFT // AFTER-ACTION REPORT"
-	summary_label = _label(panel, Vector2(34, 78), Vector2(882, 320), 17)
+	summary_label = _label(panel, Vector2(34, 78), Vector2(882, 320), 15)
 	summary_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	rescue_button = _button(panel, Vector2(34, 418), Vector2(280, 112))
 	rescue_button.pressed.connect(func() -> void: decision_selected.emit(&"rescue"))
@@ -62,7 +62,15 @@ func _refresh() -> void:
 	var survivors_adrift := int(battle_report.get("survivors_adrift", 0))
 	var salvage_value := run_state.adjusted_salvage_yield(int(battle_report.get("salvage_value", 0))) if run_state != null else int(battle_report.get("salvage_value", 0))
 	var named_risk := run_state.personnel_risk_summary(battle_report) if run_state != null else "NONE"
-	summary_label.text = "%s // %s\n\nCARRIER  SHIELDS %3d%%  ARMOR %3d%%  HULL %3d%%\nAIR GROUP  INTERCEPTORS %d/%d  SCOUTS %d/%d\nESCORT  %s  //  %s\n\nSTRAGGLERS  %d interceptor  %d scout  %s\nESCAPE PODS  %d recovered / %d adrift  (%d personnel safe, %d awaiting recovery)\nNAMED PERSONNEL  %s\nHOSTILES DESTROYED  %d\nPROJECTED SALVAGE  %d allocation stock" % [
+	var operations_report: Dictionary = battle_report.get("carrier_operations", {})
+	var operations_persistent: Dictionary = operations_report.get("persistent", {})
+	var crew_surviving := int(operations_persistent.get("crew_current", run_state.carrier_operations.crew_current if run_state != null else CarrierOperationsState.MAX_CREW))
+	var crew_casualties := int(operations_report.get("crew_casualties", 0))
+	var stores_expended: Dictionary = operations_report.get("stores_expended", {})
+	var officer_outcomes: Array = operations_report.get("officer_incident_outcomes", [])
+	if officer_outcomes.is_empty():
+		officer_outcomes = operations_report.get("officer_incidents", [])
+	summary_label.text = "%s // %s\n\nCARRIER  SHIELDS %3d%%  ARMOR %3d%%  HULL %3d%%\nAIR GROUP  INTERCEPTORS %d/%d  SCOUTS %d/%d\nESCORT  %s  //  %s\nCARRIER OPS  CREW %d/240  //  CASUALTIES %d\nSTORES EXPENDED  %s\nOFFICER INCIDENTS  %s\n\nSTRAGGLERS  %d interceptor  %d scout  %s\nESCAPE PODS  %d recovered / %d adrift  (%d personnel safe, %d awaiting recovery)\nNAMED PERSONNEL  %s\nHOSTILES DESTROYED  %d\nPROJECTED SALVAGE  %d allocation stock" % [
 		outcome, objective,
 		int(round(float(battle_report.get("carrier_shields", 0.0)) * 100.0)),
 		int(round(float(battle_report.get("carrier_armor", 0.0)) * 100.0)),
@@ -70,6 +78,7 @@ func _refresh() -> void:
 		int(battle_report.get("interceptor_craft_count", 0)), run_state.maximum_interceptor_craft() if run_state != null else SidebayRunState.MAX_INTERCEPTOR_CRAFT,
 		int(battle_report.get("scout_craft_count", 0)), run_state.maximum_scout_craft() if run_state != null else SidebayRunState.MAX_SCOUT_CRAFT,
 		str(battle_report.get("escort_name", "Escort")), "OPERATIONAL" if bool(battle_report.get("escort_active", false)) else "LOST OR SEPARATED",
+		crew_surviving, crew_casualties, _stores_expended_summary(stores_expended), _officer_outcome_summary(officer_outcomes),
 		interceptor_stragglers, scout_stragglers, "escort separated" if escort_straggler else "escort accounted for",
 		int(battle_report.get("escape_pods_rescued", 0)), int(battle_report.get("escape_pods_adrift", 0)), survivors_rescued, survivors_adrift,
 		named_risk, int(battle_report.get("destroyed_hostile_count", 0)), salvage_value
@@ -80,6 +89,34 @@ func _refresh() -> void:
 	salvage_button.text = "SALVAGE SWEEP\n+%d SALVAGE STOCK\nAllocate later in Logistics" % salvage_value
 	salvage_button.disabled = salvage_value <= 0 or str(battle_report.get("outcome", "")) == "carrier_lost"
 	withdraw_button.text = "END RUN" if str(battle_report.get("outcome", "")) == "carrier_lost" else "WITHDRAW IMMEDIATELY\nNo fuel cost\nLeave the combat zone now"
+
+func _stores_expended_summary(stores: Dictionary) -> String:
+	var labels := {
+		"flak_rounds": "FLAK",
+		"guided_missiles": "MISSILES",
+		"nuclear_torpedoes": "NUCLEAR",
+		"aviation_ordnance": "AVIATION",
+		"craft_refuel": "REFUEL",
+	}
+	var entries: Array[String] = []
+	for store_id in ["flak_rounds", "guided_missiles", "nuclear_torpedoes", "aviation_ordnance", "craft_refuel"]:
+		var amount := int(stores.get(store_id, 0))
+		if amount > 0:
+			entries.append("%s %d" % [labels[store_id], amount])
+	return "NONE" if entries.is_empty() else " // ".join(entries)
+
+func _officer_outcome_summary(outcomes: Array) -> String:
+	if outcomes.is_empty():
+		return "NONE"
+	var entries: Array[String] = []
+	for outcome_value in outcomes:
+		if not outcome_value is Dictionary:
+			continue
+		var outcome: Dictionary = outcome_value
+		var name := str(outcome.get("display_name", outcome.get("personnel_id", "Officer"))).to_upper()
+		var result := str(outcome.get("outcome", "unresolved")).to_upper()
+		entries.append("%s %s" % [name, result])
+	return "NONE" if entries.is_empty() else "; ".join(entries)
 
 func _label(parent: Control, position_value: Vector2, size_value: Vector2, font_size: int) -> Label:
 	var label := Label.new()

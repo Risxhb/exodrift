@@ -150,8 +150,7 @@ func _resolve_noncombat_node(node: SidebayCampaignNode) -> void:
 			run_state.requisition += 1
 			message = "Salvage secured: +%d salvage stock, +1 requisition." % recovered
 		SidebayCampaignNode.NodeType.REPAIR:
-			run_state.supplies += node.reward_supplies
-			message = "Fleet support completed: +%d reserve supplies." % node.reward_supplies
+			message = _apply_repair_node_support(node)
 		SidebayCampaignNode.NodeType.INTEL:
 			run_state.intel += node.reward_intel
 			message = "Signals decoded: +%d intel." % node.reward_intel
@@ -161,6 +160,11 @@ func _resolve_noncombat_node(node: SidebayCampaignNode) -> void:
 	active_node = null
 	if run_state.prepare_operational_event(node.node_type, node.node_id):
 		_show_operational_event()
+
+func _apply_repair_node_support(node: SidebayCampaignNode) -> String:
+	run_state.supplies += node.reward_supplies
+	var crew_restored := run_state.restore_crew_at_repair_node(24)
+	return "Fleet support completed: +%d reserve supplies, +%d replacement crew (%d/240 aboard)." % [node.reward_supplies, crew_restored, run_state.carrier_operations.crew_current]
 
 func _launch_battle(node: SidebayCampaignNode) -> void:
 	campaign_map.visible = false

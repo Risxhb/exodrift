@@ -2,12 +2,20 @@ extends SceneTree
 
 const SAMPLE_FRAMES := 900
 const WARMUP_FRAMES := 240
+const RESOLUTIONS: Array[Vector2i] = [Vector2i(1920, 1080), Vector2i(2560, 1440)]
 
 func _initialize() -> void:
 	call_deferred("_profile")
 
 func _profile() -> void:
-	root.size = Vector2i(1920, 1080)
+	var passed := true
+	for resolution in RESOLUTIONS:
+		var result: Dictionary = await _profile_resolution(resolution)
+		passed = passed and bool(result.passed)
+	quit(0 if passed else 1)
+
+func _profile_resolution(resolution: Vector2i) -> Dictionary:
+	root.size = resolution
 	var scene := (load("res://scenes/main.tscn") as PackedScene).instantiate()
 	root.add_child(scene)
 	for _frame in 8:
@@ -21,6 +29,13 @@ func _profile() -> void:
 	scene.carrier.damage_state.shields = 100000.0
 	scene.carrier.damage_state.armor = 100000.0
 	scene.carrier.damage_state.hull = 100000.0
+	var operations := scene.carrier.carrier_operations as CarrierOperationsState
+	operations.stores.flak_rounds = 10000
+	operations.stores.guided_missiles = 1000
+	operations.subsystem_condition.command_cic = 0.15
+	operations.create_hazard(&"command_cic", &"fire", 0.9)
+	operations.create_hazard(&"propulsion", &"breach", 0.7)
+	scene.carrier_operations_console.open_console()
 	await scene.interceptor.start_deployed(scene.carrier.global_position + Vector3(-260.0, 40.0, -320.0))
 	await scene.scout.start_deployed(scene.carrier.global_position + Vector3(260.0, -40.0, -360.0))
 	scene.sensors.emit_active_ping()
@@ -65,7 +80,8 @@ func _profile() -> void:
 	var passed := effective_fps >= 60.0 and p95 <= 16.7 and p99 <= 25.0 and stable_nodes
 	scene.queue_free()
 	await process_frame
-	quit(0 if passed else 1)
+	await process_frame
+	return {"resolution": resolution, "passed": passed}
 
 func _percentile(values: Array[float], fraction: float) -> float:
 	if values.is_empty():

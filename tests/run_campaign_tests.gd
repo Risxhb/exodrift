@@ -95,7 +95,7 @@ func _test_carrier_and_hangar_economy() -> void:
 	var supplies_before := state.supplies
 	var refit_message := state.select_hangar_complement(&"strike_group")
 	_assert_true(refit_message.contains("deck refit") and state.supplies == supplies_before - refit_cost, "changing hangar complements spends the exact quoted supply refit cost")
-	_assert_true(state.maximum_interceptor_craft() == 5 and state.maximum_scout_craft() == 2 and state.interceptor_ammunition == 160 and state.scout_ammunition == 36, "strike complement deploys its fixed craft and ammunition allocation")
+	_assert_true(state.maximum_interceptor_craft() == 5 and state.maximum_scout_craft() == 2 and state.interceptor_ammunition == 140 and state.scout_ammunition == 24, "strike complement deploys its fixed craft and selected-package ammunition allocation")
 	state.sector_index = 1
 	_assert_true(state.acquire_carrier(&"cvn_vanguard").contains("acquired") and state.requisition == 2, "route progress unlocks the authored Vanguard carrier frame")
 	state.cycle_carrier()
