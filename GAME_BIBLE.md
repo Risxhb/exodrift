@@ -193,7 +193,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 
 ## 8. Milestones and acceptance gates
 
-**Implementation status (2026-07-12):** M1–M17 are implemented. Fourteen contract, campaign, integrated battle, encounter, onboarding, playtest-reporting, save/settings, ship-readability, audio/narrative, helm/presentation, and ordnance suites pass. The M17 600-frame combat gate measures 144.9 FPS at 1920×1080 with p95 7.19 ms/p99 7.28 ms. The sustained all-wings/flak/missile/nuclear/point-defense gate measures 144.9 FPS with p95 8.83 ms/p99 9.37 ms and zero dropped effects; the full-runtime-model animated menu measures 165.0 effective FPS on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
+**Implementation status (2026-07-12):** M1–M18 are implemented. Fourteen contract, campaign, integrated battle, encounter, onboarding, playtest-reporting, save/settings, ship-readability, audio/narrative, helm/presentation, and ordnance suites pass. The M18 600-frame combat gate measures 144.9 FPS at 1920×1080 with p95 7.40 ms/p99 7.59 ms. The sustained all-wings/flak/missile/nuclear/point-defense gate measures 144.9 FPS with p95 9.57 ms/p99 9.99 ms and zero dropped effects; the full-runtime-model animated menu measures 144.9 effective FPS on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
 
 ### M1 — Canonical bible and Godot foundation `[IMPLEMENTED]`
 
@@ -326,6 +326,19 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - The title battle instantiates the exact playable carrier plus current textured capital/fighter builders against the procedural sky, with 22 flak tracers, six arcing missile plumes, and four layered explosion rigs. The public fleet archive replaces seven CSS glyphs with 900×506 direct Godot renders of the actual Sidebay, Resolute, Raptor, Watcher, Acheron, Vesper, and Crucible models.
 - Fourteen automated suites pass. Normal combat measures 144.9 FPS (p95 7.19 ms/p99 7.28 ms), sustained maximum ordnance measures 144.9 FPS (p95 8.83 ms/p99 9.37 ms, zero dropped effects), and the runtime-model menu measures 165.0 effective FPS on the development RTX 3060.
 
+### M18 — Tactical interface and deep-space polish `[IMPLEMENTED]`
+
+- Flak placement keeps the carrier centered and zooms aft to frame the hull and screen volume. The authored 125 m framing is signed zoom 0%; players can zoom in to +100% or out to -100% at 650 m.
+- `1` places flak in direct combat or the tactical overlay. Tactical LMB confirms and RMB cancels without leaving the command map.
+- Remappable `B` opens both hangar wings and deploys available air groups, or recalls both groups and retracts the galleries after recovery. `Z` and `X` remain granular wing controls.
+- Carrier Telemetry, Air Group, Fire Control, Target Solution, and Tactical Overview are collapsible. Target Solution no longer contains a placeholder ship silhouette.
+- The interactive overview lists contact name, range, closing speed, and identification state. Identified contacts can be manually locked and issued persistent Approach, Orbit, or Keep 2.5K carrier commands.
+- Projected target graphics now use scalable corner brackets, envelope color, range/relative-velocity annotation, a motion-lead pip, and the existing off-screen direction indicator.
+- Gameplay and title scenes use a GL-compatible infinite space shader with multi-scale stars, galactic structure, nebula regions, and dust lanes. Foreground star/nebula geometry remains quality-scaled for parallax.
+- Capital hull cores, dorsal armor, and keels use tapered faceted geometry with brighter triplanar PBR surfaces and restrained rim response while retaining the existing texture atlases and node budgets.
+- The `/exodrift/` showcase and `risxhb.github.io` home page use current runtime models in a premium, truthful fleet-collection presentation with accessible faction tabs.
+- All fourteen automated suites pass. Normal combat measures 144.9 FPS (p95 7.40 ms/p99 7.59 ms), sustained maximum ordnance measures 144.9 FPS (p95 9.57 ms/p99 9.99 ms, zero dropped effects), and the runtime-model menu measures 144.9 effective FPS on the development RTX 3060.
+
 ## 9. Test matrix
 
 Automated tests cover damage-layer transitions, missile-lock eligibility, FIFO order queues, sensor confidence decay and track drift, command-link transitions, and every valid bay-state transition.
@@ -345,6 +358,8 @@ M15 tests cover deterministic onboarding progression and minimum card dwell, act
 M16 tests cover heading navigation, persistent throttle and stop/boost behavior, removed strafe bindings, cursor restoration, the compact adaptive bottom menu, live engagement composition, faction surface atlases/material response/modeling budgets, procedural-sky construction, nebula/star readability, asymmetric HUD styling, and control-strip copy.
 
 M17 tests cover remappable 1/2/3 and bracket actions, placement-camera travel and return, carrier-local screen anchoring, range clamps, staggered fire, airburst interception, nuclear inventory/arming/AoE/friendly fire/interception/trails, heavy carrier limits, speed-reactive engine trails, queued wing redeploy, exact runtime title/archive models, layered menu effects, pooled VFX bounds, and regression compatibility.
+
+M18 tests cover signed carrier zoom, carrier-centered flak framing, direct/tactical placement parity, remappable aggregate hangar-wing control, persistent manual target locks, orbit/approach/keep-distance geometry, collapsible command panels, the interactive overview, projected lock brackets and lead, shader-driven deep space, tapered hull construction, and all prior campaign/combat contracts.
 
 Presentation tests cover menu-first startup, continuous background battle motion, accessibility settings, title-to-campaign fades, manual-save Continue, and return-to-title state preservation.
 

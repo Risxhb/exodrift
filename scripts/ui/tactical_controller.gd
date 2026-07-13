@@ -4,6 +4,7 @@ extends Node
 signal mode_changed(enabled: bool)
 signal notification_requested(message: String)
 signal selection_changed(name: String)
+signal target_lock_requested(entity_id: StringName)
 
 var enabled: bool = false
 var carrier: PlayerCarrier
@@ -58,7 +59,7 @@ func set_enabled(value: bool) -> void:
 		_set_hostile_visibility(false)
 	else:
 		carrier.chase_camera.current = true
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		contact_marker_root.visible = false
 		friendly_marker_root.visible = false
 		grid_instance.visible = false
@@ -92,7 +93,13 @@ func handle_input(event: InputEvent) -> bool:
 			middle_dragging = event.pressed
 			return true
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			_select_near_screen_point(event.position)
+			if not _select_near_screen_point(event.position):
+				var contact := _contact_near_screen_point(event.position)
+				if contact != null:
+					if contact.is_targetable():
+						target_lock_requested.emit(contact.tracked_entity_id)
+					else:
+						notification_requested.emit("Lock rejected: contact not identified")
 			return true
 		if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 			_issue_context_order(event.position, event.shift_pressed)
@@ -103,8 +110,8 @@ func handle_input(event: InputEvent) -> bool:
 		return true
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
-			KEY_1, KEY_2, KEY_3, KEY_4:
-				var index := int(event.keycode - KEY_1)
+			KEY_F1, KEY_F2, KEY_F3, KEY_F4:
+				var index := int(event.keycode - KEY_F1)
 				if index < commandables.size():
 					select_commandable(commandables[index])
 				return true
@@ -139,7 +146,7 @@ func select_commandable(node: Node) -> void:
 	selected = node
 	selection_changed.emit(_selected_name())
 
-func _select_near_screen_point(screen_point: Vector2) -> void:
+func _select_near_screen_point(screen_point: Vector2) -> bool:
 	var best: Node
 	var best_distance := 48.0
 	for candidate in commandables:
@@ -152,6 +159,8 @@ func _select_near_screen_point(screen_point: Vector2) -> void:
 			best_distance = distance
 	if best != null:
 		select_commandable(best)
+		return true
+	return false
 
 func _issue_context_order(screen_point: Vector2, queued: bool) -> void:
 	if selected == null:
@@ -233,6 +242,13 @@ func _screen_to_command_plane(screen_point: Vector2) -> Vector3:
 	var plane := Plane(Vector3.UP, carrier.global_position.y)
 	var intersection = plane.intersects_ray(origin, direction)
 	return intersection if intersection != null else carrier.global_position
+
+func flak_placement_world_point(screen_point: Vector2, range_m: float) -> Vector3:
+	var plane_point := _screen_to_command_plane(screen_point)
+	var direction := plane_point - carrier.global_position
+	if direction.length_squared() < 1.0:
+		direction = -carrier.global_transform.basis.z.normalized()
+	return carrier.global_position + direction.normalized() * range_m
 
 func _update_contact_markers() -> void:
 	var live_ids: Dictionary = {}

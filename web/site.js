@@ -1,20 +1,55 @@
-const revealObserver = new IntersectionObserver((entries) => {
-  for (const entry of entries) {
-    if (entry.isIntersecting) entry.target.classList.add("visible");
-  }
-}, { threshold: 0.12 });
+const revealElements = document.querySelectorAll(".reveal");
 
-document.querySelectorAll(".reveal").forEach((element) => revealObserver.observe(element));
+if ("IntersectionObserver" in window) {
+  const revealObserver = new IntersectionObserver((entries, observer) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      entry.target.classList.add("visible");
+      observer.unobserve(entry.target);
+    }
+  }, { threshold: 0.12 });
+  revealElements.forEach((element) => revealObserver.observe(element));
+} else {
+  revealElements.forEach((element) => element.classList.add("visible"));
+}
 
-document.querySelectorAll(".fleet-tabs button").forEach((button) => {
-  button.addEventListener("click", () => {
-    document.querySelectorAll(".fleet-tabs button").forEach((item) => item.classList.remove("active"));
-    document.querySelectorAll("[data-fleet]").forEach((fleet) => fleet.classList.add("hidden"));
-    button.classList.add("active");
-    document.querySelector(`[data-fleet="${button.dataset.faction}"]`).classList.remove("hidden");
+const fleetTabs = Array.from(document.querySelectorAll('.fleet-tabs [role="tab"]'));
+const fleetPanels = Array.from(document.querySelectorAll('[role="tabpanel"][data-fleet]'));
+
+function activateFleetTab(tab, moveFocus = false) {
+  fleetTabs.forEach((item) => {
+    const selected = item === tab;
+    item.classList.toggle("active", selected);
+    item.setAttribute("aria-selected", String(selected));
+    item.tabIndex = selected ? 0 : -1;
+  });
+
+  fleetPanels.forEach((panel) => {
+    const selected = panel.dataset.fleet === tab.dataset.faction;
+    panel.hidden = !selected;
+    panel.classList.toggle("hidden", !selected);
+  });
+
+  if (moveFocus) tab.focus();
+}
+
+fleetTabs.forEach((tab, index) => {
+  tab.addEventListener("click", () => activateFleetTab(tab));
+  tab.addEventListener("keydown", (event) => {
+    let targetIndex = index;
+    if (event.key === "ArrowRight") targetIndex = (index + 1) % fleetTabs.length;
+    else if (event.key === "ArrowLeft") targetIndex = (index - 1 + fleetTabs.length) % fleetTabs.length;
+    else if (event.key === "Home") targetIndex = 0;
+    else if (event.key === "End") targetIndex = fleetTabs.length - 1;
+    else return;
+    event.preventDefault();
+    activateFleetTab(fleetTabs[targetIndex], true);
   });
 });
 
-window.addEventListener("scroll", () => {
-  document.querySelector(".nav-shell").classList.toggle("scrolled", window.scrollY > 40);
-}, { passive: true });
+const navShell = document.querySelector(".nav-shell");
+if (navShell) {
+  const updateNavigation = () => navShell.classList.toggle("scrolled", window.scrollY > 40);
+  updateNavigation();
+  window.addEventListener("scroll", updateNavigation, { passive: true });
+}

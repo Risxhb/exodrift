@@ -6,6 +6,17 @@ signal throttle_changed(normalized_throttle: float)
 signal navigation_commanded(direction: Vector3, full_cruise: bool)
 signal flak_screen_changed(active: bool, range_m: float)
 
+enum TargetNavigationMode {
+	NONE,
+	APPROACH,
+	ORBIT,
+	KEEP_DISTANCE,
+}
+
+const CHASE_DEFAULT_DISTANCE_M := 125.0
+const CHASE_MIN_DISTANCE_M := 70.0
+const CHASE_MAX_DISTANCE_M := 650.0
+
 var control_enabled: bool = true
 var mouse_sensitivity: float = 0.0022
 var look_yaw: float = 0.0
@@ -23,8 +34,8 @@ var chase_camera: Camera3D
 var port_bay_marker: Marker3D
 var starboard_bay_marker: Marker3D
 var web_cursor_steer: Vector2 = Vector2.ZERO
-var chase_distance_m: float = 125.0
-var chase_target_distance_m: float = 125.0
+var chase_distance_m: float = CHASE_DEFAULT_DISTANCE_M
+var chase_target_distance_m: float = CHASE_DEFAULT_DISTANCE_M
 var camera_orbit_yaw: float = 0.0
 var camera_orbit_pitch: float = 0.0
 var camera_orbiting: bool = false
@@ -65,6 +76,10 @@ var nuclear_blast_radius_m: float = 650.0
 var engine_trails: Array[MeshInstance3D] = []
 var pending_flak_shots: Array[Dictionary] = []
 var flak_round_interval_seconds: float = 0.035
+var target_navigation_mode: TargetNavigationMode = TargetNavigationMode.NONE
+var target_navigation_target: CombatShip
+var target_navigation_distance_m: float = 1200.0
+var orbit_clockwise: bool = true
 
 func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: StringName, color: Color) -> void:
 	super.configure(ship_definition, entity_id, faction, color)
@@ -300,7 +315,9 @@ func _physics_process(delta: float) -> void:
 	point_defense_cooldown = maxf(0.0, point_defense_cooldown - delta)
 	_process_flak_salvo_queue(delta)
 	_update_bay_retraction(delta)
-	if control_enabled:
+	if target_navigation_mode != TargetNavigationMode.NONE:
+		_process_target_navigation(delta)
+	elif control_enabled:
 		_process_player_flight(delta)
 	elif autopilot_active:
 		_process_autopilot(delta)
@@ -356,6 +373,42 @@ func _process_autopilot(delta: float) -> void:
 		_steer_toward(desired, delta)
 	move_and_slide()
 
+func _process_target_navigation(delta: float) -> void:
+	if not is_instance_valid(target_navigation_target) or target_navigation_target.is_destroyed:
+		clear_target_navigation()
+		velocity = velocity.move_toward(Vector3.ZERO, definition.acceleration_mps2 * delta)
+		move_and_slide()
+		return
+	var offset := target_navigation_target.global_position - global_position
+	var distance := maxf(1.0, offset.length())
+	var toward_target := offset / distance
+	var target_velocity := target_navigation_target.velocity
+	var desired_velocity := target_velocity
+	match target_navigation_mode:
+		TargetNavigationMode.APPROACH:
+			var approach_error := distance - target_navigation_distance_m
+			if approach_error > 40.0:
+				var approach_speed := definition.maximum_speed_mps * clampf(approach_error / maxf(400.0, target_navigation_distance_m), 0.2, 1.0)
+				desired_velocity += toward_target * approach_speed
+		TargetNavigationMode.KEEP_DISTANCE:
+			var range_error := distance - target_navigation_distance_m
+			if absf(range_error) > 60.0:
+				var correction_speed := definition.maximum_speed_mps * clampf(absf(range_error) / maxf(350.0, target_navigation_distance_m), 0.18, 0.8)
+				desired_velocity += toward_target * correction_speed * signf(range_error)
+		TargetNavigationMode.ORBIT:
+			var radial := -toward_target
+			var orbit_up := Vector3.UP if absf(radial.dot(Vector3.UP)) < 0.94 else global_transform.basis.y.normalized()
+			var tangent := orbit_up.cross(radial).normalized() * (-1.0 if orbit_clockwise else 1.0)
+			var orbit_error := (distance - target_navigation_distance_m) / maxf(1.0, target_navigation_distance_m)
+			var orbit_direction := (tangent - radial * clampf(orbit_error * 1.45, -0.85, 0.85)).normalized()
+			desired_velocity += orbit_direction * definition.maximum_speed_mps * 0.68
+	if desired_velocity.length() > definition.maximum_speed_mps * 1.15:
+		desired_velocity = desired_velocity.normalized() * definition.maximum_speed_mps * 1.15
+	velocity = velocity.move_toward(desired_velocity, definition.acceleration_mps2 * delta)
+	if velocity.length_squared() > 1.0:
+		_steer_toward(velocity.normalized(), delta)
+	move_and_slide()
+
 func set_throttle(value: float) -> void:
 	var next_throttle := clampf(value, 0.0, 1.0)
 	if is_equal_approx(next_throttle, throttle_setting):
@@ -372,12 +425,15 @@ func control_state() -> Dictionary:
 		"throttle_percent": throttle_percent(),
 		"heading": commanded_heading,
 		"heading_commanded": has_commanded_heading,
+		"target_navigation_mode": TargetNavigationMode.keys()[target_navigation_mode],
+		"target_navigation_distance_m": target_navigation_distance_m,
 	}
 
 func command_heading(direction_value: Vector3, full_cruise: bool = false) -> bool:
 	if direction_value.length_squared() < 0.25:
 		return false
 	commanded_heading = direction_value.normalized()
+	clear_target_navigation()
 	has_commanded_heading = true
 	autopilot_active = false
 	if full_cruise:
@@ -432,16 +488,16 @@ func _update_camera() -> void:
 	if chase_camera == null:
 		return
 	chase_distance_m = lerpf(chase_distance_m, chase_target_distance_m, 0.18)
-	var height := lerpf(34.0, 76.0, inverse_lerp(70.0, 260.0, chase_distance_m))
+	var height := lerpf(34.0, 152.0, inverse_lerp(CHASE_MIN_DISTANCE_M, CHASE_MAX_DISTANCE_M, chase_distance_m))
 	var camera_offset := Vector3(0.0, height, chase_distance_m)
 	camera_offset = camera_offset.rotated(Vector3.RIGHT, camera_orbit_pitch)
 	camera_offset = camera_offset.rotated(Vector3.UP, camera_orbit_yaw)
 	flak_camera_blend = lerpf(flak_camera_blend, 1.0 if flak_placement_active else 0.0, 0.18)
-	var placement_camera_offset := flak_preview_local_offset * 0.72 + Vector3(0.0, 52.0, 180.0)
+	var placement_distance := clampf(flak_screen_range_m * 0.86 + CHASE_DEFAULT_DISTANCE_M, 820.0, 2200.0)
+	var placement_camera_offset := camera_offset.normalized() * placement_distance
 	chase_camera.position = camera_offset.lerp(placement_camera_offset, flak_camera_blend)
 	var carrier_focus := global_position + global_transform.basis.y * 3.0
-	var placement_focus := global_transform * flak_preview_local_offset
-	chase_camera.look_at(carrier_focus.lerp(placement_focus, flak_camera_blend), Vector3.UP)
+	chase_camera.look_at(carrier_focus, Vector3.UP)
 	var viewport_size := get_viewport().get_visible_rect().size
 	var director_position := flak_aim_screen_position if flak_aim_uses_pointer else viewport_size * 0.5
 	director_position.x = clampf(director_position.x, 0.0, viewport_size.x)
@@ -456,10 +512,12 @@ func _update_flak_mounts() -> void:
 			mount.look_at(mount.global_position + aim_direction, turret_up)
 
 func adjust_chase_zoom(wheel_steps: float) -> void:
-	chase_target_distance_m = clampf(chase_target_distance_m * pow(0.86, wheel_steps), 70.0, 260.0)
+	chase_target_distance_m = clampf(chase_target_distance_m * pow(0.86, wheel_steps), CHASE_MIN_DISTANCE_M, CHASE_MAX_DISTANCE_M)
 
 func chase_zoom_percent() -> int:
-	return int(round(inverse_lerp(260.0, 70.0, chase_target_distance_m) * 100.0))
+	if chase_target_distance_m <= CHASE_DEFAULT_DISTANCE_M:
+		return int(round(inverse_lerp(CHASE_DEFAULT_DISTANCE_M, CHASE_MIN_DISTANCE_M, chase_target_distance_m) * 100.0))
+	return -int(round(inverse_lerp(CHASE_DEFAULT_DISTANCE_M, CHASE_MAX_DISTANCE_M, chase_target_distance_m) * 100.0))
 
 func fire_flak() -> bool:
 	if flak_weapon == null or flak_cooldown > 0.0:
@@ -550,13 +608,29 @@ func begin_flak_placement(screen_position: Vector2) -> bool:
 	_update_flak_indicator(true)
 	return flak_placement_valid
 
+func begin_flak_placement_world(world_position: Vector3) -> bool:
+	flak_placement_active = true
+	flak_placement_valid = update_flak_placement_world(world_position)
+	_update_flak_indicator(true)
+	return flak_placement_valid
+
 func update_flak_placement_from_screen(screen_position: Vector2) -> bool:
 	if chase_camera == null or not chase_camera.current:
 		flak_placement_valid = false
 		_update_flak_indicator(true)
 		return false
 	var ray_direction := chase_camera.project_ray_normal(screen_position).normalized()
-	var candidate := global_position + ray_direction * flak_screen_range_m
+	flak_placement_valid = update_flak_placement_world(global_position + ray_direction * flak_screen_range_m)
+	_update_flak_indicator(true)
+	return flak_placement_valid
+
+func update_flak_placement_world(world_position: Vector3) -> bool:
+	var offset := world_position - global_position
+	if offset.length_squared() < 1.0:
+		flak_placement_valid = false
+		_update_flak_indicator(true)
+		return false
+	var candidate := global_position + offset.normalized() * flak_screen_range_m
 	flak_preview_local_offset = to_local(candidate)
 	flak_placement_valid = absf(candidate.y) <= CombatShip.VERTICAL_BATTLESPACE_LIMIT_M
 	_update_flak_indicator(true)
@@ -649,8 +723,33 @@ func _process_point_defense() -> void:
 				return
 
 func set_autopilot(destination: Vector3) -> void:
+	clear_target_navigation()
 	autopilot_destination = destination
 	autopilot_active = true
+
+func command_approach(target_ship: CombatShip, stop_distance_m: float = 350.0) -> bool:
+	return _command_target_navigation(TargetNavigationMode.APPROACH, target_ship, stop_distance_m, 0.82)
+
+func command_orbit(target_ship: CombatShip, orbit_distance_m: float = 1200.0) -> bool:
+	return _command_target_navigation(TargetNavigationMode.ORBIT, target_ship, orbit_distance_m, 0.68)
+
+func command_keep_distance(target_ship: CombatShip, distance_m: float = 2500.0) -> bool:
+	return _command_target_navigation(TargetNavigationMode.KEEP_DISTANCE, target_ship, distance_m, 0.58)
+
+func _command_target_navigation(mode: TargetNavigationMode, target_ship: CombatShip, distance_m: float, throttle: float) -> bool:
+	if not is_instance_valid(target_ship) or target_ship.is_destroyed:
+		return false
+	target_navigation_mode = mode
+	target_navigation_target = target_ship
+	target_navigation_distance_m = clampf(distance_m, 250.0, 6000.0)
+	autopilot_active = false
+	has_commanded_heading = false
+	set_throttle(throttle)
+	return true
+
+func clear_target_navigation() -> void:
+	target_navigation_mode = TargetNavigationMode.NONE
+	target_navigation_target = null
 
 func get_bay_marker(side: StringName) -> Marker3D:
 	return port_bay_marker if side == &"port" else starboard_bay_marker

@@ -7,6 +7,7 @@ signal quit_requested
 
 const SETTINGS_PATH := "user://exodrift_settings.cfg"
 const UIStyle := preload("res://scripts/ui/ui_style.gd")
+const SpaceSky := preload("res://scripts/systems/space_sky.gd")
 
 var world_root: Node3D
 var camera: Camera3D
@@ -56,6 +57,11 @@ func fade_out() -> void:
 	departing = true
 	for button in menu_buttons:
 		button.disabled = true
+	if DisplayServer.get_name() == "headless":
+		interface.modulate.a = 0.0
+		world_root.scale = Vector3.ONE * 1.035
+		await get_tree().process_frame
+		return
 	var tween := create_tween().set_parallel(true)
 	tween.tween_property(interface, "modulate:a", 0.0, 0.35)
 	tween.tween_property(world_root, "scale", Vector3.ONE * 1.035, 0.45)
@@ -71,26 +77,9 @@ func _build_world() -> void:
 	add_child(world_root)
 	var environment_node := WorldEnvironment.new()
 	var environment := Environment.new()
-	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color(0.006, 0.018, 0.045)
-	sky_material.sky_horizon_color = Color(0.055, 0.17, 0.28)
-	sky_material.sky_curve = 0.1
-	sky_material.ground_bottom_color = Color(0.006, 0.018, 0.045)
-	sky_material.ground_horizon_color = Color(0.055, 0.17, 0.28)
-	sky_material.ground_curve = 0.16
-	sky_material.sun_angle_max = 1.0
-	sky_material.sun_curve = 0.06
-	var sky := Sky.new()
-	sky.radiance_size = Sky.RADIANCE_SIZE_256
-	sky.sky_material = sky_material
-	environment.background_mode = Environment.BG_SKY
-	environment.sky = sky
-	environment.background_energy_multiplier = 1.28
-	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(0.19, 0.3, 0.52)
-	environment.ambient_light_energy = 1.05
-	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	SpaceSky.apply_to_environment(environment, &"menu")
+	environment.ambient_light_color = Color(0.2, 0.25, 0.34)
+	environment.ambient_light_energy = 1.04
 	environment_node.environment = environment
 	world_root.add_child(environment_node)
 	var key_light := DirectionalLight3D.new()
@@ -110,8 +99,8 @@ func _build_world() -> void:
 	camera_fill.light_energy = 1.85
 	world_root.add_child(camera_fill)
 	_build_stars()
-	_add_menu_nebula_card(Vector3(-5400.0, 1500.0, -11800.0), Vector2(7200.0, 3600.0), Color(0.08, 0.42, 0.7, 0.5))
-	_add_menu_nebula_card(Vector3(5900.0, -1200.0, -13200.0), Vector2(6200.0, 3100.0), Color(0.74, 0.2, 0.055, 0.38))
+	_add_menu_nebula_card(Vector3(-5400.0, 1500.0, -11800.0), Vector2(7200.0, 3600.0), Color(0.18, 0.16, 0.32, 0.13))
+	_add_menu_nebula_card(Vector3(5900.0, -1200.0, -13200.0), Vector2(6200.0, 3100.0), Color(0.5, 0.12, 0.045, 0.11))
 	camera = Camera3D.new()
 	camera.fov = 51.0
 	camera.far = 30000.0
@@ -412,13 +401,13 @@ func _build_interface(can_continue: bool) -> void:
 	var telemetry := _label(interface, Vector2(26, 22), Vector2(350, 56), 13)
 	telemetry.text = "LIVE COMBAT FEED // HELIOS REACH\nCOMMAND LINK: STANDBY"
 	var build := _label(interface, Vector2(990, 22), Vector2(260, 52), 13)
-	build.text = "FLEET + ORDNANCE BUILD // M17\nSINGLE-PLAYER // PC + WEB"
+	build.text = "TACTICAL INTERFACE BUILD // M18\nSINGLE-PLAYER // PC + WEB"
 	build.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	main_panel = _command_bar()
 	var title := _label(main_panel, Vector2(22, 14), Vector2(218, 42), 30)
 	title.text = "EXODRIFT"
 	var subtitle := _label(main_panel, Vector2(23, 51), Vector2(218, 22), 11)
-	subtitle.text = "CARRIER COMMAND // M17"
+	subtitle.text = "CARRIER COMMAND // M18"
 	var divider := ColorRect.new()
 	divider.color = Color(0.08, 0.7, 0.96, 0.72)
 	divider.position = Vector2(246, 14)
