@@ -15,7 +15,7 @@ func _run() -> void:
 	if world != null and world.environment != null:
 		_assert_true(world.environment.background_mode == Environment.BG_SKY, "battlefield uses a panoramic sky instead of a flat clear color")
 		var sky_material := world.environment.sky.sky_material if world.environment.sky != null else null
-		_assert_true(sky_material is ShaderMaterial and (sky_material as ShaderMaterial).shader.code.contains("galaxy_noise"), "sky uses a resolution-independent deep-space shader with stars, dust lanes, and galactic structure")
+		_assert_true(sky_material is ShaderMaterial and (sky_material as ShaderMaterial).shader.code.contains("galaxy_noise") and (sky_material as ShaderMaterial).get_shader_parameter("panorama_texture") != null, "sky blends a generated galaxy arm with resolution-independent stars and dust lanes")
 	var stars := scene.get_node_or_null("DeepStarfield") as MultiMeshInstance3D
 	_assert_true(stars != null and stars.multimesh.instance_count == 360, "bounded procedural parallax stars layer over the panorama")
 	var hud := scene.hud as SidebayHUD
@@ -28,6 +28,8 @@ func _run() -> void:
 	var panel_style := hud.telemetry_panel.get_theme_stylebox("panel") as StyleBoxFlat
 	_assert_true(panel_style != null and panel_style.border_width_left > panel_style.border_width_right and panel_style.corner_radius_top_right > panel_style.corner_radius_top_left, "HUD frames use asymmetrical rails instead of uniform boxes")
 	_assert_true(hud.collapsible_panels.size() >= 5 and hud.overview_rows.size() == 5, "carrier telemetry, air group, fire control, target solution, and tactical overview are collapsible command surfaces")
+	_assert_true(is_equal_approx(hud.telemetry_panel.scale.x, 0.75) and hud.target_context_menu.item_count >= 13, "combat HUD uses the compact 75% layout and shared distance-bearing target menu")
+	_assert_true(int(ProjectSettings.get_setting("display/window/size/window_width_override")) == 2560 and int(ProjectSettings.get_setting("display/window/size/window_height_override")) == 1440, "desktop window defaults to 2560×1440")
 	_assert_true(hud.target_reticle is ExodriftTargetLockReticle and hud.target_panel.find_children("*", "Panel", true, false).is_empty(), "target solution uses projected lock graphics and no placeholder ship portrait panel")
 	var collapse_button := hud.telemetry_panel.find_children("*Collapse", "Button", true, false).front() as Button if not hud.telemetry_panel.find_children("*Collapse", "Button", true, false).is_empty() else null
 	_assert_true(collapse_button != null, "carrier telemetry exposes an interactive collapse header")

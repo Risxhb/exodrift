@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" fill="#1b2831"/>
+  <g fill="#22343e" stroke="#0a141a" stroke-width="4">
+    <path d="M2 2H94L106 14V62H2Z"/><path d="M110 2H254V62H110Z"/>
+    <path d="M2 66H152L164 78V126H2Z"/><path d="M168 66H254V126H168Z"/>
+    <path d="M2 130H66L78 142V190H2Z"/><path d="M82 130H254V190H82Z"/>
+    <path d="M2 194H130L142 206V254H2Z"/><path d="M146 194H254V254H146Z"/>
+  </g>
+  <g fill="#344954" opacity=".78">
+    <path d="M5 5H91V14H5ZM113 5H251V14H113ZM5 69H149V78H5ZM171 69H251V78H171Z"/>
+    <path d="M5 133H63V142H5ZM85 133H251V142H85ZM5 197H127V206H5ZM149 197H251V206H149Z"/>
+  </g>
+  <g stroke="#637985" stroke-width="1.2" opacity=".55">
+    <path d="M5 57H101M113 57H251M5 121H159M171 121H251M5 185H73M85 185H251M5 249H137M149 249H251"/>
+    <path d="M30 5V58M126 69V122M104 133V186M214 197V250" opacity=".45"/>
+  </g>
+  <g fill="#91a5ad" opacity=".62">
+    <circle cx="10" cy="10" r="1.6"/><circle cx="88" cy="10" r="1.6"/><circle cx="118" cy="10" r="1.6"/><circle cx="246" cy="10" r="1.6"/>
+    <circle cx="10" cy="53" r="1.6"/><circle cx="96" cy="53" r="1.6"/><circle cx="118" cy="53" r="1.6"/><circle cx="246" cy="53" r="1.6"/>
+    <circle cx="10" cy="75" r="1.6"/><circle cx="150" cy="75" r="1.6"/><circle cx="177" cy="75" r="1.6"/><circle cx="246" cy="75" r="1.6"/>
+    <circle cx="10" cy="117" r="1.6"/><circle cx="158" cy="117" r="1.6"/><circle cx="177" cy="117" r="1.6"/><circle cx="246" cy="117" r="1.6"/>
+    <circle cx="10" cy="139" r="1.6"/><circle cx="64" cy="139" r="1.6"/><circle cx="90" cy="139" r="1.6"/><circle cx="246" cy="139" r="1.6"/>
+    <circle cx="10" cy="181" r="1.6"/><circle cx="70" cy="181" r="1.6"/><circle cx="90" cy="181" r="1.6"/><circle cx="246" cy="181" r="1.6"/>
+  </g>
+  <path d="M104 25H204V31H104ZM104 36H166V39H104Z" fill="#8de8f4" opacity=".9"/>
+  <path d="M172 36H204V39H172Z" fill="#36cbe2" opacity=".95"/>
+  <path d="M20 95H94L103 100L94 105H20Z" fill="#63d9e8" opacity=".75"/>
+  <path d="M20 111H76M183 155H235" stroke="#d78a32" stroke-width="3" opacity=".82"/>
+  <path d="M24 48L52 42M128 112L168 103M92 174L120 168M188 238L235 228" stroke="#b3c0c5" stroke-width="1.2" opacity=".2"/>
+</svg>

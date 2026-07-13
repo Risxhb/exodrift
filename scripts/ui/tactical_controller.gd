@@ -5,6 +5,7 @@ signal mode_changed(enabled: bool)
 signal notification_requested(message: String)
 signal selection_changed(name: String)
 signal target_lock_requested(entity_id: StringName)
+signal context_menu_requested(screen_position: Vector2, entity_id: StringName)
 
 var enabled: bool = false
 var carrier: PlayerCarrier
@@ -102,7 +103,14 @@ func handle_input(event: InputEvent) -> bool:
 						notification_requested.emit("Lock rejected: contact not identified")
 			return true
 		if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			_issue_context_order(event.position, event.shift_pressed)
+			var contact := _contact_near_screen_point(event.position)
+			if selected == carrier and contact != null:
+				if contact.is_targetable():
+					context_menu_requested.emit(event.position, contact.tracked_entity_id)
+				else:
+					notification_requested.emit("Navigation rejected: contact not identified")
+			else:
+				_issue_context_order(event.position, event.shift_pressed)
 			return true
 	if event is InputEventMouseMotion and middle_dragging:
 		yaw -= event.relative.x * 0.006

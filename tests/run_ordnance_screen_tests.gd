@@ -19,7 +19,8 @@ func _run() -> void:
 	_assert_true(ExodriftInputSettings.action_key("flak_range_decrease") == KEY_BRACKETLEFT and ExodriftInputSettings.action_key("flak_range_increase") == KEY_BRACKETRIGHT, "brackets provide remappable flak fuse-range adjustment")
 	_assert_true(ExodriftInputSettings.action_key("toggle_all_wings") == KEY_B, "B provides the remappable aggregate hangar-wing deployment and retraction control")
 	_assert_true(carrier.definition.acceleration_mps2 <= 18.0 and carrier.definition.rotation_speed_radians <= 0.38, "carrier uses capital-ship acceleration and turn-rate limits")
-	_assert_true(not carrier.engine_trails.is_empty(), "carrier engine banks expose speed-reactive luminous trails")
+	_assert_true(not carrier.engine_trails.is_empty() and carrier.engine_trails[0].has("outer") and carrier.engine_trails[0].has("inner") and carrier.engine_trails[0].has("core"), "carrier engine banks expose layered propulsion-demand plumes")
+	_assert_true(is_equal_approx(carrier.flak_weapon.range_m, 3200.0) and is_equal_approx(carrier.flak_airburst_radius_m, 250.0), "carrier flak uses the 3.2 km battery envelope and 250 m airburst radius")
 	_assert_true(carrier.chase_zoom_percent() == 0, "the authored carrier framing is the signed zoom scale's zero point")
 	carrier.adjust_chase_zoom(-20.0)
 	_assert_true(carrier.chase_zoom_percent() < 0 and carrier.chase_target_distance_m > 260.0, "signed zoom allows substantially farther carrier command framing")
@@ -34,7 +35,7 @@ func _run() -> void:
 	_assert_true(carrier.flak_camera_blend > 0.7 and carrier.chase_camera.position.z > 0.0 and carrier.chase_camera.position.length() > 800.0 and (-carrier.chase_camera.global_transform.basis.z).dot(camera_to_carrier) > 0.98, "placement zooms out while keeping the carrier centered instead of travelling toward the fuse volume")
 	var minimum := carrier.adjust_flak_screen_range(-20)
 	var maximum := carrier.adjust_flak_screen_range(20)
-	_assert_true(is_equal_approx(minimum, 800.0) and is_equal_approx(maximum, 2400.0), "flak fuse range clamps to the authored 0.8–2.4 km envelope")
+	_assert_true(is_equal_approx(minimum, 1000.0) and is_equal_approx(maximum, 3200.0), "flak fuse range clamps to the authored 1.0–3.2 km envelope")
 	carrier.adjust_flak_screen_range(-4)
 	_assert_true(carrier.confirm_flak_placement() and carrier.flak_screen_active and not carrier.flak_placement_active, "LMB-style confirmation commits sustained flak and exits placement")
 	for _frame in 18:
@@ -66,6 +67,13 @@ func _run() -> void:
 		screen_round.global_position = threat.global_position
 		screen_round.detonate()
 		_assert_true(threat.expired, "flak airburst intercepts an incoming missile inside its screening radius")
+		var active_roles: Array[String] = []
+		var combat_vfx := root.get_node_or_null("CombatVFX")
+		if combat_vfx != null:
+			for slot in combat_vfx.impact_slots:
+				if bool(slot.active):
+					active_roles.append(String(slot.role))
+		_assert_true(active_roles.has("flak_flash") and active_roles.has("flak_smoke") and active_roles.has("flak_pressure"), "airburst layers a flash, dark smoke, and pressure ring from the pooled VFX system")
 
 	_clear_source_projectiles(carrier.stable_entity_id)
 	await process_frame

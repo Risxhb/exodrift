@@ -7,6 +7,20 @@ const TargetLockReticle := preload("res://scripts/ui/target_lock_reticle.gd")
 
 signal target_lock_requested(entity_id: StringName)
 signal target_command_requested(command: StringName, entity_id: StringName)
+signal target_navigation_requested(command: StringName, entity_id: StringName, distance_m: float)
+
+const HUD_SCALE := 0.75
+const CONTEXT_LOCK := 1
+const CONTEXT_APPROACH := 2
+const CONTEXT_ORBIT_500 := 10
+const CONTEXT_ORBIT_5000 := 11
+const CONTEXT_ORBIT_10000 := 12
+const CONTEXT_ORBIT_25000 := 13
+const CONTEXT_KEEP_500 := 20
+const CONTEXT_KEEP_5000 := 21
+const CONTEXT_KEEP_10000 := 22
+const CONTEXT_KEEP_25000 := 23
+const CONTEXT_CLEAR := 30
 
 var carrier: PlayerCarrier
 var interceptor: SidebaySquadron
@@ -57,6 +71,10 @@ var notification_panel: Panel
 var controls_panel: Panel
 var pause_veil: ColorRect
 var result_veil: ColorRect
+var hud_root: Control
+var target_context_menu: PopupMenu
+var context_target_id: StringName = &""
+var scaled_hud_panels: Array[Control] = []
 
 func configure(
 	player_carrier: PlayerCarrier,
@@ -72,9 +90,11 @@ func configure(
 	sensors = sensor_system
 	tactical = tactical_controller
 	_build_ui()
+	get_viewport().size_changed.connect(_layout_scaled_hud)
 
 func _build_ui() -> void:
 	var root := Control.new()
+	hud_root = root
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
@@ -108,29 +128,19 @@ func _build_ui() -> void:
 	target_armor_bar = _bar(target_panel, Vector2(32, 124), Vector2(282, 7), Color(0.95, 0.65, 0.12))
 	target_hull_bar = _bar(target_panel, Vector2(32, 142), Vector2(282, 7), Color(0.9, 0.15, 0.12))
 	_register_collapsible(target_panel)
-	overview_panel = _panel(root, Vector2(934, 180), Vector2(328, 252), Color(0.005, 0.022, 0.034, 0.82), UIStyle.CYAN_SOFT)
+	overview_panel = _panel(root, Vector2(934, 180), Vector2(328, 218), Color(0.005, 0.022, 0.034, 0.82), UIStyle.CYAN_SOFT)
 	_collapsible_heading(overview_panel, "TACTICAL OVERVIEW", UIStyle.CYAN_SOFT)
 	for index in 5:
 		var row := _overview_button(overview_panel, Vector2(12, 28 + index * 31), Vector2(304, 28), 10)
 		row.pressed.connect(_select_overview_row.bind(index))
+		row.gui_input.connect(_on_overview_row_input.bind(index))
 		overview_rows.append(row)
 		overview_contact_ids.append(&"")
-	var lock_button := _overview_button(overview_panel, Vector2(12, 190), Vector2(70, 28), 9)
-	lock_button.text = "LOCK"
-	lock_button.pressed.connect(_issue_overview_command.bind(&"lock"))
-	var approach_button := _overview_button(overview_panel, Vector2(86, 190), Vector2(70, 28), 9)
-	approach_button.text = "APPROACH"
-	approach_button.pressed.connect(_issue_overview_command.bind(&"approach"))
-	var orbit_button := _overview_button(overview_panel, Vector2(160, 190), Vector2(70, 28), 9)
-	orbit_button.text = "ORBIT"
-	orbit_button.pressed.connect(_issue_overview_command.bind(&"orbit"))
-	var keep_button := _overview_button(overview_panel, Vector2(234, 190), Vector2(82, 28), 9)
-	keep_button.text = "KEEP 2.5K"
-	keep_button.pressed.connect(_issue_overview_command.bind(&"keep_distance"))
-	var overview_hint := _label(overview_panel, Vector2(12, 221), Vector2(304, 20), 8, UIStyle.TEXT_MUTED)
-	overview_hint.text = "SELECT TRACK  //  LOCK OR ISSUE HELM GEOMETRY"
+	var overview_hint := _label(overview_panel, Vector2(12, 190), Vector2(304, 20), 8, UIStyle.TEXT_MUTED)
+	overview_hint.text = "RMB TRACK  //  LOCK OR HELM GEOMETRY"
 	overview_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_register_collapsible(overview_panel)
+	_build_target_context_menu(root)
 	target_indicator = _label(root, Vector2(624, 300), Vector2(38, 38), 30)
 	target_indicator.text = "▲"
 	target_indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -192,6 +202,48 @@ func _build_ui() -> void:
 	pause_copy.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pause_panel.visible = false
 	pause_veil.visible = false
+	scaled_hud_panels = [objective_panel, telemetry_panel, wing_panel, weapon_panel, target_panel, overview_panel, map_info_panel, radar_panel, mode_panel, notification_panel, controls_panel]
+	_layout_scaled_hud()
+
+func _build_target_context_menu(root: Control) -> void:
+	target_context_menu = PopupMenu.new()
+	target_context_menu.name = "TargetNavigationMenu"
+	target_context_menu.add_item("LOCK TARGET", CONTEXT_LOCK)
+	target_context_menu.add_item("APPROACH — 500 M", CONTEXT_APPROACH)
+	target_context_menu.add_separator("ORBIT")
+	target_context_menu.add_item("ORBIT — 500 M", CONTEXT_ORBIT_500)
+	target_context_menu.add_item("ORBIT — 5 KM", CONTEXT_ORBIT_5000)
+	target_context_menu.add_item("ORBIT — 10 KM", CONTEXT_ORBIT_10000)
+	target_context_menu.add_item("ORBIT — 25 KM", CONTEXT_ORBIT_25000)
+	target_context_menu.add_separator("KEEP AT DISTANCE")
+	target_context_menu.add_item("KEEP — 500 M", CONTEXT_KEEP_500)
+	target_context_menu.add_item("KEEP — 5 KM", CONTEXT_KEEP_5000)
+	target_context_menu.add_item("KEEP — 10 KM", CONTEXT_KEEP_10000)
+	target_context_menu.add_item("KEEP — 25 KM", CONTEXT_KEEP_25000)
+	target_context_menu.add_separator()
+	target_context_menu.add_item("CLEAR RELATIVE NAVIGATION", CONTEXT_CLEAR)
+	target_context_menu.add_theme_font_size_override("font_size", 13)
+	target_context_menu.id_pressed.connect(_on_target_context_id_pressed)
+	root.add_child(target_context_menu)
+
+func _layout_scaled_hud() -> void:
+	if hud_root == null:
+		return
+	for panel in scaled_hud_panels:
+		if is_instance_valid(panel):
+			panel.scale = Vector2.ONE * HUD_SCALE
+	var viewport_size := get_viewport().get_visible_rect().size
+	objective_panel.position = Vector2(18.0, 14.0)
+	telemetry_panel.position = Vector2(18.0, 49.0)
+	wing_panel.position = Vector2(18.0, 131.0)
+	weapon_panel.position = Vector2(18.0, 190.0)
+	map_info_panel.position = Vector2(18.0, 49.0)
+	target_panel.position = Vector2(viewport_size.x - 18.0 - target_panel.size.x * HUD_SCALE, 14.0)
+	overview_panel.position = Vector2(viewport_size.x - 18.0 - overview_panel.size.x * HUD_SCALE, 141.0)
+	radar_panel.position = Vector2(viewport_size.x - 18.0 - radar_panel.size.x * HUD_SCALE, viewport_size.y - 44.0 - radar_panel.size.y * HUD_SCALE)
+	mode_panel.position = Vector2((viewport_size.x - mode_panel.size.x * HUD_SCALE) * 0.5, 14.0)
+	controls_panel.position = Vector2((viewport_size.x - controls_panel.size.x * HUD_SCALE) * 0.5, viewport_size.y - 12.0 - controls_panel.size.y * HUD_SCALE)
+	notification_panel.position = Vector2((viewport_size.x - notification_panel.size.x * HUD_SCALE) * 0.5, controls_panel.position.y - 12.0 - notification_panel.size.y * HUD_SCALE)
 
 func _process(delta: float) -> void:
 	if not is_instance_valid(carrier):
@@ -228,7 +280,7 @@ func _process(delta: float) -> void:
 		map_info_panel.visible = true
 		mode_panel.visible = true
 		map_info_label.text = _map_information()
-		controls_label.text = "1 FLAK   F1-F4 GROUPS   LMB SELECT/CONFIRM   RMB ORDER/CANCEL   I INTERCEPT   E ESCORT   SHIFT QUEUE   B WINGS   WHEEL ZOOM"
+		controls_label.text = "1 FLAK   F1-F4 GROUPS   LMB SELECT/CONFIRM   RMB NAV/ORDER   I INTERCEPT   E ESCORT   SHIFT QUEUE   B WINGS   WHEEL ZOOM"
 	else:
 		telemetry_panel.visible = true
 		wing_panel.visible = true
@@ -291,6 +343,48 @@ func _select_overview_row(index: int) -> void:
 		return
 	overview_selected_id = entity_id
 	_refresh_overview()
+
+func _on_overview_row_input(event: InputEvent, index: int) -> void:
+	if not event is InputEventMouseButton:
+		return
+	var mouse_event := event as InputEventMouseButton
+	if mouse_event.button_index != MOUSE_BUTTON_RIGHT or not mouse_event.pressed:
+		return
+	if index < 0 or index >= overview_contact_ids.size():
+		return
+	var entity_id := overview_contact_ids[index]
+	if entity_id.is_empty():
+		return
+	overview_selected_id = entity_id
+	open_target_context_menu(get_viewport().get_mouse_position(), entity_id)
+	get_viewport().set_input_as_handled()
+
+func open_target_context_menu(screen_position: Vector2, entity_id: StringName) -> void:
+	var contact := sensors.get_contact(entity_id) if sensors != null else null
+	if contact == null or not contact.is_targetable():
+		notify("NAVIGATION MENU — identified combat track required")
+		return
+	context_target_id = entity_id
+	overview_selected_id = entity_id
+	target_context_menu.position = Vector2i(screen_position)
+	target_context_menu.popup()
+
+func _on_target_context_id_pressed(id: int) -> void:
+	if id == CONTEXT_LOCK:
+		target_lock_requested.emit(context_target_id)
+		return
+	if id == CONTEXT_CLEAR:
+		target_navigation_requested.emit(&"clear", context_target_id, 0.0)
+		return
+	var command := &"orbit" if id in [CONTEXT_ORBIT_500, CONTEXT_ORBIT_5000, CONTEXT_ORBIT_10000, CONTEXT_ORBIT_25000] else (&"keep_distance" if id in [CONTEXT_KEEP_500, CONTEXT_KEEP_5000, CONTEXT_KEEP_10000, CONTEXT_KEEP_25000] else &"approach")
+	var distance := 500.0
+	if id in [CONTEXT_ORBIT_5000, CONTEXT_KEEP_5000]:
+		distance = 5000.0
+	elif id in [CONTEXT_ORBIT_10000, CONTEXT_KEEP_10000]:
+		distance = 10000.0
+	elif id in [CONTEXT_ORBIT_25000, CONTEXT_KEEP_25000]:
+		distance = 25000.0
+	target_navigation_requested.emit(command, context_target_id, distance)
 
 func _issue_overview_command(command: StringName) -> void:
 	if overview_selected_id.is_empty():

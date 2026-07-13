@@ -14,6 +14,8 @@ uniform vec3 galaxy_axis = vec3(0.18, 0.86, 0.47);
 uniform float galaxy_strength = 0.7;
 uniform float star_strength = 1.0;
 uniform float sky_seed = 0.0;
+uniform sampler2D panorama_texture : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform float panorama_strength = 0.28;
 
 float hash21(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
@@ -54,6 +56,7 @@ void sky() {
 	float longitude = atan(direction.z, direction.x) / 6.2831853 + 0.5;
 	float latitude = asin(clamp(direction.y, -1.0, 1.0)) / 3.14159265 + 0.5;
 	vec2 spherical_uv = vec2(longitude, latitude);
+	vec3 panorama = texture(panorama_texture, vec2(fract(longitude + 0.11), latitude)).rgb;
 
 	vec3 axis = normalize(galaxy_axis);
 	float band_distance = abs(dot(direction, axis));
@@ -64,7 +67,8 @@ void sky() {
 	float fine_structure = value_noise(galaxy_uv * 5.3 + vec2(13.0, 2.0));
 	float dust_lane = smoothstep(0.42, 0.82, fine_structure) * bright_core;
 
-	vec3 color = void_color;
+	vec3 panorama_tint = mix(vec3(0.88, 0.92, 1.0), max(galaxy_color * 2.2, vec3(0.28)), 0.2);
+	vec3 color = void_color + panorama * panorama_tint * panorama_strength;
 	color += galaxy_color * broad_band * (0.13 + structure * 0.42) * galaxy_strength;
 	color += nebula_color * bright_core * pow(structure, 2.2) * 0.62 * galaxy_strength;
 	color -= dust_color * dust_lane * (0.35 + structure * 0.45);
@@ -88,6 +92,10 @@ static func apply_to_environment(environment: Environment, preset: StringName = 
 	var palette := _palette(preset)
 	for parameter in palette:
 		material.set_shader_parameter(parameter, palette[parameter])
+	var panorama := load("res://assets/textures/galaxy_arm_panorama.png") as Texture2D
+	if panorama != null:
+		material.set_shader_parameter("panorama_texture", panorama)
+	material.set_shader_parameter("panorama_strength", 0.42 if preset == &"menu" else 0.26)
 	var sky := Sky.new()
 	sky.radiance_size = Sky.RADIANCE_SIZE_256
 	sky.sky_material = material

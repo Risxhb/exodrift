@@ -716,10 +716,13 @@ func _connect_feedback() -> void:
 	tactical.notification_requested.connect(hud.notify)
 	tactical.selection_changed.connect(func(name: String) -> void: hud.notify("Selected: %s" % name))
 	tactical.target_lock_requested.connect(_on_target_lock_requested)
+	tactical.context_menu_requested.connect(hud.open_target_context_menu)
 	if hud.has_signal("target_lock_requested"):
 		hud.connect("target_lock_requested", Callable(self, "_on_target_lock_requested"))
 	if hud.has_signal("target_command_requested"):
 		hud.connect("target_command_requested", Callable(self, "_on_target_command_requested"))
+	if hud.has_signal("target_navigation_requested"):
+		hud.connect("target_navigation_requested", Callable(self, "_on_target_navigation_requested"))
 
 func _update_target_lock() -> void:
 	if not is_instance_valid(carrier):
@@ -758,6 +761,14 @@ func _on_target_lock_requested(entity_id: StringName) -> void:
 	hud.notify("TARGET LOCKED — %s" % candidate.display_name.to_upper())
 
 func _on_target_command_requested(command: StringName, entity_id: StringName) -> void:
+	var default_distance := 500.0 if command == &"approach" else (1200.0 if command == &"orbit" else 2500.0)
+	_on_target_navigation_requested(command, entity_id, default_distance)
+
+func _on_target_navigation_requested(command: StringName, entity_id: StringName, distance_m: float) -> void:
+	if command in [&"clear", &"stop"]:
+		carrier.clear_target_navigation()
+		hud.notify("RELATIVE NAVIGATION CLEARED")
+		return
 	var resolved_id := entity_id if not entity_id.is_empty() else manual_target_lock_id
 	if resolved_id.is_empty():
 		hud.notify("NAVIGATION COMMAND REJECTED — select a target")
@@ -772,16 +783,13 @@ func _on_target_command_requested(command: StringName, entity_id: StringName) ->
 	var accepted := false
 	match String(command).to_lower():
 		"approach":
-			accepted = carrier.command_approach(candidate)
+			accepted = carrier.command_approach(candidate, distance_m)
 		"orbit":
-			accepted = carrier.command_orbit(candidate)
+			accepted = carrier.command_orbit(candidate, distance_m)
 		"keep_distance", "keep_range", "keep at range":
-			accepted = carrier.command_keep_distance(candidate)
-		"clear", "stop":
-			carrier.clear_target_navigation()
-			accepted = true
+			accepted = carrier.command_keep_distance(candidate, distance_m)
 	if accepted:
-		hud.notify("%s COMMAND — %s" % [String(command).replace("_", " ").to_upper(), candidate.display_name.to_upper()])
+		hud.notify("%s %.1f KM — %s" % [String(command).replace("_", " ").to_upper(), distance_m / 1000.0, candidate.display_name.to_upper()])
 	else:
 		hud.notify("NAVIGATION COMMAND REJECTED")
 
@@ -1337,7 +1345,7 @@ func _carrier_definition() -> ShipDefinition:
 	definition.command_range_m *= 1.0 + command_skill * 0.03
 	definition.damage_layers = _damage_layers(600.0 * shield_multiplier * float(frame.shields), 700.0 * armor_multiplier * float(frame.armor), 950.0 * hull_multiplier * float(frame.hull), 12.0 * float(frame.shield_regen), 0.28 * float(frame.armor_mitigation))
 	definition.weapons = [
-		_weapon(&"carrier_flak", "Directed Flak Screen", "flak", 2600.0, 0.24, 12.0, 1900.0, false, false, true),
+		_weapon(&"carrier_flak", "Directed Flak Screen", "flak", 3200.0, 0.24, 12.0, 1900.0, false, false, true),
 		_weapon(&"carrier_missile", "Long-Range Strike Missile", "missile", 8500.0, 6.5, 62.0, 720.0, true, true, false),
 		_weapon(&"carrier_nuclear", "Armed Nuclear Torpedo", "nuclear", 10000.0, 999.0, 520.0, 520.0, true, true, false),
 	]

@@ -94,6 +94,22 @@ func spawn_faction_burst(role: String, world_position: Vector3, team: StringName
 	var faction_role := "%s_impact" % palette_key
 	return spawn_burst(faction_role if materials.has(faction_role) else role, world_position, magnitude)
 
+func spawn_flak_airburst(world_position: Vector3, team: StringName = &"friendly", visual_id: StringName = &"", magnitude: float = 1.0) -> bool:
+	var spawned := spawn_burst("flak_flash", world_position, magnitude * 1.2)
+	var density := float(quality_manager.profile().get("effect_density", 0.75)) if quality_manager != null else 0.75
+	var smoke_count := 1 if density < 0.7 else (2 if density < 0.9 else 3)
+	for index in smoke_count:
+		var phase := float(spawned_effects * 13 + index * 29)
+		var offset := Vector3(sin(phase * 0.73), cos(phase * 1.17), sin(phase * 1.61)).normalized() * (7.0 + index * 5.0) * magnitude
+		spawn_burst("flak_smoke", world_position + offset, magnitude * (0.92 + index * 0.12))
+	if density >= 0.7:
+		spawn_burst("flak_pressure", world_position, magnitude)
+	if density >= 0.9:
+		var palette_key := _projectile_palette_key(team, visual_id)
+		var shrapnel_role := "%s_impact" % palette_key
+		spawn_burst(shrapnel_role if materials.has(shrapnel_role) else "flak_shrapnel", world_position, magnitude * 0.62)
+	return spawned
+
 func spawn_burst(role: String, world_position: Vector3, magnitude: float = 1.0) -> bool:
 	var used := 0
 	for slot in impact_slots:
@@ -109,6 +125,7 @@ func spawn_burst(role: String, world_position: Vector3, magnitude: float = 1.0) 
 		slot.active = true
 		slot.age = 0.0
 		slot.duration = _duration_for(role)
+		slot.role = role
 		slot.start_scale = 0.35 * magnitude
 		slot.end_scale = _end_scale_for(role) * magnitude
 		node.mesh = _burst_mesh_for(role)
@@ -192,6 +209,10 @@ func _build_shared_resources() -> void:
 	projectile_trail_materials["vesper"] = _emissive_material(Color(0.92, 0.18, 1.0, 0.78), 3.8, true)
 	projectile_trail_materials["crucible"] = _emissive_material(Color(0.62, 0.14, 1.0, 0.82), 4.0, true)
 	materials["flak"] = _emissive_material(Color(0.32, 0.82, 1.0, 0.9), 4.4, true)
+	materials["flak_flash"] = _emissive_material(Color(1.0, 0.84, 0.48, 0.96), 6.8, true)
+	materials["flak_smoke"] = _smoke_material(Color(0.075, 0.08, 0.085, 0.76))
+	materials["flak_pressure"] = _emissive_material(Color(1.0, 0.44, 0.1, 0.42), 3.8, true)
+	materials["flak_shrapnel"] = _emissive_material(Color(1.0, 0.62, 0.18, 0.86), 4.8, true)
 	materials["missile"] = _emissive_material(Color(1.0, 0.26, 0.035, 0.92), 5.0, true)
 	materials["muzzle"] = _emissive_material(Color(0.72, 0.93, 1.0, 0.94), 5.4, true)
 	materials["shield"] = _emissive_material(Color(0.08, 0.72, 1.0, 0.72), 4.2, true)
@@ -208,22 +229,23 @@ func _build_shared_resources() -> void:
 	materials["crucible_impact"] = _emissive_material(Color(0.68, 0.18, 1.0, 0.92), 5.1, true)
 	for key in materials:
 		var burst_material: StandardMaterial3D = materials[key]
-		if String(key) in ["nuclear", "nuclear_ring", "blast_core", "blast_ring"]:
+		if String(key) in ["nuclear", "nuclear_ring", "blast_core", "blast_ring", "flak_pressure"]:
 			burst_material.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
 		else:
 			burst_material.albedo_texture = burst_texture
-			burst_material.emission_texture = burst_texture
+			if String(key) != "flak_smoke":
+				burst_material.emission_texture = burst_texture
 			burst_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 		# Impact cards are luminous volumes. Additive, depth-write-free rendering
 		# prevents the transparent perimeter of large nuclear/shockwave sprites from
 		# presenting as an opaque dark quad when it crosses other geometry.
-		burst_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		burst_material.blend_mode = BaseMaterial3D.BLEND_MODE_MIX if String(key) == "flak_smoke" else BaseMaterial3D.BLEND_MODE_ADD
 		burst_material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 
 func _burst_mesh_for(role: String) -> PrimitiveMesh:
 	if role in ["nuclear", "blast_core"]:
 		return blast_volume_mesh
-	if role in ["nuclear_ring", "blast_ring"]:
+	if role in ["nuclear_ring", "blast_ring", "flak_pressure"]:
 		return blast_ring_mesh
 	return burst_mesh
 
@@ -238,6 +260,7 @@ func _build_impact_pool() -> void:
 		impact_slots.append({
 			"node": node,
 			"active": false,
+			"role": "",
 			"age": 0.0,
 			"duration": 0.2,
 			"start_scale": 0.25,
@@ -273,6 +296,14 @@ func _emissive_material(color: Color, energy: float, transparent: bool = false) 
 	material.emission_energy_multiplier = energy * (0.48 if quality_manager != null and bool(quality_manager.reduced_flashes) else 1.0)
 	return material
 
+func _smoke_material(color: Color) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = color
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.no_depth_test = false
+	return material
+
 func _projectile_palette_key(team: StringName, visual_id: StringName) -> String:
 	var identity := String(visual_id)
 	if identity.begins_with("vesper_"):
@@ -285,6 +316,10 @@ func _projectile_palette_key(team: StringName, visual_id: StringName) -> String:
 
 func _duration_for(role: String) -> float:
 	match role:
+		"flak_flash": return 0.13
+		"flak_smoke": return 0.82
+		"flak_pressure": return 0.46
+		"flak_shrapnel": return 0.34
 		"nuclear": return 1.25
 		"nuclear_ring": return 1.05
 		"blast_ring": return 0.52
@@ -299,6 +334,10 @@ func _duration_for(role: String) -> float:
 
 func _end_scale_for(role: String) -> float:
 	match role:
+		"flak_flash": return 18.0
+		"flak_smoke": return 64.0
+		"flak_pressure": return 176.0
+		"flak_shrapnel": return 26.0
 		"nuclear": return 34.0
 		"nuclear_ring": return 46.0
 		"blast_ring": return 22.0

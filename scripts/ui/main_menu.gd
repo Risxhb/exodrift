@@ -8,6 +8,7 @@ signal quit_requested
 const SETTINGS_PATH := "user://exodrift_settings.cfg"
 const UIStyle := preload("res://scripts/ui/ui_style.gd")
 const SpaceSky := preload("res://scripts/systems/space_sky.gd")
+const TutorialScreen := preload("res://scripts/ui/tutorial_screen.gd")
 
 var world_root: Node3D
 var camera: Camera3D
@@ -16,6 +17,7 @@ var main_panel: Control
 var settings_panel: Control
 var credits_panel: Control
 var controls_panel: Control
+var tutorial_screen: ExodriftTutorialScreen
 var confirmation_panel: Control
 var continue_button: Button
 var status_label: Label
@@ -413,20 +415,22 @@ func _build_interface(can_continue: bool) -> void:
 	divider.position = Vector2(246, 14)
 	divider.size = Vector2(1, 72)
 	main_panel.add_child(divider)
-	var new_button := _button(main_panel, "NEW OPERATION", Vector2(264, 18), Vector2(196, 46))
+	var new_button := _button(main_panel, "NEW OPERATION", Vector2(264, 18), Vector2(170, 46))
 	new_button.pressed.connect(_request_new_run)
-	continue_button = _button(main_panel, "CONTINUE", Vector2(468, 18), Vector2(172, 46))
+	continue_button = _button(main_panel, "CONTINUE", Vector2(442, 18), Vector2(140, 46))
 	continue_button.disabled = not can_continue
 	continue_button.tooltip_text = "No manual run save is available." if not can_continue else "Load the current manual campaign save."
 	continue_button.pressed.connect(_request_continue)
-	var settings_button := _button(main_panel, "SETTINGS", Vector2(648, 18), Vector2(142, 46))
+	var tutorial_button := _button(main_panel, "TUTORIAL", Vector2(590, 18), Vector2(130, 46))
+	tutorial_button.pressed.connect(_show_tutorial)
+	var settings_button := _button(main_panel, "SETTINGS", Vector2(728, 18), Vector2(130, 46))
 	settings_button.pressed.connect(_show_settings)
-	var credits_button := _button(main_panel, "CREDITS", Vector2(798, 18), Vector2(126, 46))
+	var credits_button := _button(main_panel, "CREDITS", Vector2(866, 18), Vector2(110, 46))
 	credits_button.pressed.connect(_show_credits)
-	var quit_button := _button(main_panel, "QUIT", Vector2(932, 18), Vector2(128, 46))
+	var quit_button := _button(main_panel, "QUIT", Vector2(984, 18), Vector2(92, 46))
 	quit_button.visible = not OS.has_feature("web")
 	if OS.has_feature("web"):
-		credits_button.size.x = 262.0
+		credits_button.size.x = 210.0
 	quit_button.pressed.connect(func() -> void: quit_requested.emit())
 	status_label = _label(main_panel, Vector2(264, 68), Vector2(796, 20), 10)
 	status_label.text = "COMMAND LINK READY // SELECT AN OPERATION"
@@ -622,6 +626,23 @@ func _show_credits() -> void:
 	controls_panel.visible = false
 	confirmation_panel.visible = false
 	credits_panel.visible = true
+
+func _show_tutorial() -> void:
+	if is_instance_valid(tutorial_screen):
+		return
+	main_panel.visible = false
+	settings_panel.visible = false
+	credits_panel.visible = false
+	controls_panel.visible = false
+	confirmation_panel.visible = false
+	tutorial_screen = TutorialScreen.new()
+	add_child(tutorial_screen)
+	tutorial_screen.configure()
+	tutorial_screen.closed.connect(_on_tutorial_closed)
+
+func _on_tutorial_closed() -> void:
+	tutorial_screen = null
+	_show_main()
 
 func _show_controls() -> void:
 	main_panel.visible = false
