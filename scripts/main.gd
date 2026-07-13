@@ -63,7 +63,7 @@ func _ready() -> void:
 	var recorder := _playtest_recorder()
 	if recorder != null:
 		recorder.begin_battle({"node_id": String(campaign_node_id), "sector": campaign_sector_index, "layout": String(encounter.layout_id), "objective": campaign_objective_type, "boss": encounter.is_sector_command})
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if OS.has_feature("web") else Input.MOUSE_MODE_CAPTURED
+	_apply_carrier_mouse_mode()
 	await get_tree().process_frame
 	await get_tree().process_frame
 	_apply_campaign_fleet_snapshot()
@@ -90,7 +90,7 @@ func _process(delta: float) -> void:
 	if is_instance_valid(escort) and is_instance_valid(carrier):
 		escort.command_link.update_for_distance(escort.global_position.distance_to(carrier.global_position), carrier.definition.command_range_m)
 	if not tactical.enabled and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-		if carrier.fire_flak():
+		if carrier.fire_primary():
 			var recorder := _playtest_recorder()
 			if recorder != null:
 				recorder.increment(&"flak_barrages")
@@ -114,6 +114,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("toggle_tactical"):
 		tactical.set_enabled(not tactical.enabled)
+		_apply_carrier_mouse_mode()
 		if tactical.enabled:
 			var recorder := _playtest_recorder()
 			if recorder != null:
@@ -121,17 +122,28 @@ func _unhandled_input(event: InputEvent) -> void:
 		hud.notify("Tactical map is live; carrier maintains helm orders." if tactical.enabled else "Direct flight control restored.")
 		audio.play_tone(620.0 if tactical.enabled else 420.0, 0.1)
 		return
+	if event.is_action_pressed("pilot_mode"):
+		carrier.set_pilot_mode()
+		return
+	if event.is_action_pressed("gun_mode"):
+		carrier.set_gun_mode()
+		return
 	if tactical.handle_input(event):
 		return
 	if event is InputEventMouseMotion:
 		if carrier.camera_orbiting:
 			carrier.apply_camera_orbit(event.relative)
-		elif OS.has_feature("web"):
+		elif OS.has_feature("web") or carrier.is_pilot_mode():
 			carrier.set_web_cursor_steering(event.position, get_viewport().get_visible_rect().size)
 		else:
 			carrier.apply_mouse_look(event.relative)
 	elif event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_MIDDLE:
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed and carrier.is_pilot_mode():
+			if carrier.command_flight_from_screen(event.position, event.double_click, true):
+				hud.notify("FULL CRUISE VECTOR SET" if event.double_click else "HEADING VECTOR SET")
+			else:
+				hud.notify("HELM VECTOR BLOCKED — select empty space")
+		elif event.button_index == MOUSE_BUTTON_MIDDLE:
 			carrier.set_camera_orbiting(event.pressed)
 			if event.pressed:
 				hud.notify("COMBAT CAMERA ORBIT — drag to rotate view")
@@ -354,14 +366,31 @@ func _sector_encounter_profile() -> Dictionary:
 func _build_environment() -> void:
 	var sector := _sector_encounter_profile()
 	var world_environment := WorldEnvironment.new()
+	world_environment.name = "ExodriftSkyEnvironment"
 	var environment := Environment.new()
-	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = sector.background_color
+	var sky_material := ProceduralSkyMaterial.new()
+	var backdrop_color: Color = sector.background_color
+	var horizon_color := Color(sector.nebula_secondary.r, sector.nebula_secondary.g, sector.nebula_secondary.b).lerp(backdrop_color, 0.72)
+	sky_material.sky_top_color = backdrop_color.darkened(0.35)
+	sky_material.sky_horizon_color = horizon_color
+	sky_material.sky_curve = 0.12
+	sky_material.ground_bottom_color = backdrop_color.darkened(0.35)
+	sky_material.ground_horizon_color = horizon_color
+	sky_material.ground_curve = 0.18
+	sky_material.sun_angle_max = 1.1
+	sky_material.sun_curve = 0.08
+	var sky := Sky.new()
+	sky.radiance_size = Sky.RADIANCE_SIZE_256
+	sky.sky_material = sky_material
+	environment.background_mode = Environment.BG_SKY
+	environment.sky = sky
+	environment.background_energy_multiplier = 0.82
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = sector.ambient_color
-	environment.ambient_light_energy = 1.08
-	environment.reflected_light_source = Environment.REFLECTION_SOURCE_BG
+	environment.ambient_light_energy = 0.86
+	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	environment.tonemap_exposure = 1.08
 	world_environment.environment = environment
 	add_child(world_environment)
 	var key_light := DirectionalLight3D.new()
@@ -393,7 +422,7 @@ func _build_starfield() -> void:
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.mesh = mesh
-	multimesh.instance_count = 720
+	multimesh.instance_count = 360
 	var random := RandomNumberGenerator.new()
 	random.seed = 724911
 	for index in multimesh.instance_count:
@@ -403,6 +432,8 @@ func _build_starfield() -> void:
 	var stars := MultiMeshInstance3D.new()
 	stars.name = "DeepStarfield"
 	stars.multimesh = multimesh
+	stars.add_to_group("quality_backdrop")
+	stars.set_meta("quality_layer", 1)
 	add_child(stars)
 	_build_nebula_star_band()
 	_build_dust_field()
@@ -607,6 +638,14 @@ func _deploy_initial_forces() -> void:
 
 func _connect_feedback() -> void:
 	carrier.ship_destroyed.connect(_on_ship_destroyed)
+	carrier.control_mode_changed.connect(func(_mode: PlayerCarrier.ControlMode, label: String) -> void:
+		_apply_carrier_mouse_mode()
+		hud.notify("%s MODE ACTIVE" % label)
+	)
+	carrier.navigation_commanded.connect(func(_direction: Vector3, full_cruise: bool) -> void:
+		if full_cruise:
+			audio.play_tone(540.0, 0.08, -18.0)
+	)
 	if is_instance_valid(escort):
 		escort.ship_destroyed.connect(_on_ship_destroyed)
 		escort.ship_destroyed.connect(_on_friendly_capital_destroyed.bind(escort))
@@ -971,7 +1010,13 @@ func _toggle_pause() -> void:
 	var next := not get_tree().paused
 	get_tree().paused = next
 	hud.set_paused(next)
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if next else (Input.MOUSE_MODE_VISIBLE if tactical.enabled else Input.MOUSE_MODE_CAPTURED)
+	_apply_carrier_mouse_mode()
+
+func _apply_carrier_mouse_mode() -> void:
+	if get_tree().paused or (is_instance_valid(tactical) and tactical.enabled) or OS.has_feature("web") or (is_instance_valid(carrier) and carrier.is_pilot_mode()):
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	else:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 func _restart_encounter() -> void:
 	get_tree().paused = false

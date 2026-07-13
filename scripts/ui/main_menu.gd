@@ -71,11 +71,25 @@ func _build_world() -> void:
 	add_child(world_root)
 	var environment_node := WorldEnvironment.new()
 	var environment := Environment.new()
-	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color(0.004, 0.009, 0.028)
+	var sky_material := ProceduralSkyMaterial.new()
+	sky_material.sky_top_color = Color(0.004, 0.012, 0.03)
+	sky_material.sky_horizon_color = Color(0.035, 0.12, 0.2)
+	sky_material.sky_curve = 0.1
+	sky_material.ground_bottom_color = Color(0.004, 0.012, 0.03)
+	sky_material.ground_horizon_color = Color(0.035, 0.12, 0.2)
+	sky_material.ground_curve = 0.16
+	sky_material.sun_angle_max = 1.0
+	sky_material.sun_curve = 0.06
+	var sky := Sky.new()
+	sky.radiance_size = Sky.RADIANCE_SIZE_256
+	sky.sky_material = sky_material
+	environment.background_mode = Environment.BG_SKY
+	environment.sky = sky
+	environment.background_energy_multiplier = 1.08
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = Color(0.12, 0.2, 0.36)
-	environment.ambient_light_energy = 0.75
+	environment.ambient_light_energy = 0.64
+	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	environment_node.environment = environment
 	world_root.add_child(environment_node)
@@ -90,20 +104,29 @@ func _build_world() -> void:
 	hostile_light.light_energy = 0.65
 	world_root.add_child(hostile_light)
 	_build_stars()
+	_add_menu_nebula_card(Vector3(-5400.0, 1500.0, -11800.0), Vector2(7200.0, 3600.0), Color(0.08, 0.38, 0.62, 0.38))
+	_add_menu_nebula_card(Vector3(5900.0, -1200.0, -13200.0), Vector2(6200.0, 3100.0), Color(0.68, 0.18, 0.06, 0.28))
 	camera = Camera3D.new()
-	camera.fov = 55.0
-	camera.position = Vector3(0.0, 180.0, 1050.0)
+	camera.fov = 51.0
+	camera.far = 30000.0
+	camera.position = Vector3(35.0, 145.0, 980.0)
 	camera.current = true
 	world_root.add_child(camera)
-	camera.look_at(Vector3(0.0, 0.0, -650.0))
-	_add_ship("Sidebay Carrier", Vector3(-590.0, -50.0, -520.0), Color(0.12, 0.48, 0.72), Vector3(190.0, 48.0, 520.0), true, 0.0)
-	_add_ship("Resolute", Vector3(-830.0, 155.0, -980.0), Color(0.15, 0.58, 0.8), Vector3(78.0, 30.0, 220.0), false, 1.8)
-	_add_ship("Acheron Command", Vector3(610.0, 75.0, -790.0), Color(0.7, 0.08, 0.04), Vector3(126.0, 42.0, 320.0), false, 3.1)
-	_add_ship("Acheron Screen", Vector3(845.0, -175.0, -430.0), Color(0.82, 0.12, 0.035), Vector3(68.0, 27.0, 185.0), false, 4.7)
-	for index in 8:
-		var friendly := index < 4
-		var phase := float(index) * 0.78
-		var origin := Vector3(-560.0 if friendly else 590.0, -20.0, -610.0 if friendly else -820.0)
+	camera.look_at(Vector3(0.0, -25.0, -710.0))
+	# The menu battle is composed as two readable formations instead of a loose
+	# collection of ships. Sidebay owns the near-left foreground while the enemy
+	# command group holds the high-right distance, leaving the center as a firing lane.
+	_add_ship("Sidebay Carrier", Vector3(-395.0, -82.0, -470.0), Color(0.12, 0.48, 0.72), Vector3(190.0, 48.0, 520.0), true, 0.0)
+	_add_ship("Resolute", Vector3(-665.0, 105.0, -810.0), Color(0.15, 0.58, 0.8), Vector3(72.0, 29.0, 218.0), false, 1.8)
+	_add_ship("Harrier", Vector3(-175.0, 145.0, -1010.0), Color(0.11, 0.68, 0.88), Vector3(56.0, 22.0, 168.0), false, 2.5)
+	_add_ship("Bulwark", Vector3(-720.0, -180.0, -1140.0), Color(0.18, 0.44, 0.7), Vector3(94.0, 38.0, 238.0), false, 4.0)
+	_add_ship("Acheron Command", Vector3(455.0, 48.0, -735.0), Color(0.7, 0.08, 0.04), Vector3(126.0, 42.0, 320.0), false, 3.1)
+	_add_ship("Acheron Spear", Vector3(725.0, -120.0, -960.0), Color(0.82, 0.12, 0.035), Vector3(68.0, 27.0, 185.0), false, 4.7)
+	_add_ship("Acheron Guard", Vector3(220.0, -205.0, -1190.0), Color(0.62, 0.055, 0.025), Vector3(84.0, 31.0, 215.0), false, 5.4)
+	for index in 12:
+		var friendly := index < 6
+		var phase := float(index) * 0.57
+		var origin := Vector3(-410.0 if friendly else 465.0, -25.0, -650.0 if friendly else -830.0)
 		_add_fighter(origin, Color(0.2, 0.76, 1.0) if friendly else Color(1.0, 0.2, 0.04), phase, friendly)
 	_build_tracers()
 	_build_explosions()
@@ -132,6 +155,28 @@ func _build_stars() -> void:
 	stars.multimesh = multimesh
 	world_root.add_child(stars)
 
+func _add_menu_nebula_card(position_value: Vector3, size_value: Vector2, tint: Color) -> void:
+	var card := MeshInstance3D.new()
+	card.name = "MenuNebulaVeil"
+	var mesh := QuadMesh.new()
+	mesh.size = size_value
+	card.mesh = mesh
+	card.position = position_value
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	material.albedo_color = tint
+	var nebula_texture := load("res://assets/textures/nebula_card.svg") as Texture2D
+	material.albedo_texture = nebula_texture
+	material.emission_enabled = true
+	material.emission = Color(tint.r, tint.g, tint.b) * 0.78
+	material.emission_texture = nebula_texture
+	card.material_override = material
+	card.add_to_group("menu_nebula_veil")
+	world_root.add_child(card)
+
 func _add_ship(ship_name: String, base_position: Vector3, color: Color, dimensions: Vector3, carrier: bool, phase: float) -> void:
 	var ship := Node3D.new()
 	ship.name = ship_name
@@ -151,6 +196,21 @@ func _add_ship(ship_name: String, base_position: Vector3, color: Color, dimensio
 	nose.rotation.y = PI
 	nose.material_override = _material(color.lightened(0.18), 0.05)
 	ship.add_child(nose)
+	var dorsal := MeshInstance3D.new()
+	var dorsal_mesh := BoxMesh.new()
+	dorsal_mesh.size = Vector3(dimensions.x * 0.3, dimensions.y * 0.48, dimensions.z * 0.32)
+	dorsal.mesh = dorsal_mesh
+	dorsal.position = Vector3(0.0, -dimensions.y * 0.58, -dimensions.z * 0.06)
+	dorsal.material_override = _material(color.lightened(0.12), 0.04)
+	ship.add_child(dorsal)
+	for side in [-1.0, 1.0]:
+		var armor := MeshInstance3D.new()
+		var armor_mesh := BoxMesh.new()
+		armor_mesh.size = Vector3(dimensions.x * 0.12, dimensions.y * 0.7, dimensions.z * 0.58)
+		armor.mesh = armor_mesh
+		armor.position = Vector3(side * dimensions.x * 0.54, 0.0, dimensions.z * 0.04)
+		armor.material_override = _material(color.darkened(0.28), 0.03)
+		ship.add_child(armor)
 	if carrier:
 		for side in [-1.0, 1.0]:
 			var bay := MeshInstance3D.new()
@@ -174,6 +234,12 @@ func _add_ship(ship_name: String, base_position: Vector3, color: Color, dimensio
 	engine.position.z = dimensions.z * 0.52
 	engine.material_override = _material(Color(0.08, 0.62, 1.0) if color.b > color.r else Color(1.0, 0.16, 0.025), 4.0)
 	ship.add_child(engine)
+	var engine_glow := OmniLight3D.new()
+	engine_glow.light_color = Color(0.08, 0.62, 1.0) if color.b > color.r else Color(1.0, 0.1, 0.02)
+	engine_glow.light_energy = 2.2
+	engine_glow.omni_range = minf(dimensions.x * 1.4, 165.0)
+	engine_glow.position.z = dimensions.z * 0.58
+	ship.add_child(engine_glow)
 	ships.append({"node": ship, "base": base_position, "phase": phase, "fighter": false, "friendly": color.b > color.r})
 
 func _add_fighter(origin: Vector3, color: Color, phase: float, friendly: bool) -> void:
@@ -214,21 +280,23 @@ func _build_explosions() -> void:
 func _update_battle(_delta: float) -> void:
 	if camera == null:
 		return
-	camera.position = Vector3(sin(elapsed * 0.08) * 115.0, 175.0 + sin(elapsed * 0.13) * 35.0, 1050.0 + cos(elapsed * 0.07) * 90.0)
-	camera.look_at(Vector3(0.0, -20.0, -650.0))
+	# Slow command-camera drift keeps silhouettes stable long enough to read while
+	# still making the engagement feel live.
+	camera.position = Vector3(35.0 + sin(elapsed * 0.055) * 68.0, 145.0 + sin(elapsed * 0.09) * 22.0, 980.0 + cos(elapsed * 0.05) * 42.0)
+	camera.look_at(Vector3(sin(elapsed * 0.04) * 35.0, -25.0, -710.0))
 	for ship_data in ships:
 		var ship: Node3D = ship_data.node
 		var base: Vector3 = ship_data.base
 		var phase := float(ship_data.phase)
 		if bool(ship_data.fighter):
 			var friendly := bool(ship_data.friendly)
-			var angle := elapsed * (0.38 if friendly else -0.43) + phase
-			ship.position = base + Vector3(cos(angle) * 420.0, sin(angle * 1.7) * 145.0, sin(angle) * 520.0)
+			var angle := elapsed * (0.31 if friendly else -0.35) + phase
+			ship.position = base + Vector3(cos(angle) * 315.0, sin(angle * 1.7) * 118.0, sin(angle) * 390.0)
 			ship.rotation = Vector3(sin(angle) * 0.22, -angle + (PI * 0.5 if friendly else -PI * 0.5), cos(angle) * 0.25)
 		else:
 			ship.position = base + Vector3(sin(elapsed * 0.12 + phase) * 50.0, cos(elapsed * 0.16 + phase) * 28.0, sin(elapsed * 0.09 + phase) * 36.0)
-			var broadside_yaw := -0.72 if bool(ship_data.friendly) else 0.72
-			ship.rotation.y = broadside_yaw + sin(elapsed * 0.08 + phase) * 0.14
+			var broadside_yaw := -0.58 if bool(ship_data.friendly) else 0.58
+			ship.rotation.y = broadside_yaw + sin(elapsed * 0.07 + phase) * 0.09
 	for tracer_data in tracers:
 		var tracer: Node3D = tracer_data.node
 		var friendly := bool(tracer_data.friendly)
@@ -266,44 +334,56 @@ func _build_interface(can_continue: bool) -> void:
 	var telemetry := _label(interface, Vector2(26, 22), Vector2(350, 56), 13)
 	telemetry.text = "LIVE COMBAT FEED // HELIOS REACH\nCOMMAND LINK: STANDBY"
 	var build := _label(interface, Vector2(990, 22), Vector2(260, 52), 13)
-	build.text = "SHIP READINESS BUILD // M15\nSINGLE-PLAYER // PC + WEB"
+	build.text = "HELM + PRESENTATION BUILD // M16\nSINGLE-PLAYER // PC + WEB"
 	build.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	main_panel = _menu_panel()
-	var title := _label(main_panel, Vector2(24, 22), Vector2(392, 58), 42)
+	main_panel = _command_bar()
+	var title := _label(main_panel, Vector2(22, 14), Vector2(218, 42), 30)
 	title.text = "EXODRIFT"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var subtitle := _label(main_panel, Vector2(24, 76), Vector2(392, 30), 16)
-	subtitle.text = "C A R R I E R   C O M M A N D"
-	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var subtitle := _label(main_panel, Vector2(23, 51), Vector2(218, 22), 11)
+	subtitle.text = "CARRIER COMMAND // M16"
 	var divider := ColorRect.new()
-	divider.color = Color(0.08, 0.7, 0.96, 0.8)
-	divider.position = Vector2(86, 116)
-	divider.size = Vector2(268, 2)
+	divider.color = Color(0.08, 0.7, 0.96, 0.72)
+	divider.position = Vector2(246, 14)
+	divider.size = Vector2(1, 72)
 	main_panel.add_child(divider)
-	var doctrine := _label(main_panel, Vector2(24, 128), Vector2(392, 44), 13)
-	doctrine.text = "PILOT THE FLAGSHIP. COMMAND THE FLEET."
-	doctrine.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var new_button := _button(main_panel, "BEGIN NEW OPERATION", Vector2(54, 188), Vector2(332, 48))
+	var new_button := _button(main_panel, "NEW OPERATION", Vector2(264, 18), Vector2(196, 46))
 	new_button.pressed.connect(_request_new_run)
-	continue_button = _button(main_panel, "CONTINUE SAVED RUN", Vector2(54, 246), Vector2(332, 48))
+	continue_button = _button(main_panel, "CONTINUE", Vector2(468, 18), Vector2(172, 46))
 	continue_button.disabled = not can_continue
 	continue_button.tooltip_text = "No manual run save is available." if not can_continue else "Load the current manual campaign save."
 	continue_button.pressed.connect(_request_continue)
-	var settings_button := _button(main_panel, "SETTINGS", Vector2(54, 304), Vector2(332, 48))
+	var settings_button := _button(main_panel, "SETTINGS", Vector2(648, 18), Vector2(142, 46))
 	settings_button.pressed.connect(_show_settings)
-	var credits_button := _button(main_panel, "CREDITS", Vector2(54, 362), Vector2(332, 48))
+	var credits_button := _button(main_panel, "CREDITS", Vector2(798, 18), Vector2(126, 46))
 	credits_button.pressed.connect(_show_credits)
-	var quit_button := _button(main_panel, "QUIT TO DESKTOP", Vector2(54, 420), Vector2(332, 48))
+	var quit_button := _button(main_panel, "QUIT", Vector2(932, 18), Vector2(128, 46))
 	quit_button.visible = not OS.has_feature("web")
+	if OS.has_feature("web"):
+		credits_button.size.x = 262.0
 	quit_button.pressed.connect(func() -> void: quit_requested.emit())
-	status_label = _label(main_panel, Vector2(28, 482), Vector2(384, 40), 12)
-	status_label.text = "SELECT A COMMAND OPTION"
-	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status_label = _label(main_panel, Vector2(264, 68), Vector2(796, 20), 10)
+	status_label.text = "COMMAND LINK READY // SELECT AN OPERATION"
+	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_build_settings_panel()
 	_build_credits_panel()
 	_build_controls_panel()
 	_build_confirmation_panel()
 	new_button.grab_focus()
+
+func _command_bar() -> Panel:
+	var panel := Panel.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	panel.position = Vector2(-550, -116)
+	panel.size = Vector2(1100, 98)
+	var style := UIStyle.panel_style(Color(0.004, 0.017, 0.031, 0.92), UIStyle.CYAN, 1, 4)
+	style.shadow_size = 14
+	style.corner_radius_top_left = 3
+	style.corner_radius_top_right = 3
+	style.corner_radius_bottom_left = 3
+	style.corner_radius_bottom_right = 3
+	panel.add_theme_stylebox_override("panel", style)
+	interface.add_child(panel)
+	return panel
 
 func _menu_panel() -> Panel:
 	var panel := Panel.new()

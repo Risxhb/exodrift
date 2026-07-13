@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" fill="#111721"/>
+  <g fill="#192433" stroke="#070b11" stroke-width="5">
+    <path d="M0 0H256V54L222 67H34L0 54ZM0 65L30 78H226L256 65V118L224 131H32L0 118ZM0 129L28 143H228L256 129V182L222 195H34L0 182ZM0 193L30 207H226L256 193V246L236 256H20L0 246Z"/>
+  </g>
+  <g fill="none" stroke="#314a63" stroke-width="2" opacity=".9">
+    <path d="M0 46L36 60H220L256 46M0 110L34 124H222L256 110M0 174L36 188H220L256 174M0 238L33 252H223L256 238"/>
+  </g>
+  <g fill="#213247">
+    <path d="M56 11L83 2H173L200 11L176 41H80ZM50 75L80 66H176L206 75L178 105H78ZM58 139L86 130H170L198 139L174 169H82ZM50 203L81 194H175L206 203L177 233H79Z"/>
+  </g>
+  <g fill="none" stroke="#dd45ff" stroke-width="4" opacity=".72">
+    <path d="M0 27H46L67 41H189L210 27H256M0 91H42L65 105H191L214 91H256M0 155H46L69 169H187L210 155H256M0 219H42L65 233H191L214 219H256"/>
+  </g>
+  <g fill="none" stroke="#5deaff" stroke-width="1.4" opacity=".95">
+    <path d="M0 24H47L69 38H187L209 24H256M0 88H43L67 102H189L213 88H256M0 152H47L71 166H185L209 152H256M0 216H43L67 230H189L213 216H256"/>
+  </g>
+  <g fill="#75dbea" opacity=".65">
+    <ellipse cx="25" cy="11" rx="5" ry="2"/><ellipse cx="231" cy="11" rx="5" ry="2"/><ellipse cx="39" cy="56" rx="5" ry="2"/><ellipse cx="217" cy="56" rx="5" ry="2"/>
+    <ellipse cx="25" cy="75" rx="5" ry="2"/><ellipse cx="231" cy="75" rx="5" ry="2"/><ellipse cx="39" cy="120" rx="5" ry="2"/><ellipse cx="217" cy="120" rx="5" ry="2"/>
+    <ellipse cx="25" cy="139" rx="5" ry="2"/><ellipse cx="231" cy="139" rx="5" ry="2"/><ellipse cx="39" cy="184" rx="5" ry="2"/><ellipse cx="217" cy="184" rx="5" ry="2"/>
+    <ellipse cx="25" cy="203" rx="5" ry="2"/><ellipse cx="231" cy="203" rx="5" ry="2"/><ellipse cx="39" cy="248" rx="5" ry="2"/><ellipse cx="217" cy="248" rx="5" ry="2"/>
+  </g>
+  <path d="M87 13C104 23 151 23 169 13M84 77C103 88 153 88 172 77M90 141C107 151 149 151 166 141M84 205C104 216 152 216 172 205" fill="none" stroke="#627b91" stroke-width="1.5" opacity=".45"/>
+</svg>

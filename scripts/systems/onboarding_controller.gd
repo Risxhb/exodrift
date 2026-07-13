@@ -117,7 +117,7 @@ func _set_step(next_step: Step) -> void:
 		return
 	step_label.text = _step_title(next_step)
 	instruction_label.text = _step_instruction(next_step)
-	progress_label.text = "ORIENTATION   [F1] HIDE" if next_step == Step.WELCOME else "%d / 6   [F1] HIDE" % mini(int(next_step), 6)
+	progress_label.text = "ORIENTATION   [F3] HIDE" if next_step == Step.WELCOME else "%d / 6   [F3] HIDE" % mini(int(next_step), 6)
 	var recorder := get_node_or_null("/root/PlaytestRecorder") as ExodriftPlaytestRecorder
 	if recorder != null:
 		recorder.record_event(&"onboarding_step", {"step": Step.keys()[next_step]})
@@ -139,7 +139,7 @@ func _step_instruction(step: Step) -> String:
 		Step.WELCOME:
 			return "Your carrier is the fleet's command node and its most important hull. Opening the tactical map never pauses combat."
 		Step.HELM:
-			return "Use WASD plus Space/C to translate the carrier. The mouse directs the camera and flak without turning the hull."
+			return "Press C for Pilot Mode. Use W/S to raise or lower throttle, or double-click empty space to set a full-cruise heading."
 		Step.SENSOR:
 			return "Contacts begin uncertain. Press P for an active ping: it identifies nearby targets, but broadcasts your position."
 		Step.FLIGHT:
@@ -152,7 +152,7 @@ func _step_instruction(step: Step) -> String:
 			return "Command link established. Recall deployed wings before jump preparation; damaged or empty wings need time to service."
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F1:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F3:
 		dismiss()
 		get_viewport().set_input_as_handled()
 

@@ -66,64 +66,64 @@ func _build_ui() -> void:
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
-	objective_panel = _panel(root, Vector2(18, 14), Vector2(720, 40), Color(0.006, 0.024, 0.038, 0.88), UIStyle.AMBER)
-	_accent_line(objective_panel, Vector2(0, 0), Vector2(5, 40), UIStyle.AMBER)
-	objective_label = _label(objective_panel, Vector2(16, 4), Vector2(690, 30), 17)
+	objective_panel = _panel(root, Vector2(18, 14), Vector2(650, 36), Color(0.006, 0.024, 0.038, 0.74), UIStyle.AMBER)
+	_accent_line(objective_panel, Vector2(0, 0), Vector2(4, 36), UIStyle.AMBER)
+	objective_label = _label(objective_panel, Vector2(16, 2), Vector2(620, 28), 15)
 	objective_label.text = "OBJECTIVE  Identify and destroy the hostile command frigate"
-	telemetry_panel = _panel(root, Vector2(18, 62), Vector2(430, 108), Color(0.006, 0.024, 0.038, 0.9))
+	telemetry_panel = _panel(root, Vector2(18, 58), Vector2(370, 98), Color(0.006, 0.024, 0.038, 0.72))
 	_section_heading(telemetry_panel, "CARRIER TELEMETRY", UIStyle.CYAN)
-	status_label = _label(telemetry_panel, Vector2(14, 24), Vector2(402, 58), 13)
-	shield_bar = _bar(telemetry_panel, Vector2(14, 88), Vector2(126, 9), Color(0.1, 0.65, 1.0))
-	armor_bar = _bar(telemetry_panel, Vector2(152, 88), Vector2(126, 9), Color(0.95, 0.65, 0.12))
-	hull_bar = _bar(telemetry_panel, Vector2(290, 88), Vector2(126, 9), Color(0.9, 0.15, 0.12))
-	wing_panel = _panel(root, Vector2(18, 178), Vector2(510, 76), Color(0.006, 0.024, 0.038, 0.86))
+	status_label = _label(telemetry_panel, Vector2(14, 23), Vector2(342, 50), 12)
+	shield_bar = _bar(telemetry_panel, Vector2(14, 80), Vector2(104, 7), Color(0.1, 0.65, 1.0))
+	armor_bar = _bar(telemetry_panel, Vector2(126, 80), Vector2(104, 7), Color(0.95, 0.65, 0.12))
+	hull_bar = _bar(telemetry_panel, Vector2(238, 80), Vector2(104, 7), Color(0.9, 0.15, 0.12))
+	wing_panel = _panel(root, Vector2(18, 164), Vector2(438, 68), Color(0.006, 0.024, 0.038, 0.68))
 	_section_heading(wing_panel, "AIR GROUP", UIStyle.CYAN)
-	wing_label = _label(wing_panel, Vector2(14, 24), Vector2(482, 46), 12)
-	weapon_panel = _panel(root, Vector2(18, 262), Vector2(460, 76), Color(0.006, 0.024, 0.038, 0.86))
+	wing_label = _label(wing_panel, Vector2(14, 23), Vector2(410, 40), 11)
+	weapon_panel = _panel(root, Vector2(18, 240), Vector2(402, 68), Color(0.006, 0.024, 0.038, 0.68))
 	_section_heading(weapon_panel, "FIRE CONTROL", UIStyle.AMBER)
-	weapon_label = _label(weapon_panel, Vector2(14, 24), Vector2(432, 46), 12)
-	target_panel = _panel(root, Vector2(912, 14), Vector2(350, 172), Color(0.006, 0.024, 0.038, 0.94), UIStyle.CYAN)
+	weapon_label = _label(weapon_panel, Vector2(14, 23), Vector2(374, 40), 11)
+	target_panel = _panel(root, Vector2(934, 14), Vector2(328, 158), Color(0.006, 0.024, 0.038, 0.76), UIStyle.CYAN)
 	_section_heading(target_panel, "TARGET SOLUTION", UIStyle.CYAN)
-	var portrait_back := _panel(target_panel, Vector2(14, 30), Vector2(84, 76), Color(0.012, 0.065, 0.09, 0.96), UIStyle.CYAN_SOFT)
+	var portrait_back := _panel(target_panel, Vector2(14, 30), Vector2(76, 66), Color(0.012, 0.065, 0.09, 0.66), UIStyle.CYAN_SOFT)
 	var portrait := Polygon2D.new()
 	portrait.polygon = PackedVector2Array([Vector2(42, 6), Vector2(57, 25), Vector2(76, 38), Vector2(62, 48), Vector2(56, 70), Vector2(28, 70), Vector2(22, 48), Vector2(8, 38), Vector2(27, 25)])
 	portrait.color = Color(0.22, 0.72, 0.92, 0.9)
 	portrait_back.add_child(portrait)
-	target_label = _label(target_panel, Vector2(112, 30), Vector2(224, 76), 12)
+	target_label = _label(target_panel, Vector2(100, 29), Vector2(214, 68), 11)
 	target_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_label(target_panel, Vector2(14, 112), Vector2(18, 14), 9, Color(0.3, 0.75, 1.0)).text = "S"
 	_label(target_panel, Vector2(14, 130), Vector2(18, 14), 9, Color(1.0, 0.7, 0.25)).text = "A"
 	_label(target_panel, Vector2(14, 148), Vector2(18, 14), 9, Color(1.0, 0.3, 0.24)).text = "H"
-	target_shield_bar = _bar(target_panel, Vector2(32, 114), Vector2(304, 8), Color(0.1, 0.65, 1.0))
-	target_armor_bar = _bar(target_panel, Vector2(32, 132), Vector2(304, 8), Color(0.95, 0.65, 0.12))
-	target_hull_bar = _bar(target_panel, Vector2(32, 150), Vector2(304, 8), Color(0.9, 0.15, 0.12))
+	target_shield_bar = _bar(target_panel, Vector2(32, 106), Vector2(282, 7), Color(0.1, 0.65, 1.0))
+	target_armor_bar = _bar(target_panel, Vector2(32, 124), Vector2(282, 7), Color(0.95, 0.65, 0.12))
+	target_hull_bar = _bar(target_panel, Vector2(32, 142), Vector2(282, 7), Color(0.9, 0.15, 0.12))
 	target_indicator = _label(root, Vector2(624, 300), Vector2(38, 38), 30)
 	target_indicator.text = "▲"
 	target_indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	target_indicator.add_theme_color_override("font_color", Color(0.25, 0.92, 1.0))
 	target_indicator.pivot_offset = Vector2(19, 19)
 	target_indicator.visible = false
-	mode_panel = _panel(root, Vector2(470, 14), Vector2(340, 48), Color(0.006, 0.024, 0.038, 0.9), UIStyle.CYAN)
-	mode_label = _label(mode_panel, Vector2(8, 4), Vector2(324, 38), 22)
+	mode_panel = _panel(root, Vector2(692, 14), Vector2(224, 36), Color(0.006, 0.024, 0.038, 0.72), UIStyle.CYAN)
+	mode_label = _label(mode_panel, Vector2(8, 2), Vector2(208, 28), 14)
 	mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	mode_panel.visible = false
-	notification_panel = _panel(root, Vector2(350, 614), Vector2(580, 42), Color(0.006, 0.03, 0.045, 0.94), UIStyle.AMBER)
+	notification_panel = _panel(root, Vector2(350, 616), Vector2(580, 38), Color(0.006, 0.03, 0.045, 0.76), UIStyle.AMBER)
 	notification_label = _label(notification_panel, Vector2(12, 5), Vector2(556, 30), 15)
 	notification_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	notification_panel.visible = false
-	controls_panel = _panel(root, Vector2(12, 674), Vector2(1256, 34), Color(0.004, 0.018, 0.028, 0.92), UIStyle.CYAN_SOFT)
-	controls_label = _label(controls_panel, Vector2(10, 3), Vector2(1236, 25), 11, UIStyle.TEXT_MUTED)
+	controls_panel = _panel(root, Vector2(84, 680), Vector2(1112, 28), Color(0.004, 0.018, 0.028, 0.62), UIStyle.CYAN_SOFT)
+	controls_label = _label(controls_panel, Vector2(10, 3), Vector2(1092, 22), 10, UIStyle.TEXT_MUTED)
 	controls_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	controls_label.text = "Mouse free-look / flak aim  WASD thrust  Space/C vertical  LMB flak  RMB missile  P ping  Z/X wings  Tab map  Esc pause"
+	controls_label.text = "C PILOT  G GUN  W/S THROTTLE  DOUBLE-CLICK SPACE FULL CRUISE  LMB MODE ACTION  RMB MISSILE  P PING  Z/X WINGS  TAB MAP"
 	crosshair_label = _label(root, Vector2(624, 340), Vector2(32, 32), 24)
-	crosshair_label.text = ""
+	crosshair_label.text = "⌖"
 	crosshair_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	crosshair_label.visible = false
 	map_info_panel = _panel(root, Vector2(18, 74), Vector2(342, 210), Color(0.006, 0.024, 0.038, 0.94), UIStyle.CYAN)
 	_section_heading(map_info_panel, "COMMAND LINK", UIStyle.CYAN)
 	map_info_label = _label(map_info_panel, Vector2(16, 34), Vector2(312, 164), 14)
 	map_info_panel.visible = false
-	radar_panel = _panel(root, Vector2(1032, 438), Vector2(230, 220), Color(0.004, 0.025, 0.038, 0.94), UIStyle.CYAN_SOFT)
+	radar_panel = _panel(root, Vector2(1032, 442), Vector2(230, 216), Color(0.004, 0.025, 0.038, 0.56), UIStyle.CYAN_SOFT)
 	radar_title = _label(radar_panel, Vector2(12, 8), Vector2(206, 24), 11, UIStyle.TEXT_MUTED)
 	radar_title.text = "TACTICAL RADAR // ACTIVE"
 	radar_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -146,7 +146,7 @@ func _build_ui() -> void:
 	pause_title.text = "PAUSED / SETTINGS"
 	pause_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var pause_copy := _label(pause_panel, Vector2(40, 90), Vector2(420, 160), 18)
-	pause_copy.text = "Esc — resume\n\nMouse: independent camera + flak director\nCarrier hull remains on its helm heading\nMouse wheel: camera zoom\nVertical battlespace: ±1,400 m\n\nEnter — restart encounter"
+	pause_copy.text = "Esc — resume\n\nC: Pilot Mode — visible cursor + heading commands\nG: Gun Mode — captured flak director\nW/S: throttle  •  Ctrl: full stop  •  Shift: boost\nDouble-click empty space: full-cruise heading\nMiddle-drag: camera orbit  •  Wheel: zoom\n\nEnter — restart encounter"
 	pause_copy.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pause_panel.visible = false
 	pause_veil.visible = false
@@ -168,7 +168,7 @@ func _process(delta: float) -> void:
 	weapon_label.text = "FLAK CURTAIN  //  %s  •  %d ROUNDS\nMISSILE SALVO  //  %s  •  %d WEAPONS  •  %.1f km" % [flak_status, carrier.flak_burst_count, missile_status, carrier.missile_salvo_count, carrier.missile_weapon.range_m / 1000.0]
 	var graphics := get_node_or_null("/root/GraphicsQualityManager")
 	radar_title.text = "TACTICAL RADAR // %s" % (graphics.profile_label() if graphics != null else "ACTIVE")
-	mode_label.text = "TACTICAL MAP — LIVE" if tactical.enabled else ""
+	mode_label.text = "TACTICAL MAP — LIVE" if tactical.enabled else "%s MODE  //  THROTTLE %03d%%" % [carrier.control_mode_label(), carrier.throttle_percent()]
 	_update_target_presentation()
 	if tactical.enabled:
 		telemetry_panel.visible = false
@@ -184,11 +184,14 @@ func _process(delta: float) -> void:
 		telemetry_panel.visible = true
 		wing_panel.visible = true
 		weapon_panel.visible = true
-		crosshair_label.visible = false
+		crosshair_label.visible = carrier.is_gun_mode()
+		if crosshair_label.visible:
+			var director_position := carrier.flak_aim_screen_position if carrier.flak_aim_uses_pointer else get_viewport().get_visible_rect().size * 0.5
+			crosshair_label.position = director_position - crosshair_label.size * 0.5
 		objective_panel.visible = true
 		map_info_panel.visible = false
-		mode_panel.visible = false
-		controls_label.text = ("CURSOR AIM / CAMERA   " if OS.has_feature("web") else "MOUSE FREE-LOOK / FLAK AIM   ") + "WASD THRUST   SPACE/C VERTICAL   WHEEL ZOOM   SHIFT BOOST   CTRL BRAKE   LMB FLAK   RMB MISSILES   P PING   Z/X WINGS   V JUMP   TAB MAP   ESC PAUSE"
+		mode_panel.visible = true
+		controls_label.text = "C PILOT   G GUN   W/S THROTTLE   DOUBLE-CLICK EMPTY SPACE FULL CRUISE   LMB %s   RMB MISSILES   P PING   Z/X WINGS   V JUMP   TAB MAP" % ("FLAK" if carrier.is_gun_mode() else "HEADING")
 	if notification_time > 0.0:
 		notification_time -= delta
 		if notification_time <= 0.0:
@@ -344,9 +347,22 @@ func _panel(parent: Node, position_value: Vector2, size_value: Vector2, color: C
 	var panel := Panel.new()
 	panel.position = position_value
 	panel.size = size_value
-	panel.add_theme_stylebox_override("panel", UIStyle.panel_style(color, accent, 1, 5))
+	panel.add_theme_stylebox_override("panel", UIStyle.hud_panel_style(color, accent))
+	panel.set_meta("military_hud_frame", true)
 	parent.add_child(panel)
+	_add_frame_marks(panel, accent)
 	return panel
+
+func _add_frame_marks(panel: Panel, accent: Color) -> void:
+	var top_mark := Polygon2D.new()
+	top_mark.polygon = PackedVector2Array([Vector2(0, 0), Vector2(38, 0), Vector2(31, 3), Vector2(0, 3)])
+	top_mark.color = Color(accent.r, accent.g, accent.b, 0.9)
+	panel.add_child(top_mark)
+	var lower_mark := Polygon2D.new()
+	lower_mark.position = Vector2(panel.size.x - 38.0, panel.size.y - 3.0)
+	lower_mark.polygon = PackedVector2Array([Vector2(7, 0), Vector2(38, 0), Vector2(38, 3), Vector2(0, 3)])
+	lower_mark.color = Color(accent.r, accent.g, accent.b, 0.52)
+	panel.add_child(lower_mark)
 
 func _section_heading(parent: Control, text_value: String, accent: Color) -> void:
 	var heading := _label(parent, Vector2(14, 5), Vector2(parent.size.x - 28.0, 16), 10, Color(accent.r, accent.g, accent.b, 0.9))

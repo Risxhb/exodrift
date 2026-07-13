@@ -2,6 +2,14 @@ class_name PlayerCarrier
 extends CombatShip
 
 signal bay_state_changed(status: String)
+signal control_mode_changed(mode: ControlMode, label: String)
+signal throttle_changed(normalized_throttle: float)
+signal navigation_commanded(direction: Vector3, full_cruise: bool)
+
+enum ControlMode {
+	PILOT,
+	GUN,
+}
 
 var control_enabled: bool = true
 var mouse_sensitivity: float = 0.0022
@@ -34,9 +42,15 @@ var bay_assemblies: Array[Dictionary] = []
 var flak_sequence: int = 0
 var flak_burst_count: int = 7
 var missile_salvo_count: int = 4
+var control_mode: ControlMode = ControlMode.PILOT
+var throttle_setting: float = 0.0
+var throttle_change_rate: float = 0.55
+var commanded_heading: Vector3 = Vector3.FORWARD
+var has_commanded_heading: bool = false
 
 func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: StringName, color: Color) -> void:
 	super.configure(ship_definition, entity_id, faction, color)
+	commanded_heading = -global_transform.basis.z.normalized()
 	for weapon in definition.weapons:
 		if weapon.role == "flak":
 			flak_weapon = weapon
@@ -228,22 +242,33 @@ func _process_player_flight(delta: float) -> void:
 	if OS.has_feature("web"):
 		camera_orbit_yaw = wrapf(camera_orbit_yaw - web_cursor_steer.x * 1.15 * delta, -PI, PI)
 		camera_orbit_pitch = clampf(camera_orbit_pitch - web_cursor_steer.y * 0.85 * delta, -0.85, 0.65)
-	rotation = Vector3(look_pitch, look_yaw, 0.0)
-	var input := Vector3(
-		Input.get_axis("move_left", "move_right"),
-		Input.get_axis("move_down", "move_up"),
-		-Input.get_axis("move_backward", "move_forward")
-	)
-	if input.length_squared() > 1.0:
-		input = input.normalized()
-	var desired := global_transform.basis * input * definition.maximum_speed_mps
+	_process_throttle_input(delta)
+	if has_commanded_heading:
+		_steer_toward(commanded_heading, delta)
+	var desired := -global_transform.basis.z.normalized() * definition.maximum_speed_mps * throttle_setting
 	if Input.is_action_pressed("boost"):
 		desired *= 1.6
-	if input.length_squared() > 0.01:
-		velocity = velocity.move_toward(desired, definition.acceleration_mps2 * delta)
-	if Input.is_action_pressed("brake"):
-		velocity = velocity.move_toward(Vector3.ZERO, definition.acceleration_mps2 * 2.5 * delta)
+	velocity = velocity.move_toward(desired, definition.acceleration_mps2 * delta)
 	move_and_slide()
+
+func _process_throttle_input(delta: float) -> void:
+	var throttle_axis := Input.get_axis("decelerate", "accelerate")
+	if not is_zero_approx(throttle_axis):
+		set_throttle(throttle_setting + throttle_axis * throttle_change_rate * delta)
+	if Input.is_action_pressed("brake"):
+		set_throttle(0.0)
+
+func _steer_toward(direction_value: Vector3, delta: float) -> void:
+	var direction := direction_value.normalized()
+	if direction.length_squared() < 0.5:
+		return
+	var up := Vector3.UP
+	if absf(direction.dot(up)) > 0.985:
+		up = global_transform.basis.x.normalized()
+	var target_basis := Basis.looking_at(direction, up)
+	global_transform.basis = global_transform.basis.slerp(target_basis, clampf(definition.rotation_speed_radians * delta, 0.0, 1.0)).orthonormalized()
+	look_pitch = rotation.x
+	look_yaw = rotation.y
 
 func _process_autopilot(delta: float) -> void:
 	var distance := global_position.distance_to(autopilot_destination)
@@ -254,11 +279,83 @@ func _process_autopilot(delta: float) -> void:
 		return
 	var desired := global_position.direction_to(autopilot_destination) * definition.maximum_speed_mps
 	velocity = velocity.move_toward(desired, definition.acceleration_mps2 * delta)
-	if velocity.length_squared() > 1.0:
-		look_yaw = lerp_angle(look_yaw, atan2(-velocity.x, -velocity.z), clampf(definition.rotation_speed_radians * delta, 0.0, 1.0))
-		look_pitch = lerpf(look_pitch, -asin(clampf(velocity.normalized().y, -1.0, 1.0)), clampf(delta, 0.0, 1.0))
-		rotation = Vector3(look_pitch, look_yaw, 0.0)
+	if desired.length_squared() > 1.0:
+		_steer_toward(desired, delta)
 	move_and_slide()
+
+func set_control_mode(next_mode: ControlMode) -> void:
+	if control_mode == next_mode:
+		return
+	control_mode = next_mode
+	if is_gun_mode() and not OS.has_feature("web"):
+		flak_aim_uses_pointer = false
+		web_cursor_steer = Vector2.ZERO
+	control_mode_changed.emit(control_mode, control_mode_label())
+
+func set_pilot_mode() -> void:
+	set_control_mode(ControlMode.PILOT)
+
+func set_gun_mode() -> void:
+	set_control_mode(ControlMode.GUN)
+
+func is_pilot_mode() -> bool:
+	return control_mode == ControlMode.PILOT
+
+func is_gun_mode() -> bool:
+	return control_mode == ControlMode.GUN
+
+func control_mode_label() -> String:
+	return "PILOT" if is_pilot_mode() else "GUN"
+
+func set_throttle(value: float) -> void:
+	var next_throttle := clampf(value, 0.0, 1.0)
+	if is_equal_approx(next_throttle, throttle_setting):
+		return
+	throttle_setting = next_throttle
+	throttle_changed.emit(throttle_setting)
+
+func throttle_percent() -> int:
+	return int(round(throttle_setting * 100.0))
+
+func control_state() -> Dictionary:
+	return {
+		"mode": control_mode_label(),
+		"mode_id": control_mode,
+		"throttle": throttle_setting,
+		"throttle_percent": throttle_percent(),
+		"heading": commanded_heading,
+		"heading_commanded": has_commanded_heading,
+	}
+
+func command_heading(direction_value: Vector3, full_cruise: bool = false) -> bool:
+	if direction_value.length_squared() < 0.25:
+		return false
+	commanded_heading = direction_value.normalized()
+	has_commanded_heading = true
+	autopilot_active = false
+	if full_cruise:
+		set_throttle(1.0)
+	elif throttle_setting < 0.05:
+		set_throttle(0.35)
+	navigation_commanded.emit(commanded_heading, full_cruise)
+	return true
+
+func command_flight_from_screen(screen_position: Vector2, full_cruise: bool = false, only_empty_space: bool = true) -> bool:
+	if chase_camera == null or not chase_camera.current:
+		return false
+	var ray_origin := chase_camera.project_ray_origin(screen_position)
+	var ray_direction := chase_camera.project_ray_normal(screen_position).normalized()
+	if only_empty_space:
+		var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_direction * chase_camera.far)
+		query.exclude = [get_rid()]
+		query.collide_with_areas = false
+		query.collide_with_bodies = true
+		if not get_world_3d().direct_space_state.intersect_ray(query).is_empty():
+			return false
+	return command_heading(ray_direction, full_cruise)
+
+func fire_primary() -> bool:
+	return is_gun_mode() and fire_flak()
 
 func apply_mouse_look(relative_motion: Vector2) -> void:
 	if not control_enabled:

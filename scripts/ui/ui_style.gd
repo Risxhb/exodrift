@@ -22,6 +22,26 @@ static func panel_style(background: Color = PANEL_BACKGROUND, accent: Color = CY
 	style.content_margin_bottom = 6.0
 	return style
 
+static func hud_panel_style(background: Color = PANEL_BACKGROUND, accent: Color = CYAN_SOFT) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(background.r, background.g, background.b, minf(background.a, 0.78))
+	style.border_color = Color(accent.r, accent.g, accent.b, 0.66)
+	style.border_width_left = 2
+	style.border_width_top = 1
+	style.border_width_right = 0
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 0
+	style.corner_radius_top_right = 14
+	style.corner_radius_bottom_right = 0
+	style.corner_radius_bottom_left = 9
+	style.shadow_color = Color(0.0, 0.01, 0.018, 0.48)
+	style.shadow_size = 4
+	style.content_margin_left = 9.0
+	style.content_margin_right = 12.0
+	style.content_margin_top = 6.0
+	style.content_margin_bottom = 6.0
+	return style
+
 static func apply_label(label: Label, font_size: int, color: Color = TEXT_PRIMARY) -> void:
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", color)

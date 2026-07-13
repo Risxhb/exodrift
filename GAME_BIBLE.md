@@ -192,7 +192,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 
 ## 8. Milestones and acceptance gates
 
-**Implementation status (2026-07-12):** M1–M15 are implemented. Contract, campaign, integrated battle, encounter, onboarding, playtest-reporting, save/settings, ship-readability, audio/narrative, normal-performance, and sustained-combat stress tests pass. The M15 600-frame combat gate measures 144.9 FPS at 1920×1080 with p95 7.25 ms/p99 7.32 ms. The sustained all-wings/flak/missile/point-defense gate measures 144.9 FPS with p95 9.78 ms/p99 10.57 ms on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
+**Implementation status (2026-07-12):** M1–M16 are implemented. Contract, campaign, integrated battle, encounter, onboarding, playtest-reporting, save/settings, ship-readability, audio/narrative, helm/presentation, normal-performance, menu-performance, and sustained-combat stress tests pass. The M16 600-frame combat gate measures 144.9 FPS at 1920×1080 with p95 7.29 ms/p99 7.35 ms. The sustained all-wings/flak/missile/point-defense gate measures 144.9 FPS with p95 9.34 ms/p99 9.75 ms, and the animated menu measures 165.0 effective FPS on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
 
 ### M1 — Canonical bible and Godot foundation `[IMPLEMENTED]`
 
@@ -306,6 +306,16 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - Checkpoints use atomic temp writes, preserve a recoverable backup, fall back after corrupt primary data, autosave at campaign transitions, and confirm destructive New Operation choices. Independent audio buses and persistent keyboard rebinding complete the release settings surface.
 - A three-sector synthesized score layers combat pressure dynamically. Phase-aware radio stingers, faction-aware combat audio, and ten authored operational events replace the placeholder-audio/narrow-event-pool state.
 
+### M16 — Helm and presentation refit `[IMPLEMENTED]`
+
+- The title screen uses a compact bottom horizontal command row over a reframed seven-capital, twelve-fighter live engagement. Secondary panels remain centered and the browser build omits the desktop-only Quit action without leaving a gap.
+- `C` enters Pilot mode and `G` enters Gun mode. Pilot clicks set a heading, double-clicking empty space sets the camera-ray heading at full cruise, `W/S` adjust persistent throttle, `Ctrl` stops, and `Shift` boosts. Removed lateral/vertical strafe inputs are no longer read.
+- Gun mode preserves pointer-directed flak and identified-target missiles. Cursor capture/visibility transitions remain correct across desktop, Web, tactical command, and pause states.
+- The stretched bitmap panorama was rejected during visual QA. A resolution-independent procedural sky dome, vector nebula veils, tiered stars/dust, and sector palettes now provide crisp space at native resolution without a hard horizon seam.
+- The combat HUD uses compact asymmetric rails, clipped corners, a dedicated Pilot/Gun and throttle readout, and a Web-safe gun cursor while preserving objective, telemetry, air-group, fire-control, target, radar, notification, and command information.
+- Navy, Acheron, Vesper, and Crucible ships use dedicated surface atlases, material response, faction wear, recognition lighting, and additional modeled hull features within capital/fighter node budgets. Current build captures and the M16 milestone are reflected on the public landing page.
+- Dedicated helm-control, main-menu-layout, ship-surface, and space/HUD-readability suites pass. The final normal/stress/menu gates measure 144.9 FPS (p95 7.29 ms/p99 7.35 ms), 144.9 FPS (p95 9.34 ms/p99 9.75 ms), and 165.0 effective FPS respectively on the development RTX 3060.
+
 ## 9. Test matrix
 
 Automated tests cover damage-layer transitions, missile-lock eligibility, FIFO order queues, sensor confidence decay and track drift, command-link transitions, and every valid bay-state transition.
@@ -321,6 +331,8 @@ M13 tests cover escort, carrier-yard, and flight-group supplier sector gates; ex
 M14 tests cover ship visual profiles, immediate quality switching, backdrop tier visibility, VFX budgets, original texture resources, shared projectile mesh/material identity, combat-registry population, radar animation, normal p95/p99 frame time, sustained legal maximum fire, all deployed wings, hostile missile pressure, node stability, effect drops, and clean ObjectDB shutdown.
 
 M15 tests cover deterministic onboarding progression and minimum card dwell, active-ping timing, nine deterministic layout variants, all bespoke boss phases, first-time-player telemetry/debrief output, atomic-save recovery, overwrite confirmation, input rebinding, independent audio buses, named-ship/fighter silhouettes, damage presentation, faction VFX, adaptive sector audio, ten operational events, and campaign/integration compatibility.
+
+M16 tests cover Pilot/Gun mode transitions, click and double-click navigation, persistent throttle and stop/boost behavior, removed strafe bindings, cursor state restoration, the compact adaptive bottom menu, live engagement composition, faction surface atlases/material response/modeling budgets, procedural-sky construction, nebula/star readability, asymmetric HUD styling, and control-strip copy.
 
 Presentation tests cover menu-first startup, continuous background battle motion, accessibility settings, title-to-campaign fades, manual-save Continue, and return-to-title state preservation.
 
@@ -375,3 +387,4 @@ Each `/goal` owns exactly one milestone. Before work begins, read this bible and
 - **2026-07-12:** Completed M14 with an original modular/textured carrier combat presentation, role/faction ship profiles, shared and pooled GL-compatible VFX, saved live quality profiles, a maintained combat registry, 10 Hz radar contact caching, tiered parallax space, direct-render captures, and normal/stress performance gates. Carrier rules, bay/jump safety, sensors, and damage remain unchanged.
 - **2026-07-12:** Began M15 with a six-step first-operation orientation, three sector-specific enemy fleets and battlefield palettes, original navy/raider/alien hull plating, and expanded capital-ship silhouettes with readable functional detail. Contract, campaign, integration, and dedicated onboarding suites pass; bespoke bosses and external playtest validation remain open.
 - **2026-07-12:** Completed M15 implementation with nine deterministic sector layouts, bespoke Acheron/Vesper/Crucible command phases, structured playtest telemetry and debriefing, role-readable ship/fighter geometry and damage VFX, atomic backup-recoverable autosaves, overwrite confirmation, remappable controls, independent audio buses, an adaptive procedural score, and ten authored operational events. Nine automated suites, menu/normal/stress performance gates, and both release exports pass; external first-time-player sessions now drive post-M15 balance evidence.
+- **2026-07-12:** Completed M16 with a compact bottom title command row, a reframed fleet engagement, intent-driven Pilot/Gun modes, double-click vector flight, persistent throttle, an asymmetric military HUD, faction-specific surface refits, and updated landing-page media. Replaced the blurry panorama with a crisp procedural sky after direct-render visual QA. All thirteen regression suites, normal/stress/menu performance gates, both release exports, and the packaged-build smoke check pass.

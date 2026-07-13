@@ -233,10 +233,10 @@ func _test_application_flow() -> void:
 		await process_frame
 	_assert_true(is_instance_valid(app.main_menu) and app.run_state == null, "application starts on the presentation shell before creating a run")
 	_assert_true(is_instance_valid(app.main_menu.world_root) and app.main_menu.ships.size() >= 8 and app.main_menu.tracers.size() >= 12, "main menu contains a continuously simulated fleet battle")
-	var menu_ship_position: Vector3 = app.main_menu.ships[4].node.position
+	var menu_ship_position: Vector3 = app.main_menu.ships[8].node.position
 	for _frame in 6:
 		await process_frame
-	_assert_true(app.main_menu.ships[4].node.position.distance_to(menu_ship_position) > 1.0, "background fighters continue moving behind the centered menu")
+	_assert_true(app.main_menu.ships[8].node.position.distance_to(menu_ship_position) > 1.0, "background fighters continue moving above the compact bottom command row")
 	app.main_menu._show_settings()
 	app.main_menu.flash_toggle.set_pressed_no_signal(true)
 	app.main_menu._on_flash_toggled(true)
