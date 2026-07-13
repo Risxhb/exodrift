@@ -487,13 +487,13 @@ func spawn_projectile(weapon: WeaponDefinition, start: Vector3, fire_direction: 
 		weapon.range_m * 1.15,
 		tracked_target,
 		2.5 if weapon.tracks_target else 0.0,
-		weapon.role == "missile",
+		weapon.role in ["missile", "nuclear"],
 		weapon.role,
 		definition.ship_id
 	)
 	var vfx := _combat_vfx()
 	if vfx != null:
-		vfx.spawn_burst("muzzle", start, 0.72 if weapon.role == "missile" else 0.42)
+		vfx.spawn_burst("muzzle", start, 1.25 if weapon.role == "nuclear" else (0.72 if weapon.role == "missile" else 0.42))
 	return projectile
 
 func receive_damage(amount: float, source_entity_id: StringName = &"") -> void:
@@ -525,7 +525,7 @@ func _on_destroyed() -> void:
 	velocity = Vector3.ZERO
 	var vfx := _combat_vfx()
 	if vfx != null:
-		vfx.spawn_burst("hull", global_position, 2.2)
+		vfx.spawn_ship_explosion(global_position, 2.2)
 	ship_destroyed.emit(stable_entity_id)
 	var tween := create_tween()
 	tween.tween_property(self, "scale", Vector3.ZERO, 0.45)

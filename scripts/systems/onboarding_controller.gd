@@ -139,11 +139,11 @@ func _step_instruction(step: Step) -> String:
 		Step.WELCOME:
 			return "Your carrier is the fleet's command node and its most important hull. Opening the tactical map never pauses combat."
 		Step.HELM:
-			return "Press C for Pilot Mode. Use W/S to raise or lower throttle, or double-click empty space to set a full-cruise heading."
+			return "Use W/S to set the carrier's persistent throttle. Double-click empty space to order a full-cruise heading; middle-drag orbits the command camera."
 		Step.SENSOR:
 			return "Contacts begin uncertain. Press P for an active ping: it identifies nearby targets, but broadcasts your position."
 		Step.FLIGHT:
-			return "Launch a wing with Z or X. Craft leave through their assigned side bay and must physically recover to rearm."
+			return "Launch with Z or X. Re-press during servicing to queue an automatic redeploy after the craft recover and rearm."
 		Step.COMMAND:
 			return "Press Tab for the live tactical map. Combat continues while you inspect contacts and command the fleet."
 		Step.ORDERS:

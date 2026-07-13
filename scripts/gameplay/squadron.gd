@@ -22,6 +22,7 @@ var docking_count: int = 0
 var cycle_timer: float = 0.0
 var formation_spacing_m: float = 55.0
 var is_hostile_air_group: bool = false
+var redeploy_requested: bool = false
 
 func configure(
 	squadron_definition: SquadronDefinition,
@@ -92,6 +93,18 @@ func request_recall() -> bool:
 	status_changed.emit(stable_entity_id, "%s returning to %s bay" % [display_name, String(bay_side)])
 	return true
 
+func request_redeploy() -> bool:
+	if home_carrier == null:
+		return false
+	if operation.state == BayOperation.State.READY:
+		return request_launch()
+	if operation.state != BayOperation.State.SERVICING:
+		status_changed.emit(stable_entity_id, "%s redeploy rejected: flight deck is %s" % [display_name, operation.label()])
+		return false
+	redeploy_requested = true
+	status_changed.emit(stable_entity_id, "%s redeploy queued after service" % display_name)
+	return true
+
 func prepare_for_jump() -> bool:
 	match operation.state:
 		BayOperation.State.QUEUED, BayOperation.State.LAUNCHING, BayOperation.State.DEPLOYED:
@@ -133,6 +146,9 @@ func _process(delta: float) -> void:
 						craft.service(definition.ammunition_per_craft, definition.endurance_seconds)
 				operation.transition(BayOperation.State.READY)
 				status_changed.emit(stable_entity_id, "%s ready to relaunch" % display_name)
+				if redeploy_requested:
+					redeploy_requested = false
+					request_launch()
 
 func _process_launch_cycle() -> void:
 	if cycle_timer < definition.launch_interval_seconds:

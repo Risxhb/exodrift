@@ -3,14 +3,16 @@ extends RefCounted
 
 const ACTION_LABELS := {
 	"accelerate": "Increase Throttle", "decelerate": "Decrease Throttle", "boost": "Boost", "brake": "Full Stop",
-	"pilot_mode": "Pilot Mode", "gun_mode": "Gun Mode",
+	"flak_screen": "Place Flak Screen", "missile_salvo": "Missile Salvo", "nuclear_torpedo": "Nuclear Torpedo",
+	"flak_range_decrease": "Flak Range Down", "flak_range_increase": "Flak Range Up",
 	"toggle_tactical": "Tactical Map", "sensor_ping": "Active Ping", "interceptor_wing": "Interceptor Wing",
 	"scout_wing": "Scout Wing", "jump_prep": "Jump Preparation"
 }
 
 const DEFAULT_KEYS := {
 	"accelerate": KEY_W, "decelerate": KEY_S, "boost": KEY_SHIFT, "brake": KEY_CTRL,
-	"pilot_mode": KEY_C, "gun_mode": KEY_G,
+	"flak_screen": KEY_1, "missile_salvo": KEY_2, "nuclear_torpedo": KEY_3,
+	"flak_range_decrease": KEY_BRACKETLEFT, "flak_range_increase": KEY_BRACKETRIGHT,
 	"toggle_tactical": KEY_TAB, "sensor_ping": KEY_P, "interceptor_wing": KEY_Z,
 	"scout_wing": KEY_X, "jump_prep": KEY_V
 }

@@ -89,12 +89,6 @@ func _process(delta: float) -> void:
 	elapsed_seconds += delta
 	if is_instance_valid(escort) and is_instance_valid(carrier):
 		escort.command_link.update_for_distance(escort.global_position.distance_to(carrier.global_position), carrier.definition.command_range_m)
-	if not tactical.enabled and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-		if carrier.fire_primary():
-			var recorder := _playtest_recorder()
-			if recorder != null:
-				recorder.increment(&"flak_barrages")
-			audio.play_tone(180.0, 0.045, -28.0)
 	_update_target_lock()
 	_process_objective(delta)
 	_process_escape_pods()
@@ -108,11 +102,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			_restart_encounter()
 			return
 		if event.keycode == KEY_ESCAPE:
+			if is_instance_valid(carrier) and carrier.cancel_flak_placement():
+				hud.notify("FLAK PLACEMENT CANCELLED — previous screen retained")
+				return
 			_toggle_pause()
 			return
 	if battle_finished or get_tree().paused:
 		return
 	if event.is_action_pressed("toggle_tactical"):
+		if carrier.flak_placement_active:
+			carrier.cancel_flak_placement()
 		tactical.set_enabled(not tactical.enabled)
 		_apply_carrier_mouse_mode()
 		if tactical.enabled:
@@ -122,27 +121,47 @@ func _unhandled_input(event: InputEvent) -> void:
 		hud.notify("Tactical map is live; carrier maintains helm orders." if tactical.enabled else "Direct flight control restored.")
 		audio.play_tone(620.0 if tactical.enabled else 420.0, 0.1)
 		return
-	if event.is_action_pressed("pilot_mode"):
-		carrier.set_pilot_mode()
-		return
-	if event.is_action_pressed("gun_mode"):
-		carrier.set_gun_mode()
-		return
 	if tactical.handle_input(event):
+		return
+	if event.is_action_pressed("flak_screen"):
+		if event is InputEventKey and event.shift_pressed:
+			carrier.clear_flak_screen()
+			hud.notify("FLAK SCREEN CEASE FIRE")
+		elif carrier.flak_placement_active:
+			carrier.cancel_flak_placement()
+			hud.notify("FLAK PLACEMENT CANCELLED — previous screen retained")
+		else:
+			carrier.begin_flak_placement(get_viewport().get_mouse_position())
+			hud.notify("FLAK SCREEN PLACEMENT — move pointer, [ / ] range, LMB confirm, RMB cancel")
+		return
+	if event.is_action_pressed("flak_range_decrease") or event.is_action_pressed("flak_range_increase"):
+		var steps := -1 if event.is_action_pressed("flak_range_decrease") else 1
+		var range_m := carrier.adjust_flak_screen_range(steps)
+		hud.notify("FLAK FUSE PLANE %.1f km" % (range_m / 1000.0))
+		return
+	if event.is_action_pressed("missile_salvo"):
+		_fire_missile_salvo()
+		return
+	if event.is_action_pressed("nuclear_torpedo"):
+		_fire_nuclear_torpedo()
 		return
 	if event is InputEventMouseMotion:
 		if carrier.camera_orbiting:
 			carrier.apply_camera_orbit(event.relative)
-		elif OS.has_feature("web") or carrier.is_pilot_mode():
-			carrier.set_web_cursor_steering(event.position, get_viewport().get_visible_rect().size)
 		else:
-			carrier.apply_mouse_look(event.relative)
+			carrier.set_web_cursor_steering(event.position, get_viewport().get_visible_rect().size)
 	elif event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed and carrier.is_pilot_mode():
-			if carrier.command_flight_from_screen(event.position, event.double_click, true):
-				hud.notify("FULL CRUISE VECTOR SET" if event.double_click else "HEADING VECTOR SET")
-			else:
-				hud.notify("HELM VECTOR BLOCKED — select empty space")
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			if carrier.flak_placement_active:
+				if carrier.confirm_flak_placement():
+					hud.notify("FLAK SCREEN LOCKED — batteries sustaining at %.1f km" % (carrier.flak_screen_range_m / 1000.0))
+				else:
+					hud.notify("INVALID FLAK SCREEN — keep the fuse plane inside the battlespace")
+			elif event.double_click:
+				if carrier.command_flight_from_screen(event.position, true, true):
+					hud.notify("FULL CRUISE VECTOR SET")
+				else:
+					hud.notify("HELM VECTOR BLOCKED — select empty space")
 		elif event.button_index == MOUSE_BUTTON_MIDDLE:
 			carrier.set_camera_orbiting(event.pressed)
 			if event.pressed:
@@ -156,14 +175,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			carrier.adjust_chase_zoom(-1.0)
 			hud.notify("Combat camera zoom %d%%" % carrier.chase_zoom_percent())
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			if target_lock == null:
-				hud.notify("Missile rejected: no identified target in lock cone")
-			elif carrier.fire_missile(target_lock):
-				var recorder := _playtest_recorder()
-				if recorder != null:
-					recorder.increment(&"missile_salvos")
-				hud.notify("LONG-RANGE SALVO AWAY — %d missiles tracking %s" % [carrier.missile_salvo_count, target_lock.display_name])
-				audio.play_tone(110.0, 0.3, -14.0)
+			if carrier.flak_placement_active:
+				carrier.cancel_flak_placement()
+				hud.notify("FLAK PLACEMENT CANCELLED — previous screen retained")
+			else:
+				_fire_missile_salvo()
 	elif event.is_action_pressed("sensor_ping"):
 		sensors.emit_active_ping()
 		var recorder := _playtest_recorder()
@@ -182,6 +198,34 @@ func _configure_input_map() -> void:
 	var config := ConfigFile.new()
 	config.load("user://exodrift_settings.cfg")
 	ExodriftInputSettings.load_bindings(config)
+
+func _fire_missile_salvo() -> bool:
+	if target_lock == null:
+		hud.notify("MISSILE REJECTED — no identified target in lock cone")
+		return false
+	if not carrier.fire_missile(target_lock):
+		hud.notify("MISSILE REJECTED — target outside envelope or cells reloading")
+		return false
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		recorder.increment(&"missile_salvos")
+	hud.notify("MISSILE SALVO AWAY — %d weapons tracking %s" % [carrier.missile_salvo_count, target_lock.display_name])
+	audio.play_tone(110.0, 0.3, -14.0)
+	return true
+
+func _fire_nuclear_torpedo() -> bool:
+	if not carrier.nuclear_available:
+		hud.notify("NUCLEAR TORPEDO EXPENDED — one strategic warhead per battle")
+		return false
+	if target_lock == null:
+		hud.notify("NUCLEAR LAUNCH REJECTED — identified target lock required")
+		return false
+	if not carrier.fire_nuclear(target_lock):
+		hud.notify("NUCLEAR LAUNCH REJECTED — target outside torpedo envelope")
+		return false
+	hud.notify("NUCLEAR TORPEDO AWAY — arms after %.1f km; %.0f m friendly-fire radius" % [carrier.nuclear_arming_distance_m / 1000.0, carrier.nuclear_blast_radius_m])
+	audio.play_tone(72.0, 0.7, -8.0)
+	return true
 
 func _sector_encounter_profile() -> Dictionary:
 	match clampi(campaign_sector_index, 0, 2):
@@ -638,10 +682,6 @@ func _deploy_initial_forces() -> void:
 
 func _connect_feedback() -> void:
 	carrier.ship_destroyed.connect(_on_ship_destroyed)
-	carrier.control_mode_changed.connect(func(_mode: PlayerCarrier.ControlMode, label: String) -> void:
-		_apply_carrier_mouse_mode()
-		hud.notify("%s MODE ACTIVE" % label)
-	)
 	carrier.navigation_commanded.connect(func(_direction: Vector3, full_cruise: bool) -> void:
 		if full_cruise:
 			audio.play_tone(540.0, 0.08, -18.0)
@@ -694,6 +734,9 @@ func _toggle_wing(wing: SidebaySquadron) -> void:
 		var recorder := _playtest_recorder()
 		if recorder != null:
 			recorder.increment(&"wing_recalls")
+	elif wing.operation.state == BayOperation.State.SERVICING:
+		if wing.request_redeploy():
+			hud.notify("%s REDEPLOY QUEUED — launch follows servicing" % wing.display_name.to_upper())
 	else:
 		hud.notify("%s is %s" % [wing.display_name, wing.operation.label()])
 
@@ -1013,10 +1056,7 @@ func _toggle_pause() -> void:
 	_apply_carrier_mouse_mode()
 
 func _apply_carrier_mouse_mode() -> void:
-	if get_tree().paused or (is_instance_valid(tactical) and tactical.enabled) or OS.has_feature("web") or (is_instance_valid(carrier) and carrier.is_pilot_mode()):
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	else:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _restart_encounter() -> void:
 	get_tree().paused = false
@@ -1150,9 +1190,9 @@ func _carrier_definition() -> ShipDefinition:
 	definition.display_name = str(frame.name)
 	definition.role = "carrier"
 	definition.dimensions_m = Vector3(float(frame.width), float(frame.height), float(frame.length))
-	definition.acceleration_mps2 = 34.0 * float(frame.acceleration)
+	definition.acceleration_mps2 = 14.0 * float(frame.acceleration)
 	definition.maximum_speed_mps = 260.0 * float(frame.speed)
-	definition.rotation_speed_radians = 0.75 * float(frame.rotation)
+	definition.rotation_speed_radians = 0.3 * float(frame.rotation)
 	definition.signature = 1.5 * float(frame.signature)
 	definition.passive_sensor_range_m = 8000.0 * float(frame.sensors)
 	definition.active_sensor_range_m = 12000.0 * float(frame.sensors)
@@ -1172,7 +1212,11 @@ func _carrier_definition() -> ShipDefinition:
 	definition.active_sensor_range_m *= 1.0 + sensor_skill * 0.03
 	definition.command_range_m *= 1.0 + command_skill * 0.03
 	definition.damage_layers = _damage_layers(600.0 * shield_multiplier * float(frame.shields), 700.0 * armor_multiplier * float(frame.armor), 950.0 * hull_multiplier * float(frame.hull), 12.0 * float(frame.shield_regen), 0.28 * float(frame.armor_mitigation))
-	definition.weapons = [_weapon(&"carrier_flak", "Flak Barrage", "flak", 2200.0, 0.18, 12.0, 1900.0, false, false, true), _weapon(&"carrier_missile", "Long-Range Strike Missile", "missile", 8500.0, 6.5, 62.0, 720.0, true, true, false)]
+	definition.weapons = [
+		_weapon(&"carrier_flak", "Directed Flak Screen", "flak", 2600.0, 0.24, 12.0, 1900.0, false, false, true),
+		_weapon(&"carrier_missile", "Long-Range Strike Missile", "missile", 8500.0, 6.5, 62.0, 720.0, true, true, false),
+		_weapon(&"carrier_nuclear", "Armed Nuclear Torpedo", "nuclear", 10000.0, 999.0, 520.0, 520.0, true, true, false),
+	]
 	for weapon in definition.weapons:
 		weapon.damage *= (1.0 + gunnery_skill * 0.025) * float(frame.weapon_damage)
 	if _installed_module("weapon") == &"siege_missile_cell":

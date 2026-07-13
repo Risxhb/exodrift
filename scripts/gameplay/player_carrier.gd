@@ -2,14 +2,9 @@ class_name PlayerCarrier
 extends CombatShip
 
 signal bay_state_changed(status: String)
-signal control_mode_changed(mode: ControlMode, label: String)
 signal throttle_changed(normalized_throttle: float)
 signal navigation_commanded(direction: Vector3, full_cruise: bool)
-
-enum ControlMode {
-	PILOT,
-	GUN,
-}
+signal flak_screen_changed(active: bool, range_m: float)
 
 var control_enabled: bool = true
 var mouse_sensitivity: float = 0.0022
@@ -18,6 +13,7 @@ var look_pitch: float = -0.08
 var aim_direction: Vector3 = Vector3.FORWARD
 var flak_weapon: WeaponDefinition
 var missile_weapon: WeaponDefinition
+var nuclear_weapon: WeaponDefinition
 var flak_cooldown: float = 0.0
 var missile_cooldown: float = 0.0
 var point_defense_cooldown: float = 0.0
@@ -42,11 +38,33 @@ var bay_assemblies: Array[Dictionary] = []
 var flak_sequence: int = 0
 var flak_burst_count: int = 7
 var missile_salvo_count: int = 4
-var control_mode: ControlMode = ControlMode.PILOT
 var throttle_setting: float = 0.0
 var throttle_change_rate: float = 0.55
 var commanded_heading: Vector3 = Vector3.FORWARD
 var has_commanded_heading: bool = false
+var flak_screen_active: bool = false
+var flak_placement_active: bool = false
+var flak_placement_valid: bool = false
+var flak_screen_range_m: float = 1600.0
+var flak_screen_min_range_m: float = 800.0
+var flak_screen_max_range_m: float = 2400.0
+var flak_screen_range_step_m: float = 200.0
+var flak_airburst_radius_m: float = 150.0
+var flak_screen_local_offset: Vector3 = Vector3(0.0, 0.0, -1600.0)
+var flak_preview_local_offset: Vector3 = Vector3(0.0, 0.0, -1600.0)
+var flak_screen_indicator: Node3D
+var flak_screen_ring: MeshInstance3D
+var flak_screen_label: Label3D
+var flak_indicator_preview_material: StandardMaterial3D
+var flak_indicator_confirmed_material: StandardMaterial3D
+var flak_indicator_invalid_material: StandardMaterial3D
+var flak_camera_blend: float = 0.0
+var nuclear_available: bool = true
+var nuclear_arming_distance_m: float = 1200.0
+var nuclear_blast_radius_m: float = 650.0
+var engine_trails: Array[MeshInstance3D] = []
+var pending_flak_shots: Array[Dictionary] = []
+var flak_round_interval_seconds: float = 0.035
 
 func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: StringName, color: Color) -> void:
 	super.configure(ship_definition, entity_id, faction, color)
@@ -56,6 +74,8 @@ func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: 
 			flak_weapon = weapon
 		elif weapon.role == "missile":
 			missile_weapon = weapon
+		elif weapon.role == "nuclear":
+			nuclear_weapon = weapon
 
 func _build_visual() -> void:
 	var dimensions := definition.dimensions_m
@@ -96,6 +116,7 @@ func _build_visual() -> void:
 	chase_camera.near = 1.0
 	chase_camera.far = 30000.0
 	add_child(chase_camera)
+	_build_flak_screen_indicator()
 
 func _add_hull_block(position_value: Vector3, size_value: Vector3, color: Color, node_name: String = "HullModule") -> MeshInstance3D:
 	var block := MeshInstance3D.new()
@@ -154,6 +175,56 @@ func _add_engine_banks(dimensions: Vector3) -> void:
 			engine.position = Vector3(side * 13.0, height, dimensions.z * 0.575)
 			engine.material_override = _make_material(Color(0.035, 0.34, 0.68), 2.15)
 			add_child(engine)
+			var trail := MeshInstance3D.new()
+			trail.name = "CarrierEngineTrail"
+			var trail_mesh := PrismMesh.new()
+			trail_mesh.size = Vector3(1.7, 1.7, 22.0)
+			trail.mesh = trail_mesh
+			trail.position = Vector3(side * 13.0, height, dimensions.z * 0.73)
+			trail.rotation.y = PI
+			trail.material_override = _make_material(Color(0.05, 0.5, 1.0, 0.28), 2.9)
+			trail.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(trail)
+			engine_trails.append(trail)
+
+func _build_flak_screen_indicator() -> void:
+	flak_screen_indicator = Node3D.new()
+	flak_screen_indicator.name = "FlakScreenIndicator"
+	flak_screen_indicator.top_level = true
+	flak_screen_indicator.visible = false
+	add_child(flak_screen_indicator)
+	flak_screen_ring = MeshInstance3D.new()
+	flak_screen_ring.name = "AirburstRadius"
+	var ring_mesh := TorusMesh.new()
+	ring_mesh.inner_radius = flak_airburst_radius_m - 4.0
+	ring_mesh.outer_radius = flak_airburst_radius_m
+	ring_mesh.rings = 32
+	ring_mesh.ring_segments = 8
+	flak_screen_ring.mesh = ring_mesh
+	flak_screen_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	flak_screen_indicator.add_child(flak_screen_ring)
+	flak_indicator_preview_material = _indicator_material(Color(0.95, 0.56, 0.12, 0.78))
+	flak_indicator_confirmed_material = _indicator_material(Color(0.12, 0.82, 1.0, 0.55))
+	flak_indicator_invalid_material = _indicator_material(Color(1.0, 0.15, 0.08, 0.86))
+	flak_screen_label = Label3D.new()
+	flak_screen_label.name = "FuseReadout"
+	flak_screen_label.position = Vector3(0.0, 22.0, 0.0)
+	flak_screen_label.font_size = 22
+	flak_screen_label.outline_size = 8
+	flak_screen_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	flak_screen_label.no_depth_test = true
+	flak_screen_indicator.add_child(flak_screen_label)
+	_update_flak_indicator(false)
+
+func _indicator_material(color: Color) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color = color
+	material.emission_enabled = true
+	material.emission = Color(color.r, color.g, color.b)
+	material.emission_energy_multiplier = 2.2
+	return material
 
 func _add_missile_cells() -> void:
 	for side in [-1.0, 1.0]:
@@ -227,6 +298,7 @@ func _physics_process(delta: float) -> void:
 	flak_cooldown = maxf(0.0, flak_cooldown - delta)
 	missile_cooldown = maxf(0.0, missile_cooldown - delta)
 	point_defense_cooldown = maxf(0.0, point_defense_cooldown - delta)
+	_process_flak_salvo_queue(delta)
 	_update_bay_retraction(delta)
 	if control_enabled:
 		_process_player_flight(delta)
@@ -236,12 +308,11 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 	_enforce_battlespace_bounds()
 	_update_camera()
+	_update_engine_trails()
+	_process_flak_screen()
 	_process_point_defense()
 
 func _process_player_flight(delta: float) -> void:
-	if OS.has_feature("web"):
-		camera_orbit_yaw = wrapf(camera_orbit_yaw - web_cursor_steer.x * 1.15 * delta, -PI, PI)
-		camera_orbit_pitch = clampf(camera_orbit_pitch - web_cursor_steer.y * 0.85 * delta, -0.85, 0.65)
 	_process_throttle_input(delta)
 	if has_commanded_heading:
 		_steer_toward(commanded_heading, delta)
@@ -266,7 +337,9 @@ func _steer_toward(direction_value: Vector3, delta: float) -> void:
 	if absf(direction.dot(up)) > 0.985:
 		up = global_transform.basis.x.normalized()
 	var target_basis := Basis.looking_at(direction, up)
-	global_transform.basis = global_transform.basis.slerp(target_basis, clampf(definition.rotation_speed_radians * delta, 0.0, 1.0)).orthonormalized()
+	var angular_error := global_transform.basis.get_rotation_quaternion().angle_to(target_basis.get_rotation_quaternion())
+	var turn_alpha := clampf(definition.rotation_speed_radians * delta / maxf(0.12, angular_error), 0.0, 0.18)
+	global_transform.basis = global_transform.basis.slerp(target_basis, turn_alpha).orthonormalized()
 	look_pitch = rotation.x
 	look_yaw = rotation.y
 
@@ -283,30 +356,6 @@ func _process_autopilot(delta: float) -> void:
 		_steer_toward(desired, delta)
 	move_and_slide()
 
-func set_control_mode(next_mode: ControlMode) -> void:
-	if control_mode == next_mode:
-		return
-	control_mode = next_mode
-	if is_gun_mode() and not OS.has_feature("web"):
-		flak_aim_uses_pointer = false
-		web_cursor_steer = Vector2.ZERO
-	control_mode_changed.emit(control_mode, control_mode_label())
-
-func set_pilot_mode() -> void:
-	set_control_mode(ControlMode.PILOT)
-
-func set_gun_mode() -> void:
-	set_control_mode(ControlMode.GUN)
-
-func is_pilot_mode() -> bool:
-	return control_mode == ControlMode.PILOT
-
-func is_gun_mode() -> bool:
-	return control_mode == ControlMode.GUN
-
-func control_mode_label() -> String:
-	return "PILOT" if is_pilot_mode() else "GUN"
-
 func set_throttle(value: float) -> void:
 	var next_throttle := clampf(value, 0.0, 1.0)
 	if is_equal_approx(next_throttle, throttle_setting):
@@ -319,8 +368,6 @@ func throttle_percent() -> int:
 
 func control_state() -> Dictionary:
 	return {
-		"mode": control_mode_label(),
-		"mode_id": control_mode,
 		"throttle": throttle_setting,
 		"throttle_percent": throttle_percent(),
 		"heading": commanded_heading,
@@ -354,9 +401,6 @@ func command_flight_from_screen(screen_position: Vector2, full_cruise: bool = fa
 			return false
 	return command_heading(ray_direction, full_cruise)
 
-func fire_primary() -> bool:
-	return is_gun_mode() and fire_flak()
-
 func apply_mouse_look(relative_motion: Vector2) -> void:
 	if not control_enabled:
 		return
@@ -380,11 +424,9 @@ func set_web_cursor_steering(cursor_position: Vector2, viewport_size: Vector2) -
 		return
 	flak_aim_screen_position = cursor_position
 	flak_aim_uses_pointer = true
-	var normalized := Vector2(cursor_position.x / viewport_size.x, cursor_position.y / viewport_size.y) * 2.0 - Vector2.ONE
-	var deadzone := 0.12
-	web_cursor_steer.x = signf(normalized.x) * maxf(0.0, absf(normalized.x) - deadzone) / (1.0 - deadzone)
-	web_cursor_steer.y = signf(normalized.y) * maxf(0.0, absf(normalized.y) - deadzone) / (1.0 - deadzone)
-	web_cursor_steer = web_cursor_steer.limit_length(1.0)
+	web_cursor_steer = Vector2.ZERO
+	if flak_placement_active:
+		update_flak_placement_from_screen(cursor_position)
 
 func _update_camera() -> void:
 	if chase_camera == null:
@@ -394,8 +436,12 @@ func _update_camera() -> void:
 	var camera_offset := Vector3(0.0, height, chase_distance_m)
 	camera_offset = camera_offset.rotated(Vector3.RIGHT, camera_orbit_pitch)
 	camera_offset = camera_offset.rotated(Vector3.UP, camera_orbit_yaw)
-	chase_camera.position = camera_offset
-	chase_camera.look_at(global_position + global_transform.basis.y * 3.0, Vector3.UP)
+	flak_camera_blend = lerpf(flak_camera_blend, 1.0 if flak_placement_active else 0.0, 0.18)
+	var placement_camera_offset := flak_preview_local_offset * 0.72 + Vector3(0.0, 52.0, 180.0)
+	chase_camera.position = camera_offset.lerp(placement_camera_offset, flak_camera_blend)
+	var carrier_focus := global_position + global_transform.basis.y * 3.0
+	var placement_focus := global_transform * flak_preview_local_offset
+	chase_camera.look_at(carrier_focus.lerp(placement_focus, flak_camera_blend), Vector3.UP)
 	var viewport_size := get_viewport().get_visible_rect().size
 	var director_position := flak_aim_screen_position if flak_aim_uses_pointer else viewport_size * 0.5
 	director_position.x = clampf(director_position.x, 0.0, viewport_size.x)
@@ -418,7 +464,9 @@ func chase_zoom_percent() -> int:
 func fire_flak() -> bool:
 	if flak_weapon == null or flak_cooldown > 0.0:
 		return false
-	_spawn_flak_barrage(aim_direction, flak_burst_count, 0.52)
+	var target_point := flak_screen_world_position() if flak_screen_active else global_position + aim_direction * flak_screen_range_m
+	var shot_distance := global_position.distance_to(target_point)
+	_queue_flak_barrage(global_position.direction_to(target_point), flak_burst_count, 0.52, shot_distance, flak_airburst_radius_m)
 	flak_cooldown = flak_weapon.cooldown_seconds
 	return true
 
@@ -437,24 +485,155 @@ func fire_missile(target_ship: CombatShip) -> bool:
 	missile_cooldown = missile_weapon.cooldown_seconds
 	return true
 
-func _spawn_flak_barrage(direction_value: Vector3, count: int, damage_scale: float) -> void:
+func fire_nuclear(target_ship: CombatShip) -> bool:
+	if nuclear_weapon == null or not nuclear_available or not is_instance_valid(target_ship):
+		return false
+	if global_position.distance_to(target_ship.global_position) > nuclear_weapon.range_m:
+		return false
+	var start := global_transform * Vector3(0.0, 5.0, -42.0)
+	var torpedo := spawn_projectile(nuclear_weapon, start, start.direction_to(target_ship.global_position), target_ship)
+	torpedo.configure_warhead(nuclear_arming_distance_m, nuclear_blast_radius_m, true, true)
+	nuclear_available = false
+	return true
+
+func _spawn_flak_barrage(direction_value: Vector3, count: int, damage_scale: float, airburst_distance_m: float = 0.0, airburst_radius_m: float = 0.0) -> void:
 	if flak_weapon == null:
 		return
-	var base_direction := direction_value.normalized()
 	for index in count:
-		var pattern_index := flak_sequence + index
-		var yaw := (float(pattern_index % 5) - 2.0) * 0.018
-		var pitch := (float((pattern_index * 3) % 5) - 2.0) * 0.014
-		var yaw_direction := base_direction.rotated(Vector3.UP, yaw).normalized()
-		var director_right := yaw_direction.cross(Vector3.UP).normalized()
-		if director_right.length_squared() < 0.01:
-			director_right = global_transform.basis.x.normalized()
-		var shot_direction := yaw_direction.rotated(director_right, pitch).normalized()
-		var side := -1.0 if pattern_index % 2 == 0 else 1.0
-		var local_start := Vector3(side * 23.0, 11.0, -30.0 + float(pattern_index % 3) * 30.0)
-		var projectile := spawn_projectile(flak_weapon, global_transform * local_start, shot_direction)
-		projectile.damage *= damage_scale
+		_spawn_flak_round(direction_value, flak_sequence + index, damage_scale, airburst_distance_m, airburst_radius_m)
 	flak_sequence += count
+
+func _queue_flak_barrage(direction_value: Vector3, count: int, damage_scale: float, airburst_distance_m: float, airburst_radius_m: float) -> void:
+	if flak_weapon == null or count <= 0:
+		return
+	_spawn_flak_round(direction_value, flak_sequence, damage_scale, airburst_distance_m, airburst_radius_m)
+	for index in range(1, count):
+		pending_flak_shots.append({
+			"delay": float(index) * flak_round_interval_seconds,
+			"direction": direction_value.normalized(),
+			"pattern": flak_sequence + index,
+			"damage_scale": damage_scale,
+			"airburst_distance": airburst_distance_m,
+			"airburst_radius": airburst_radius_m,
+		})
+	flak_sequence += count
+
+func _process_flak_salvo_queue(delta: float) -> void:
+	for index in range(pending_flak_shots.size() - 1, -1, -1):
+		var shot: Dictionary = pending_flak_shots[index]
+		shot.delay = float(shot.delay) - delta
+		if float(shot.delay) > 0.0:
+			pending_flak_shots[index] = shot
+			continue
+		_spawn_flak_round(Vector3(shot.direction), int(shot.pattern), float(shot.damage_scale), float(shot.airburst_distance), float(shot.airburst_radius))
+		pending_flak_shots.remove_at(index)
+
+func _spawn_flak_round(direction_value: Vector3, pattern_index: int, damage_scale: float, airburst_distance_m: float, airburst_radius_m: float) -> void:
+	var base_direction := direction_value.normalized()
+	var yaw := (float(pattern_index % 5) - 2.0) * 0.018
+	var pitch := (float((pattern_index * 3) % 5) - 2.0) * 0.014
+	var yaw_direction := base_direction.rotated(Vector3.UP, yaw).normalized()
+	var director_right := yaw_direction.cross(Vector3.UP).normalized()
+	if director_right.length_squared() < 0.01:
+		director_right = global_transform.basis.x.normalized()
+	var shot_direction := yaw_direction.rotated(director_right, pitch).normalized()
+	var side := -1.0 if pattern_index % 2 == 0 else 1.0
+	var local_start := Vector3(side * 23.0, 11.0, -30.0 + float(pattern_index % 3) * 30.0)
+	var projectile := spawn_projectile(flak_weapon, global_transform * local_start, shot_direction)
+	projectile.damage *= damage_scale
+	if airburst_distance_m > 0.0:
+		projectile.configure_airburst(airburst_distance_m, airburst_radius_m)
+
+func begin_flak_placement(screen_position: Vector2) -> bool:
+	flak_placement_active = true
+	flak_placement_valid = update_flak_placement_from_screen(screen_position)
+	_update_flak_indicator(true)
+	return flak_placement_valid
+
+func update_flak_placement_from_screen(screen_position: Vector2) -> bool:
+	if chase_camera == null or not chase_camera.current:
+		flak_placement_valid = false
+		_update_flak_indicator(true)
+		return false
+	var ray_direction := chase_camera.project_ray_normal(screen_position).normalized()
+	var candidate := global_position + ray_direction * flak_screen_range_m
+	flak_preview_local_offset = to_local(candidate)
+	flak_placement_valid = absf(candidate.y) <= CombatShip.VERTICAL_BATTLESPACE_LIMIT_M
+	_update_flak_indicator(true)
+	return flak_placement_valid
+
+func confirm_flak_placement() -> bool:
+	if not flak_placement_active or not flak_placement_valid:
+		return false
+	flak_screen_local_offset = flak_preview_local_offset
+	flak_screen_active = true
+	flak_placement_active = false
+	_update_flak_indicator(false)
+	flak_screen_changed.emit(true, flak_screen_range_m)
+	return true
+
+func cancel_flak_placement() -> bool:
+	if not flak_placement_active:
+		return false
+	flak_placement_active = false
+	_update_flak_indicator(false)
+	return true
+
+func clear_flak_screen() -> void:
+	flak_placement_active = false
+	flak_screen_active = false
+	_update_flak_indicator(false)
+	flak_screen_changed.emit(false, flak_screen_range_m)
+
+func adjust_flak_screen_range(steps: int) -> float:
+	var old_range := flak_screen_range_m
+	flak_screen_range_m = clampf(flak_screen_range_m + float(steps) * flak_screen_range_step_m, flak_screen_min_range_m, flak_screen_max_range_m)
+	if not is_equal_approx(old_range, flak_screen_range_m):
+		var local_direction := flak_preview_local_offset.normalized() if flak_placement_active else flak_screen_local_offset.normalized()
+		if local_direction.length_squared() < 0.5:
+			local_direction = Vector3.FORWARD
+		if flak_placement_active:
+			flak_preview_local_offset = local_direction * flak_screen_range_m
+		elif flak_screen_active:
+			flak_screen_local_offset = local_direction * flak_screen_range_m
+	_update_flak_indicator(flak_placement_active)
+	flak_screen_changed.emit(flak_screen_active, flak_screen_range_m)
+	return flak_screen_range_m
+
+func flak_screen_world_position() -> Vector3:
+	var local_offset := flak_preview_local_offset if flak_placement_active else flak_screen_local_offset
+	return global_transform * local_offset
+
+func flak_screen_status() -> String:
+	if flak_placement_active:
+		return "PLACEMENT %s" % ("VALID" if flak_placement_valid else "INVALID")
+	return "SCREENING" if flak_screen_active else "STANDBY"
+
+func _process_flak_screen() -> void:
+	if flak_screen_active and not flak_placement_active and flak_cooldown <= 0.0:
+		fire_flak()
+	_update_flak_indicator(flak_placement_active)
+
+func _update_flak_indicator(preview: bool) -> void:
+	if flak_screen_indicator == null:
+		return
+	flak_screen_indicator.visible = flak_screen_active or flak_placement_active
+	if not flak_screen_indicator.visible:
+		return
+	flak_screen_indicator.global_position = flak_screen_world_position()
+	var color := Color(0.95, 0.56, 0.12, 0.78) if preview else Color(0.12, 0.82, 1.0, 0.55)
+	if preview and not flak_placement_valid:
+		color = Color(1.0, 0.15, 0.08, 0.86)
+	flak_screen_ring.material_override = flak_indicator_invalid_material if preview and not flak_placement_valid else (flak_indicator_preview_material if preview else flak_indicator_confirmed_material)
+	flak_screen_label.modulate = color
+	flak_screen_label.text = "%s  //  %.1f km  //  R %.0f m" % [flak_screen_status(), flak_screen_range_m / 1000.0, flak_airburst_radius_m]
+
+func _update_engine_trails() -> void:
+	var speed_ratio := clampf(velocity.length() / maxf(1.0, definition.maximum_speed_mps), 0.0, 1.6)
+	for trail in engine_trails:
+		if is_instance_valid(trail):
+			trail.scale.z = lerpf(0.08, 1.35, speed_ratio)
+			trail.transparency = lerpf(0.86, 0.18, clampf(speed_ratio, 0.0, 1.0))
 
 func _process_point_defense() -> void:
 	if point_defense_cooldown > 0.0:

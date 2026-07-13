@@ -32,24 +32,30 @@ func _capture() -> void:
 			craft.global_position = scene.carrier.global_position + Vector3(side * (95.0 + rank * 48.0), 38.0 + rank * 18.0, -230.0 - rank * 95.0)
 			craft.set_physics_process(false)
 			formation_index += 1
-	for _burst in 3:
-		scene.carrier.flak_cooldown = 0.0
-		scene.carrier.fire_flak()
-		for _frame in 3:
-			await process_frame
+	var screen_center := scene.get_viewport().get_visible_rect().size * 0.5
+	scene.carrier.begin_flak_placement(screen_center)
+	for _frame in 14:
+		await process_frame
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://build"))
+	var placement_image := await _capture_best_frame(5)
+	if placement_image != null:
+		placement_image.save_png(ProjectSettings.globalize_path("res://build/flak-placement-preview.png"))
+	scene.carrier.confirm_flak_placement()
+	scene.carrier.flak_cooldown = 0.0
 	scene.carrier.missile_cooldown = 0.0
 	scene.carrier.fire_missile(scene.hostile_command)
+	scene.carrier.fire_nuclear(scene.hostile_command)
 	var vfx := root.get_node_or_null("CombatVFX")
 	if vfx != null:
 		for index in 7:
 			var side := -1.0 if index % 2 == 0 else 1.0
-			vfx.spawn_burst("flak", scene.carrier.global_position + Vector3(side * (110.0 + index * 24.0), 35.0 + index * 16.0, -620.0 - index * 170.0), 0.75 + index * 0.05)
-	for _frame in 12:
-		await process_frame
+			vfx.spawn_damage_effect(scene.carrier.global_position + Vector3(side * (110.0 + index * 24.0), 35.0 + index * 16.0, -620.0 - index * 170.0), false, 0.75 + index * 0.05)
+		vfx.spawn_ship_explosion(scene.carrier.global_position + Vector3(470.0, 110.0, -2350.0), 1.15)
+	for _frame in 46:
+		await physics_frame
 	scene.sensors.emit_active_ping()
 	var command_contact: SensorContact = scene.sensors.get_contact(&"hostile_command")
 	scene.hud.update_target(command_contact, scene.hostile_command.display_name, scene.hostile_command)
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://build"))
 	var flight_image := await _capture_best_frame(8)
 	if flight_image == null:
 		push_error("Rendering backend did not provide a viewport texture")
