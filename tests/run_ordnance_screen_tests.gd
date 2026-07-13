@@ -17,14 +17,21 @@ func _run() -> void:
 
 	_assert_true(ExodriftInputSettings.action_key("flak_screen") == KEY_1 and ExodriftInputSettings.action_key("missile_salvo") == KEY_2 and ExodriftInputSettings.action_key("nuclear_torpedo") == KEY_3, "ordnance actions use the requested remappable 1/2/3 defaults")
 	_assert_true(ExodriftInputSettings.action_key("flak_range_decrease") == KEY_BRACKETLEFT and ExodriftInputSettings.action_key("flak_range_increase") == KEY_BRACKETRIGHT, "brackets provide remappable flak fuse-range adjustment")
+	_assert_true(ExodriftInputSettings.action_key("toggle_all_wings") == KEY_B, "B provides the remappable aggregate hangar-wing deployment and retraction control")
 	_assert_true(carrier.definition.acceleration_mps2 <= 18.0 and carrier.definition.rotation_speed_radians <= 0.38, "carrier uses capital-ship acceleration and turn-rate limits")
 	_assert_true(not carrier.engine_trails.is_empty(), "carrier engine banks expose speed-reactive luminous trails")
+	_assert_true(carrier.chase_zoom_percent() == 0, "the authored carrier framing is the signed zoom scale's zero point")
+	carrier.adjust_chase_zoom(-20.0)
+	_assert_true(carrier.chase_zoom_percent() < 0 and carrier.chase_target_distance_m > 260.0, "signed zoom allows substantially farther carrier command framing")
+	carrier.chase_target_distance_m = PlayerCarrier.CHASE_DEFAULT_DISTANCE_M
+	carrier.chase_distance_m = PlayerCarrier.CHASE_DEFAULT_DISTANCE_M
 
 	var screen_center := game.get_viewport().get_visible_rect().size * 0.5
 	_assert_true(carrier.begin_flak_placement(screen_center) and carrier.flak_placement_active, "1-style placement creates a valid world-space fuse preview")
 	for _frame in 8:
 		carrier._update_camera()
-	_assert_true(carrier.flak_camera_blend > 0.7 and carrier.chase_camera.position.z < 0.0, "placement view travels from the carrier toward the fuse volume")
+	var camera_to_carrier := carrier.chase_camera.global_position.direction_to(carrier.global_position)
+	_assert_true(carrier.flak_camera_blend > 0.7 and carrier.chase_camera.position.z > 0.0 and carrier.chase_camera.position.length() > 800.0 and (-carrier.chase_camera.global_transform.basis.z).dot(camera_to_carrier) > 0.98, "placement zooms out while keeping the carrier centered instead of travelling toward the fuse volume")
 	var minimum := carrier.adjust_flak_screen_range(-20)
 	var maximum := carrier.adjust_flak_screen_range(20)
 	_assert_true(is_equal_approx(minimum, 800.0) and is_equal_approx(maximum, 2400.0), "flak fuse range clamps to the authored 0.8–2.4 km envelope")
@@ -38,6 +45,11 @@ func _run() -> void:
 	carrier.global_transform.basis = carrier.global_transform.basis.rotated(Vector3.UP, 0.4)
 	carrier._update_flak_indicator(false)
 	_assert_true(carrier.flak_screen_world_position().distance_to(carrier.global_transform * committed_local) < 0.01, "committed screen stays fixed in carrier-local space through translation and turn")
+	carrier.clear_flak_screen()
+	game.tactical.set_enabled(true)
+	var tactical_point: Vector3 = game.tactical.flak_placement_world_point(screen_center + Vector2(120.0, 40.0), carrier.flak_screen_range_m)
+	_assert_true(carrier.begin_flak_placement_world(tactical_point) and carrier.confirm_flak_placement() and game.tactical.camera.current, "tactical overlay places and confirms the same carrier-relative flak screen without leaving tactical command")
+	game.tactical.set_enabled(false)
 
 	carrier.flak_cooldown = 0.0
 	var before_flak := _source_projectiles(carrier.stable_entity_id).size()

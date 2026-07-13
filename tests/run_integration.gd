@@ -124,9 +124,16 @@ func _run() -> void:
 	sensors.emit_active_ping()
 	var command_contact := sensors.get_contact(&"hostile_command")
 	_assert_true(command_contact != null and command_contact.is_targetable(), "active ping identifies hostile command ship")
-	game.hud.update_target(command_contact, game.hostile_command.display_name, game.hostile_command)
+	game._on_target_lock_requested(&"hostile_command")
 	game.hud._process(0.016)
-	_assert_true(game.hud.locked_target == game.hostile_command and game.hud.target_label.text.contains("LOCKED"), "target lock exposes directional and layered ship-status presentation")
+	_assert_true(game.manual_target_lock_id == &"hostile_command" and game.hud.locked_target == game.hostile_command and game.hud.target_label.text.contains("LOCKED"), "interactive overview lock persists independently of the mouse aim cone")
+	game._on_target_command_requested(&"orbit", &"hostile_command")
+	_assert_true(carrier.target_navigation_mode == PlayerCarrier.TargetNavigationMode.ORBIT and carrier.target_navigation_target == game.hostile_command, "overview issues a persistent carrier orbit command against the selected track")
+	game._on_target_command_requested(&"keep_distance", &"hostile_command")
+	_assert_true(carrier.target_navigation_mode == PlayerCarrier.TargetNavigationMode.KEEP_DISTANCE and is_equal_approx(carrier.target_navigation_distance_m, 2500.0), "overview issues the authored keep-at-distance geometry")
+	game.hud._refresh_overview()
+	_assert_true(game.hud.overview_contact_ids.has(&"hostile_command"), "EVE-style tactical overview lists identified contacts with interactive target rows")
+	carrier.clear_target_navigation()
 	# Speed up only the test flight-deck timings; production values remain unchanged.
 	for wing in [interceptor, scout]:
 		wing.definition.launch_interval_seconds = 0.02

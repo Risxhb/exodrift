@@ -4,12 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#050b12">
-  <meta name="description" content="EXODRIFT: Carrier Command is a single-player action-RTS with vector-command carrier flight, gun and pilot modes, textured fleet combat, and live tactical command across three hostile sectors.">
+  <meta name="description" content="EXODRIFT: Carrier Command is a single-player action-RTS with heavy-carrier flight, placed flak screening, interactive target commands, textured fleet combat, and live tactical command across three hostile sectors.">
   <meta property="og:title" content="EXODRIFT: Carrier Command">
   <meta property="og:description" content="Pilot the flagship. Command the fleet. Survive the deep strike.">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="assets/og-exodrift.png">
-  <link rel="canonical" href="https://risxhb.github.io/">
+  <meta property="og:url" content="https://risxhb.github.io/exodrift/">
+  <meta property="og:image" content="https://risxhb.github.io/exodrift/assets/flight-preview.png">
+  <meta property="og:image:width" content="1920">
+  <meta property="og:image:height" content="1080">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://risxhb.github.io/exodrift/">
   <title>EXODRIFT: Carrier Command</title>
   <link rel="stylesheet" href="styles.css">
   <script src="site.js" defer></script>
@@ -45,25 +49,31 @@
           <a class="button primary" href="https://risxhb.github.io/exodrift/play/"><b>Deploy Now</b><small>Launch browser alpha</small></a>
           <a class="button ghost" href="#footage">Watch combat feed</a>
         </div>
-        <div class="build-note"><i></i> Fleet + ordnance build · Unified carrier command · PC + Web</div>
+        <div class="build-note"><i></i> Tactical interface build · Interactive target command · PC + Web</div>
       </div>
       <div class="hero-card reveal">
-        <div class="card-kicker">FLAGSHIP DOSSIER // CVN-01</div>
-        <div class="ship-glyph carrier-glyph"><span></span></div>
+        <div class="featured-ribbon">FEATURED COMMAND HULL</div>
+        <div class="card-kicker"><span>FLAGSHIP DOSSIER // CVN-01</span><b>UNIQUE</b></div>
+        <figure class="hero-model">
+          <img src="assets/sidebay-model.png" width="900" height="506" alt="Three-quarter view of the playable textured CVN Sidebay carrier" fetchpriority="high" decoding="async">
+          <figcaption>PLAYABLE RUNTIME MODEL</figcaption>
+        </figure>
+        <div class="collection-rating" aria-label="Unique flagship classification"><span aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span> UNIQUE FLAGSHIP</div>
         <div class="hero-card-title">Sidebay-class Carrier</div>
         <div class="stat"><span>Command</span><b>EX</b></div>
         <div class="stat"><span>Hangar</span><b>Port / Starboard</b></div>
         <div class="stat"><span>Role</span><b>Mobile Fleet Base</b></div>
-        <div class="rarity">FLAGSHIP // UNIQUE COMMAND</div>
+        <div class="hero-abilities"><span>FLAK SCREEN</span><span>GUIDED SALVO</span><span>NUCLEAR</span></div>
+        <p class="authored-note">Authored command frame // no random stat rolls</p>
       </div>
       <a class="scroll-cue" href="#overview">SCROLL TO BRIEFING <span>↓</span></a>
     </section>
 
     <section class="signal-strip" aria-label="Game highlights">
-      <div><strong>01</strong><span>Direct-pilot<br>carrier combat</span></div>
-      <div><strong>3D</strong><span>Live tactical<br>command map</span></div>
-      <div><strong>9</strong><span>Authored encounter<br>layouts</span></div>
-      <div><strong>2–3h</strong><span>Branching<br>deep-strike runs</span></div>
+      <div><strong>7</strong><span>Model-accurate<br>fleet profiles</span></div>
+      <div><strong>3</strong><span>Ordnance<br>systems</span></div>
+      <div><strong>2</strong><span>Redeployable<br>hangar wings</span></div>
+      <div><strong>9</strong><span>Authored<br>engagements</span></div>
     </section>
 
     <section class="overview section" id="overview">
@@ -81,7 +91,7 @@
         <article class="pillar reveal">
           <div class="pillar-number">02</div>
           <h3>Direct the fleet</h3>
-          <p>Open a live holographic map without pausing. Queue moves, attacks, intercepts, escorts, recalls, stances, and formations while your carrier holds course.</p>
+          <p>Open a live holographic map without pausing. Place flak from the tactical overlay, lock contacts through the interactive overview, and issue approach, orbit, or keep-distance geometry while your carrier holds course.</p>
         </article>
         <article class="pillar reveal">
           <div class="pillar-number">03</div>
@@ -97,65 +107,104 @@
         <h2>Assemble your <em>battlegroup.</em></h2>
         <p>Ships are authored tactical sidegrades—not randomized-stat loot. Layered armor, faction hull plating, bridge windows, turrets, engines, class-specific geometry, engine trails, and progressive battle damage make every ship readable in the command network.</p>
       </div>
-      <figure class="fleet-live-capture reveal">
-        <img src="assets/ship-showcase-m16.png" alt="Live Godot capture of the newly modeled Sidebay carrier, Resolute escort, Acheron ships, and fighter formation">
-        <figcaption><b>LIVE HULL STUDY // M17</b><span>Every archive card below is now a direct Godot render of the exact textured runtime model.</span><i>CVN SIDEBAY · ISS RESOLUTE · THREE-SECTOR OPPOSITION</i></figcaption>
-      </figure>
+      <article class="featured-hull reveal">
+        <figure>
+          <img src="assets/sidebay-model.png" width="900" height="506" alt="Playable CVN Sidebay command carrier rendered directly from Godot" loading="lazy" decoding="async">
+          <figcaption>EXACT RUNTIME HULL // CVN-01</figcaption>
+        </figure>
+        <div class="featured-hull-copy">
+          <p class="feature-code">FEATURED / UNIQUE COMMAND</p>
+          <div class="collection-rating"><span aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span> CVN-01</div>
+          <h3>CVN Sidebay</h3>
+          <p>The fleet's mobile base: a textured 120-meter command carrier with mirrored launch galleries, persistent heavy-carrier inertia, and three distinct ordnance directors.</p>
+          <div class="featured-stats"><span><b>EX</b> Command</span><span><b>2</b> Flight galleries</span><span><b>3</b> Weapon directors</span></div>
+          <a class="dossier-cta" href="https://risxhb.github.io/exodrift/play/">DEPLOY THIS FRAME <span>→</span></a>
+        </div>
+      </article>
       <div class="fleet-tabs" role="tablist" aria-label="Fleet factions">
-        <button class="active" data-faction="navy">Human Navy</button>
-        <button data-faction="opposition">Three-Sector Opposition</button>
+        <button class="active" id="fleet-tab-navy" role="tab" aria-selected="true" aria-controls="fleet-panel-navy" tabindex="0" data-faction="navy"><span>Human Navy</span><b>04 PROFILES</b></button>
+        <button id="fleet-tab-opposition" role="tab" aria-selected="false" aria-controls="fleet-panel-opposition" tabindex="-1" data-faction="opposition"><span>Three-Sector Opposition</span><b>03 THREATS</b></button>
       </div>
-      <div class="ship-carousel" data-fleet="navy">
+      <div class="ship-carousel" id="fleet-panel-navy" role="tabpanel" aria-labelledby="fleet-tab-navy" data-fleet="navy">
         <article class="ship-card flagship reveal">
           <div class="card-top"><span>CVN-01</span><b>FLAGSHIP</b></div>
-          <figure class="ship-visual model-render"><img src="assets/sidebay-model.png" alt="Three-quarter render of the textured Sidebay heavy carrier model from the game"><figcaption>PLAYABLE MODEL // CVN SIDEBAY</figcaption></figure>
+          <div class="card-rating"><span aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span><b>UNIQUE</b></div>
+          <figure class="ship-visual model-render"><img src="assets/sidebay-model.png" width="900" height="506" alt="Three-quarter render of the textured Sidebay heavy carrier model from the game" loading="lazy" decoding="async"><figcaption>PLAYABLE MODEL // CVN SIDEBAY</figcaption></figure>
           <h3>Sidebay</h3><p class="role">Heavy Carrier</p>
           <p>Player-commanded mobile base with mirrored launch galleries, carrier-relative flak screening, guided strike cells, and one strategic nuclear torpedo.</p>
           <div class="traits"><span>COMMAND</span><span>HANGAR</span><span>FORTRESS</span></div>
         </article>
         <article class="ship-card reveal">
           <div class="card-top"><span>FFG-12</span><b>VANGUARD</b></div>
-          <figure class="ship-visual model-render"><img src="assets/resolute-model.png" alt="Three-quarter render of the textured Resolute missile frigate model from the game"><figcaption>PLAYABLE MODEL // ISS RESOLUTE</figcaption></figure>
+          <div class="card-rating"><span aria-hidden="true">&#9733;&#9733;&#9733;&#9733;</span><b>COMMAND ISSUE</b></div>
+          <figure class="ship-visual model-render"><img src="assets/resolute-model.png" width="900" height="506" alt="Three-quarter render of the textured Resolute missile frigate model from the game" loading="lazy" decoding="async"><figcaption>PLAYABLE MODEL // ISS RESOLUTE</figcaption></figure>
           <h3>Resolute</h3><p class="role">Missile Frigate</p>
           <p>A commandable capital escort that screens the carrier and delivers deliberate long-range missile pressure.</p>
           <div class="traits"><span>MISSILE</span><span>ESCORT</span></div>
         </article>
         <article class="ship-card reveal">
           <div class="card-top"><span>VF-04</span><b>STRIKE WING</b></div>
-          <figure class="ship-visual model-render"><img src="assets/raptor-model.png" alt="Three-quarter render of the textured Raptor interceptor model from the game"><figcaption>PLAYABLE MODEL // RAPTOR</figcaption></figure>
+          <div class="card-rating"><span aria-hidden="true">&#9733;&#9733;&#9733;</span><b>WING</b></div>
+          <figure class="ship-visual model-render"><img src="assets/raptor-model.png" width="900" height="506" alt="Three-quarter render of the textured Raptor interceptor model from the game" loading="lazy" decoding="async"><figcaption>PLAYABLE MODEL // RAPTOR</figcaption></figure>
           <h3>Raptor</h3><p class="role">Interceptor Squadron</p>
           <p>Four fast interceptors built to break hostile fighter screens and protect the carrier’s recovery pattern.</p>
           <div class="traits"><span>INTERCEPT</span><span>SCREEN</span></div>
         </article>
         <article class="ship-card reveal">
           <div class="card-top"><span>RQ-03</span><b>RECON WING</b></div>
-          <figure class="ship-visual model-render"><img src="assets/watcher-model.png" alt="Three-quarter render of the textured Watcher scout drone model from the game"><figcaption>PLAYABLE MODEL // WATCHER</figcaption></figure>
+          <div class="card-rating"><span aria-hidden="true">&#9733;&#9733;&#9733;</span><b>WING</b></div>
+          <figure class="ship-visual model-render"><img src="assets/watcher-model.png" width="900" height="506" alt="Three-quarter render of the textured Watcher scout drone model from the game" loading="lazy" decoding="async"><figcaption>PLAYABLE MODEL // WATCHER</figcaption></figure>
           <h3>Watcher</h3><p class="role">Scout Drone Squadron</p>
           <p>Three sensor drones that resolve uncertain contacts without forcing the carrier to reveal itself with an active ping.</p>
           <div class="traits"><span>RECON</span><span>IDENTIFY</span></div>
         </article>
       </div>
-      <div class="ship-carousel hidden" data-fleet="opposition">
+      <div class="ship-carousel hidden" id="fleet-panel-opposition" role="tabpanel" aria-labelledby="fleet-tab-opposition" data-fleet="opposition" hidden>
         <article class="ship-card hostile flagship reveal visible">
           <div class="card-top"><span>UNKNOWN-01</span><b>HOSTILE COMMAND</b></div>
-          <figure class="ship-visual model-render"><img src="assets/acheron-picket-model.png" alt="Three-quarter render of the textured Acheron Picket command frigate model from the game"><figcaption>HOSTILE MODEL // ACHERON PICKET</figcaption></figure>
+          <div class="card-rating threat"><span>THREAT</span><b>V / V</b></div>
+          <figure class="ship-visual model-render"><img src="assets/acheron-picket-model.png" width="900" height="506" alt="Three-quarter render of the textured Acheron Picket command frigate model from the game" loading="lazy" decoding="async"><figcaption>HOSTILE MODEL // ACHERON PICKET</figcaption></figure>
           <h3>Acheron Picket</h3><p class="role">Outer-Line Command Frigate</p>
           <p>A disciplined missile picket protected by a fast screen and four-fighter attack wing. It teaches the sensor, launch, and command fundamentals of the deep strike.</p>
           <div class="traits"><span>COMMAND</span><span>PICKET</span><span>MISSILE</span></div>
         </article>
         <article class="ship-card hostile reveal visible">
           <div class="card-top"><span>UNKNOWN-02</span><b>HOSTILE SCREEN</b></div>
-          <figure class="ship-visual model-render"><img src="assets/vesper-lance-model.png" alt="Three-quarter render of the textured Vesper Lance command cruiser model from the game"><figcaption>HOSTILE MODEL // VESPER LANCE</figcaption></figure>
+          <div class="card-rating threat"><span>THREAT</span><b>IV / V</b></div>
+          <figure class="ship-visual model-render"><img src="assets/vesper-lance-model.png" width="900" height="506" alt="Three-quarter render of the textured Vesper Lance command cruiser model from the game" loading="lazy" decoding="async"><figcaption>HOSTILE MODEL // VESPER LANCE</figcaption></figure>
           <h3>Vesper Lance</h3><p class="role">Contested-Space Cruiser</p>
           <p>A purple-hulled lance cruiser operating with a needle corvette and five Gloam fighters in a split high-low formation.</p>
           <div class="traits"><span>TORPEDO</span><span>PINCER</span><span>MOBILE</span></div>
         </article>
         <article class="ship-card hostile reveal visible">
           <div class="card-top"><span>UNKNOWN-03</span><b>HOSTILE WING</b></div>
-          <figure class="ship-visual model-render"><img src="assets/crucible-regent-model.png" alt="Three-quarter render of the textured Crucible Regent battlecruiser model from the game"><figcaption>HOSTILE MODEL // CRUCIBLE REGENT</figcaption></figure>
+          <div class="card-rating threat"><span>THREAT</span><b>V / V</b></div>
+          <figure class="ship-visual model-render"><img src="assets/crucible-regent-model.png" width="900" height="506" alt="Three-quarter render of the textured Crucible Regent battlecruiser model from the game" loading="lazy" decoding="async"><figcaption>HOSTILE MODEL // CRUCIBLE REGENT</figcaption></figure>
           <h3>Crucible Regent</h3><p class="role">Command-Zone Battlecruiser</p>
           <p>A layered alien-carapace warship backed by a breach destroyer and six Ember Talons in a deeper, heavier command-zone formation.</p>
           <div class="traits"><span>SIEGE</span><span>CARAPACE</span><span>HEAVY</span></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="ordnance section" id="ordnance">
+      <div class="section-heading compact reveal">
+        <p class="eyebrow"><span></span> Ordnance directive</p>
+        <h2>Place the screen.<br><em>Commit the salvo.</em></h2>
+        <p>Three deliberate weapon directors turn the Sidebay into a carrier-scale weapons platform. Each system has a clear job, a readable footprint, and a cost to committing it.</p>
+      </div>
+      <div class="ordnance-grid">
+        <article class="ordnance-card reveal">
+          <figure><img src="assets/flak-placement-preview.png" width="1280" height="720" alt="Flak placement director marking a sustained screening volume" loading="lazy" decoding="async"></figure>
+          <div class="ordnance-copy"><span class="weapon-key">1</span><p>SCREEN DIRECTOR</p><h3>Place the flak curtain</h3><p>Set a carrier-relative volume and sustain airbursts through the incoming threat lane.</p></div>
+        </article>
+        <article class="ordnance-card reveal">
+          <figure><img src="assets/flight-preview.png" width="1920" height="1080" alt="Sidebay combat view with guided missile fire control" loading="lazy" decoding="async"></figure>
+          <div class="ordnance-copy"><span class="weapon-key">2</span><p>STRIKE DIRECTOR</p><h3>Commit guided salvos</h3><p>Lock a resolved contact and release a visible multi-missile strike with persistent trails.</p></div>
+        </article>
+        <article class="ordnance-card nuclear reveal">
+          <figure><img src="assets/flight-preview.png" width="1920" height="1080" alt="Carrier fire-control view showing the single strategic nuclear torpedo state" loading="lazy" decoding="async"></figure>
+          <div class="ordnance-copy"><span class="weapon-key">3</span><p>STRATEGIC DIRECTOR</p><h3>One nuclear torpedo</h3><p>Arm one run-defining weapon, respect its blast radius, and spend it only when the formation justifies the risk.</p></div>
         </article>
       </div>
     </section>
@@ -178,11 +227,11 @@
       </div>
       <div class="personnel-media">
         <figure class="personnel-image reveal">
-          <img src="assets/personnel-preview.png" alt="Personnel Command screen showing departments, treatment, promotion, and recruitment">
+          <img src="assets/personnel-preview.png" width="1280" height="720" alt="Personnel Command screen showing departments, treatment, promotion, and recruitment" loading="lazy" decoding="async">
           <figcaption>LIVE BUILD // PERSONNEL COMMAND</figcaption>
         </figure>
         <figure class="personnel-image reveal">
-          <img src="assets/event-preview.png" alt="Operational event screen presenting two relationship choices">
+          <img src="assets/event-preview.png" width="1280" height="720" alt="Operational event screen presenting two relationship choices" loading="lazy" decoding="async">
           <figcaption>LIVE BUILD // OPERATIONAL EVENT</figcaption>
         </figure>
       </div>
@@ -196,28 +245,28 @@
       </div>
       <div class="gallery">
         <figure class="gallery-main reveal">
-          <img src="assets/flight-preview.png" alt="Carrier combat viewed from the third-person flight camera">
+          <img src="assets/flight-preview.png" width="1920" height="1080" alt="Carrier combat viewed from the third-person flight camera" loading="lazy" decoding="async">
           <figcaption><b>DIRECT COMMAND</b><span>Heavy carrier, sustained flak screen, guided and nuclear ordnance</span><i>LIVE BUILD // 01</i></figcaption>
         </figure>
         <figure class="reveal">
-          <img src="assets/tactical-preview.png" alt="Live three-dimensional tactical command map">
-          <figcaption><b>TACTICAL NET</b><span>Issue fleet orders in real time</span><i>LIVE BUILD // 02</i></figcaption>
+          <img src="assets/menu-preview.png" width="1280" height="720" alt="Compact bottom EXODRIFT command row beneath a battle using the exact runtime fleet models" loading="lazy" decoding="async">
+          <figcaption><b>LIVE TITLE ENGAGEMENT</b><span>Exact fleet models exchange fire behind the command row</span><i>LIVE BUILD // 02</i></figcaption>
         </figure>
         <figure class="reveal">
-          <img src="assets/bays-sealed-preview.png" alt="Sidebay carrier with both armored flight galleries retracted and jump-safe">
-          <figcaption><b>JUMP SAFE</b><span>Retract and seal both flight galleries</span><i>LIVE BUILD // 03</i></figcaption>
+          <img src="assets/flak-placement-preview.png" width="1280" height="720" alt="Flak placement view showing a carrier-relative 150-meter airburst screen volume" loading="lazy" decoding="async">
+          <figcaption><b>FLAK DIRECTOR</b><span>Place and sustain a carrier-relative interception screen</span><i>LIVE BUILD // 03</i></figcaption>
         </figure>
         <figure class="reveal">
-          <img src="assets/campaign-preview.png" alt="Branching three-sector campaign map">
-          <figcaption><b>DEEP STRIKE</b><span>Choose a route, pay its cost</span><i>LIVE BUILD // 04</i></figcaption>
+          <img src="assets/tactical-preview.png" width="1920" height="1080" alt="Live three-dimensional tactical command map" loading="lazy" decoding="async">
+          <figcaption><b>TACTICAL NET</b><span>Issue fleet orders in real time</span><i>LIVE BUILD // 04</i></figcaption>
         </figure>
         <figure class="reveal">
-          <img src="assets/menu-preview.png" alt="Compact bottom EXODRIFT command row beneath a live fleet battle">
-          <figcaption><b>COMMAND SHELL</b><span>Minimal bottom-row command menu over a live engagement</span><i>LIVE BUILD // 05</i></figcaption>
+          <img src="assets/bays-sealed-preview.png" width="1920" height="1080" alt="Sidebay carrier with both armored flight galleries retracted and jump-safe" loading="lazy" decoding="async">
+          <figcaption><b>JUMP SAFE</b><span>Retract and seal both flight galleries</span><i>LIVE BUILD // 05</i></figcaption>
         </figure>
         <figure class="reveal">
-          <img src="assets/flak-placement-preview.png" alt="Temporary flak placement view showing a carrier-relative 150-meter airburst screen volume">
-          <figcaption><b>FLAK DIRECTOR</b><span>Place and sustain a carrier-relative interception screen</span><i>LIVE BUILD // 06</i></figcaption>
+          <img src="assets/campaign-preview.png" width="1280" height="720" alt="Branching three-sector campaign map" loading="lazy" decoding="async">
+          <figcaption><b>DEEP STRIKE</b><span>Choose a route, pay its cost</span><i>LIVE BUILD // 06</i></figcaption>
         </figure>
       </div>
     </section>
@@ -227,21 +276,28 @@
         <p class="eyebrow"><span></span> Development transmission</p>
         <h2>Playable now. <em>Built in public.</em></h2>
       </div>
-      <div class="timeline">
-        <div class="timeline-item complete reveal"><span>01</span><div><b>FIRST PLAYABLE</b><h3>Carrier combat loop</h3><p>Flight, weapons, side bays, squadrons, live tactical command, sensors, AI, and win/loss flow.</p></div></div>
-        <div class="timeline-item complete reveal"><span>02</span><div><b>RUN LAYER</b><h3>Three-sector deep strike</h3><p>Branching route, supplies, fuel, intel, forecasts, combat nodes, manual saves, and browser distribution.</p></div></div>
-        <div class="timeline-item complete reveal"><span>03</span><div><b>FLEET PERSISTENCE</b><h3>Condition & buildcraft</h3><p>Battle damage, surviving craft, ammunition, fleet service, module slots, and authored sidegrade unlocks.</p></div></div>
-        <div class="timeline-item complete reveal"><span>04</span><div><b>OBJECTIVE FOUNDATION</b><h3>Interception & withdrawal</h3><p>Command strikes, interception battles, extraction corridors, emergency withdrawal, and reduced-reward partial victories.</p></div></div>
-        <div class="timeline-item complete reveal"><span>05</span><div><b>MISSION CONSEQUENCES</b><h3>No one gets left behind for free</h3><p>Defense, escort, capture, pursuit, escape pods, jump stragglers, after-action rescue, salvage, and persistent losses.</p></div></div>
-        <div class="timeline-item complete reveal"><span>06</span><div><b>PRESENTATION SHELL</b><h3>Command begins at the title screen</h3><p>A centered command menu over a continuously simulated carrier battle, with Continue, settings, credits, and campaign transitions.</p></div></div>
-        <div class="timeline-item complete reveal"><span>07</span><div><b>PERSONNEL COMMAND</b><h3>The names behind the fleet</h3><p>Twelve officers, six departments, tactical assignments, injuries, bonds, rescue outcomes, succession, and permanent death.</p></div></div>
-        <div class="timeline-item complete reveal"><span>08</span><div><b>OPERATIONAL LIVES</b><h3>Careers continue between battles</h3><p>Treatment, promotions, relationship events, radio barks, requisition pools, and rare authored officer unlocks.</p></div></div>
-        <div class="timeline-item complete reveal"><span>09</span><div><b>FLEET ACQUISITION</b><h3>Build the task force</h3><p>Authored escort requisition, carrier frames, hangar complements, salvage allocation, and route-level logistics.</p></div></div>
-        <div class="timeline-item complete reveal"><span>10</span><div><b>GRAPHICS + PERFORMANCE</b><h3>Make every salvo readable</h3><p>Modular textured hulls, retractable lit galleries, pooled flak and missile effects, quality profiles, richer space, radar caching, and sustained-combat performance gates.</p></div></div>
-        <div class="timeline-item complete reveal"><span>11</span><div><b>SHIP READINESS</b><h3>Every sector fights differently</h3><p>A guided first operation, nine authored layouts, bespoke Acheron/Vesper/Crucible command phases, readable ship classes and damage, adaptive audio, ten crew events, release-safe saves, remappable controls, and structured playtest debriefs.</p></div></div>
-        <div class="timeline-item complete reveal"><span>12</span><div><b>HELM + PRESENTATION</b><h3>Read space, command by intent</h3><p>A compact bottom command row, updated title engagement, crisp procedural space dome, double-click vector flight, persistent throttle, angular military HUD rails, and a new faction surface refit.</p></div></div>
-        <div class="timeline-item complete reveal"><span>13</span><div><b>FLEET + ORDNANCE</b><h3>Place the screen. Commit the salvo.</h3><p>One unified mouse command view, heavy carrier inertia, placed sustained flak, guided and nuclear ordnance, wing redeploy, layered bounded explosions, exact title-scene models, and a model-accurate public fleet archive.</p></div></div>
-      </div>
+      <article class="roadmap-current reveal">
+        <div class="current-build-code"><span>M18</span><b>CURRENT PLAYABLE BUILD</b></div>
+        <div><p>TACTICAL COMMAND + VISUAL POLISH</p><h3>Lock the track. Shape the engagement.</h3><p>A true deep-space sky, carrier-centered flak placement, signed long-range zoom, tactical-overlay screening, collapsible command panels, interactive target overview, approach/orbit/keep-distance helm orders, and more readable faceted fleet hulls.</p></div>
+        <a href="https://risxhb.github.io/exodrift/play/">PLAY M18 <span>→</span></a>
+      </article>
+      <details class="roadmap-archive reveal">
+        <summary><span>Completed transmission archive</span><b>M01–M17 // 13 MILESTONES</b></summary>
+        <div class="timeline">
+          <div class="timeline-item complete"><span>01</span><div><b>FIRST PLAYABLE</b><h3>Carrier combat loop</h3><p>Flight, weapons, side bays, squadrons, live tactical command, sensors, AI, and win/loss flow.</p></div></div>
+          <div class="timeline-item complete"><span>02</span><div><b>RUN LAYER</b><h3>Three-sector deep strike</h3><p>Branching route, supplies, fuel, intel, forecasts, combat nodes, manual saves, and browser distribution.</p></div></div>
+          <div class="timeline-item complete"><span>03</span><div><b>FLEET PERSISTENCE</b><h3>Condition & buildcraft</h3><p>Battle damage, surviving craft, ammunition, fleet service, module slots, and authored sidegrade unlocks.</p></div></div>
+          <div class="timeline-item complete"><span>04</span><div><b>OBJECTIVE FOUNDATION</b><h3>Interception & withdrawal</h3><p>Command strikes, interception battles, extraction corridors, emergency withdrawal, and reduced-reward partial victories.</p></div></div>
+          <div class="timeline-item complete"><span>05</span><div><b>MISSION CONSEQUENCES</b><h3>No one gets left behind for free</h3><p>Defense, escort, capture, pursuit, escape pods, jump stragglers, after-action rescue, salvage, and persistent losses.</p></div></div>
+          <div class="timeline-item complete"><span>06</span><div><b>PRESENTATION SHELL</b><h3>Command begins at the title screen</h3><p>A continuously simulated carrier battle behind Continue, settings, credits, and campaign transitions.</p></div></div>
+          <div class="timeline-item complete"><span>07</span><div><b>PERSONNEL COMMAND</b><h3>The names behind the fleet</h3><p>Twelve officers, six departments, tactical assignments, injuries, bonds, rescue outcomes, succession, and permanent death.</p></div></div>
+          <div class="timeline-item complete"><span>08</span><div><b>OPERATIONAL LIVES</b><h3>Careers continue between battles</h3><p>Treatment, promotions, relationship events, radio barks, requisition pools, and rare authored officer unlocks.</p></div></div>
+          <div class="timeline-item complete"><span>09</span><div><b>FLEET ACQUISITION</b><h3>Build the task force</h3><p>Authored escort requisition, carrier frames, hangar complements, salvage allocation, and route-level logistics.</p></div></div>
+          <div class="timeline-item complete"><span>10</span><div><b>GRAPHICS + PERFORMANCE</b><h3>Make every salvo readable</h3><p>Textured hulls, retractable lit galleries, quality profiles, richer space, caching, and sustained-combat performance gates.</p></div></div>
+          <div class="timeline-item complete"><span>11</span><div><b>SHIP READINESS</b><h3>Every sector fights differently</h3><p>Nine authored layouts, bespoke hostile phases, readable ship damage, adaptive audio, crew events, safe saves, and remappable controls.</p></div></div>
+          <div class="timeline-item complete"><span>12</span><div><b>HELM + PRESENTATION</b><h3>Read space, command by intent</h3><p>A compact command row, crisp procedural space, double-click vector flight, persistent throttle, military HUD rails, and faction surface refits.</p></div></div>
+        </div>
+      </details>
     </section>
 
     <section class="final-cta">
@@ -249,7 +305,7 @@
       <div class="reveal">
         <p class="eyebrow"><span></span> Command link established</p>
         <h2>The fleet is waiting.</h2>
-        <p>Launch the browser build. Double-click open space to set a heavy-carrier heading, press 1 to place a sustained flak screen, 2 for guided missiles, 3 for the single nuclear torpedo, and command the wider fleet through nine authored layouts.</p>
+        <p>Launch the browser build. Double-click open space to set a heavy-carrier heading, press 1 to place a sustained flak screen in either combat or tactical view, use B to deploy or retract the hangar wings, and select overview tracks to lock, approach, orbit, or keep distance.</p>
         <div class="hero-actions">
           <a class="button primary" href="https://risxhb.github.io/exodrift/play/"><b>Play EXODRIFT</b><small>Browser alpha</small></a>
           <a class="button ghost" href="https://github.com/Risxhb/exodrift">View source</a>

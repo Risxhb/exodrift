@@ -70,13 +70,11 @@ func _build_visual() -> void:
 	var profile := visual_profile
 	var body := MeshInstance3D.new()
 	body.name = "Hull"
-	var mesh := BoxMesh.new()
-	mesh.size = hull_dimensions * profile.core_scale
-	body.mesh = mesh
+	body.mesh = _tapered_hull_mesh(hull_dimensions * profile.core_scale, profile.core_fore_taper, profile.core_aft_taper, 0.82, 1.0)
 	body.material_override = _make_material(visual_color, 0.1, profile.hull_texture_path)
 	add_child(body)
-	_add_visual_block("DorsalArmor", Vector3(0.0, hull_dimensions.y * 0.38, hull_dimensions.z * 0.05), hull_dimensions * profile.dorsal_scale, visual_color.lightened(0.08), 0.0, profile.hull_texture_path)
-	_add_visual_block("Keel", Vector3(0.0, -hull_dimensions.y * 0.38, hull_dimensions.z * 0.08), hull_dimensions * profile.keel_scale, visual_color.darkened(0.22), 0.0, profile.hull_texture_path)
+	_add_tapered_visual_block("DorsalArmor", Vector3(0.0, hull_dimensions.y * 0.38, hull_dimensions.z * 0.05), hull_dimensions * profile.dorsal_scale, profile.dorsal_fore_taper, profile.dorsal_aft_taper, visual_color.lightened(0.08), profile.hull_texture_path)
+	_add_tapered_visual_block("Keel", Vector3(0.0, -hull_dimensions.y * 0.38, hull_dimensions.z * 0.08), hull_dimensions * profile.keel_scale, profile.core_fore_taper * 0.82, profile.core_aft_taper * 0.9, visual_color.darkened(0.22), profile.hull_texture_path)
 	for side in [-1.0, 1.0]:
 		_add_visual_block("ArmorShoulder", Vector3(side * hull_dimensions.x * 0.43, 0.0, hull_dimensions.z * 0.08), hull_dimensions * profile.shoulder_scale, visual_color.darkened(0.08), 0.0, profile.hull_texture_path)
 		_add_engine_nacelle(side, hull_dimensions, profile)
@@ -341,12 +339,56 @@ func _add_visual_block(node_name: String, position_value: Vector3, size_value: V
 	add_child(block)
 	return block
 
+func _add_tapered_visual_block(node_name: String, position_value: Vector3, size_value: Vector3, fore_taper: float, aft_taper: float, color: Color, texture_path: String = "") -> MeshInstance3D:
+	var block := MeshInstance3D.new()
+	block.name = node_name
+	block.mesh = _tapered_hull_mesh(size_value, fore_taper, aft_taper, 0.82, 1.0)
+	block.position = position_value
+	block.material_override = _make_material(color, 0.0, texture_path)
+	add_child(block)
+	return block
+
+func _tapered_hull_mesh(size_value: Vector3, fore_width: float, aft_width: float, fore_height: float, aft_height: float) -> ArrayMesh:
+	var half := size_value * 0.5
+	var front_x := half.x * clampf(fore_width, 0.25, 1.0)
+	var back_x := half.x * clampf(aft_width, 0.25, 1.0)
+	var front_y := half.y * clampf(fore_height, 0.25, 1.0)
+	var back_y := half.y * clampf(aft_height, 0.25, 1.0)
+	var vertices := [
+		Vector3(-front_x, -front_y, -half.z), Vector3(-front_x, front_y, -half.z),
+		Vector3(front_x, front_y, -half.z), Vector3(front_x, -front_y, -half.z),
+		Vector3(-back_x, -back_y, half.z), Vector3(-back_x, back_y, half.z),
+		Vector3(back_x, back_y, half.z), Vector3(back_x, -back_y, half.z),
+	]
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	_add_mesh_quad(surface, vertices[0], vertices[1], vertices[2], vertices[3])
+	_add_mesh_quad(surface, vertices[7], vertices[6], vertices[5], vertices[4])
+	_add_mesh_quad(surface, vertices[0], vertices[4], vertices[5], vertices[1])
+	_add_mesh_quad(surface, vertices[3], vertices[2], vertices[6], vertices[7])
+	_add_mesh_quad(surface, vertices[1], vertices[5], vertices[6], vertices[2])
+	_add_mesh_quad(surface, vertices[0], vertices[3], vertices[7], vertices[4])
+	surface.generate_normals()
+	return surface.commit()
+
+func _add_mesh_quad(surface: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> void:
+	surface.set_uv(Vector2(0.0, 1.0)); surface.add_vertex(a)
+	surface.set_uv(Vector2(0.0, 0.0)); surface.add_vertex(b)
+	surface.set_uv(Vector2(1.0, 0.0)); surface.add_vertex(c)
+	surface.set_uv(Vector2(0.0, 1.0)); surface.add_vertex(a)
+	surface.set_uv(Vector2(1.0, 0.0)); surface.add_vertex(c)
+	surface.set_uv(Vector2(1.0, 1.0)); surface.add_vertex(d)
+
 func _make_material(color: Color, emission_energy: float = 0.0, texture_path: String = "") -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	var profile := visual_profile
 	material.albedo_color = color
 	material.metallic = profile.surface_metallic if profile != null else 0.65
 	material.roughness = profile.surface_roughness if profile != null else 0.42
+	material.metallic_specular = 0.38
+	material.rim_enabled = true
+	material.rim = profile.rim_strength if profile != null else 0.14
+	material.rim_tint = 0.42
 	if emission_energy <= 0.2:
 		material.albedo_color = color.lightened(profile.albedo_lift if profile != null else 0.2)
 		var default_texture_path := profile.hull_texture_path if profile != null else ("res://assets/textures/navy_refit_hull.svg" if team == &"friendly" else "res://assets/textures/acheron_forged_hull.svg")
@@ -354,12 +396,16 @@ func _make_material(color: Color, emission_energy: float = 0.0, texture_path: St
 		material.albedo_texture = _hull_texture(resolved_texture_path)
 		var texture_scale := profile.texture_scale if profile != null else 3.0
 		material.uv1_scale = Vector3(texture_scale, texture_scale, texture_scale)
+		material.uv1_triplanar = true
+		material.uv1_triplanar_sharpness = 3.6
+		material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	if emission_energy > 0.0:
 		if emission_energy > 0.2:
 			material.metallic = 0.18
 			material.roughness = 0.2
 		material.emission_enabled = true
-		material.emission = color * emission_energy
+		material.emission = color
+		material.emission_energy_multiplier = emission_energy
 	return material
 
 func _hull_texture(texture_path: String) -> Texture2D:

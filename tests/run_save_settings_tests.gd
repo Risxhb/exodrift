@@ -32,6 +32,10 @@ func _run() -> void:
 	ExodriftInputSettings.load_bindings(config)
 	_assert_true(ExodriftInputSettings.action_key("sensor_ping") == KEY_O, "remapped controls persist through settings serialization")
 	ExodriftInputSettings.rebind("sensor_ping", original_ping)
+	var original_wings := ExodriftInputSettings.action_key("toggle_all_wings")
+	ExodriftInputSettings.rebind("toggle_all_wings", KEY_N)
+	_assert_true(ExodriftInputSettings.action_key("toggle_all_wings") == KEY_N, "aggregate hangar-wing control is remappable")
+	ExodriftInputSettings.rebind("toggle_all_wings", original_wings)
 
 	_assert_true(AudioServer.get_bus_index("Music") >= 0 and AudioServer.get_bus_index("SFX") >= 0 and AudioServer.get_bus_index("Radio") >= 0, "independent music, SFX, and radio buses are configured")
 	var menu := ExodriftMainMenu.new()

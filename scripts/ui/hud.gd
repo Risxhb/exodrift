@@ -3,6 +3,10 @@ extends CanvasLayer
 
 const RadarDisplay := preload("res://scripts/ui/radar_display.gd")
 const UIStyle := preload("res://scripts/ui/ui_style.gd")
+const TargetLockReticle := preload("res://scripts/ui/target_lock_reticle.gd")
+
+signal target_lock_requested(entity_id: StringName)
+signal target_command_requested(command: StringName, entity_id: StringName)
 
 var carrier: PlayerCarrier
 var interceptor: SidebaySquadron
@@ -19,6 +23,14 @@ var target_shield_bar: ProgressBar
 var target_armor_bar: ProgressBar
 var target_hull_bar: ProgressBar
 var locked_target: CombatShip
+var target_reticle: ExodriftTargetLockReticle
+var target_caption: Label
+var overview_panel: Panel
+var overview_rows: Array[Button] = []
+var overview_contact_ids: Array[StringName] = []
+var overview_selected_id: StringName = &""
+var overview_refresh_seconds: float = 0.0
+var collapsible_panels: Dictionary = {}
 var objective_label: Label
 var notification_label: Label
 var mode_label: Label
@@ -71,38 +83,68 @@ func _build_ui() -> void:
 	objective_label = _label(objective_panel, Vector2(16, 2), Vector2(620, 28), 15)
 	objective_label.text = "OBJECTIVE  Identify and destroy the hostile command frigate"
 	telemetry_panel = _panel(root, Vector2(18, 58), Vector2(370, 98), Color(0.006, 0.024, 0.038, 0.72))
-	_section_heading(telemetry_panel, "CARRIER TELEMETRY", UIStyle.CYAN)
+	_collapsible_heading(telemetry_panel, "CARRIER TELEMETRY", UIStyle.CYAN)
 	status_label = _label(telemetry_panel, Vector2(14, 23), Vector2(342, 50), 12)
 	shield_bar = _bar(telemetry_panel, Vector2(14, 80), Vector2(104, 7), Color(0.1, 0.65, 1.0))
 	armor_bar = _bar(telemetry_panel, Vector2(126, 80), Vector2(104, 7), Color(0.95, 0.65, 0.12))
 	hull_bar = _bar(telemetry_panel, Vector2(238, 80), Vector2(104, 7), Color(0.9, 0.15, 0.12))
+	_register_collapsible(telemetry_panel)
 	wing_panel = _panel(root, Vector2(18, 164), Vector2(438, 68), Color(0.006, 0.024, 0.038, 0.68))
-	_section_heading(wing_panel, "AIR GROUP", UIStyle.CYAN)
+	_collapsible_heading(wing_panel, "AIR GROUP", UIStyle.CYAN)
 	wing_label = _label(wing_panel, Vector2(14, 23), Vector2(410, 40), 11)
+	_register_collapsible(wing_panel)
 	weapon_panel = _panel(root, Vector2(18, 240), Vector2(470, 88), Color(0.006, 0.024, 0.038, 0.68))
-	_section_heading(weapon_panel, "FIRE CONTROL", UIStyle.AMBER)
+	_collapsible_heading(weapon_panel, "FIRE CONTROL", UIStyle.AMBER)
 	weapon_label = _label(weapon_panel, Vector2(14, 23), Vector2(442, 60), 11)
+	_register_collapsible(weapon_panel)
 	target_panel = _panel(root, Vector2(934, 14), Vector2(328, 158), Color(0.006, 0.024, 0.038, 0.76), UIStyle.CYAN)
-	_section_heading(target_panel, "TARGET SOLUTION", UIStyle.CYAN)
-	var portrait_back := _panel(target_panel, Vector2(14, 30), Vector2(76, 66), Color(0.012, 0.065, 0.09, 0.66), UIStyle.CYAN_SOFT)
-	var portrait := Polygon2D.new()
-	portrait.polygon = PackedVector2Array([Vector2(42, 6), Vector2(57, 25), Vector2(76, 38), Vector2(62, 48), Vector2(56, 70), Vector2(28, 70), Vector2(22, 48), Vector2(8, 38), Vector2(27, 25)])
-	portrait.color = Color(0.22, 0.72, 0.92, 0.9)
-	portrait_back.add_child(portrait)
-	target_label = _label(target_panel, Vector2(100, 29), Vector2(214, 68), 11)
-	target_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_collapsible_heading(target_panel, "TARGET SOLUTION", UIStyle.CYAN)
+	target_label = _label(target_panel, Vector2(14, 29), Vector2(300, 68), 11)
+	target_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_label(target_panel, Vector2(14, 112), Vector2(18, 14), 9, Color(0.3, 0.75, 1.0)).text = "S"
 	_label(target_panel, Vector2(14, 130), Vector2(18, 14), 9, Color(1.0, 0.7, 0.25)).text = "A"
 	_label(target_panel, Vector2(14, 148), Vector2(18, 14), 9, Color(1.0, 0.3, 0.24)).text = "H"
 	target_shield_bar = _bar(target_panel, Vector2(32, 106), Vector2(282, 7), Color(0.1, 0.65, 1.0))
 	target_armor_bar = _bar(target_panel, Vector2(32, 124), Vector2(282, 7), Color(0.95, 0.65, 0.12))
 	target_hull_bar = _bar(target_panel, Vector2(32, 142), Vector2(282, 7), Color(0.9, 0.15, 0.12))
+	_register_collapsible(target_panel)
+	overview_panel = _panel(root, Vector2(934, 180), Vector2(328, 252), Color(0.005, 0.022, 0.034, 0.82), UIStyle.CYAN_SOFT)
+	_collapsible_heading(overview_panel, "TACTICAL OVERVIEW", UIStyle.CYAN_SOFT)
+	for index in 5:
+		var row := _overview_button(overview_panel, Vector2(12, 28 + index * 31), Vector2(304, 28), 10)
+		row.pressed.connect(_select_overview_row.bind(index))
+		overview_rows.append(row)
+		overview_contact_ids.append(&"")
+	var lock_button := _overview_button(overview_panel, Vector2(12, 190), Vector2(70, 28), 9)
+	lock_button.text = "LOCK"
+	lock_button.pressed.connect(_issue_overview_command.bind(&"lock"))
+	var approach_button := _overview_button(overview_panel, Vector2(86, 190), Vector2(70, 28), 9)
+	approach_button.text = "APPROACH"
+	approach_button.pressed.connect(_issue_overview_command.bind(&"approach"))
+	var orbit_button := _overview_button(overview_panel, Vector2(160, 190), Vector2(70, 28), 9)
+	orbit_button.text = "ORBIT"
+	orbit_button.pressed.connect(_issue_overview_command.bind(&"orbit"))
+	var keep_button := _overview_button(overview_panel, Vector2(234, 190), Vector2(82, 28), 9)
+	keep_button.text = "KEEP 2.5K"
+	keep_button.pressed.connect(_issue_overview_command.bind(&"keep_distance"))
+	var overview_hint := _label(overview_panel, Vector2(12, 221), Vector2(304, 20), 8, UIStyle.TEXT_MUTED)
+	overview_hint.text = "SELECT TRACK  //  LOCK OR ISSUE HELM GEOMETRY"
+	overview_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_register_collapsible(overview_panel)
 	target_indicator = _label(root, Vector2(624, 300), Vector2(38, 38), 30)
 	target_indicator.text = "▲"
 	target_indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	target_indicator.add_theme_color_override("font_color", Color(0.25, 0.92, 1.0))
 	target_indicator.pivot_offset = Vector2(19, 19)
 	target_indicator.visible = false
+	target_reticle = TargetLockReticle.new()
+	target_reticle.position = Vector2(560, 280)
+	target_reticle.size = Vector2(160, 160)
+	target_reticle.visible = false
+	root.add_child(target_reticle)
+	target_caption = _label(root, Vector2(548, 424), Vector2(184, 36), 10, UIStyle.TEXT_PRIMARY)
+	target_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	target_caption.visible = false
 	mode_panel = _panel(root, Vector2(692, 14), Vector2(224, 36), Color(0.006, 0.024, 0.038, 0.72), UIStyle.CYAN)
 	mode_label = _label(mode_panel, Vector2(8, 2), Vector2(208, 28), 14)
 	mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -114,7 +156,7 @@ func _build_ui() -> void:
 	controls_panel = _panel(root, Vector2(84, 680), Vector2(1112, 28), Color(0.004, 0.018, 0.028, 0.62), UIStyle.CYAN_SOFT)
 	controls_label = _label(controls_panel, Vector2(10, 3), Vector2(1092, 22), 10, UIStyle.TEXT_MUTED)
 	controls_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	controls_label.text = "1 FLAK SCREEN  2 MISSILES  3 NUCLEAR  [ / ] FUSE RANGE  DOUBLE-CLICK SPACE FULL CRUISE  MMB ORBIT  WHEEL ZOOM"
+	controls_label.text = "1 FLAK SCREEN  2 MISSILES  3 NUCLEAR  B HANGAR WINGS  [ / ] FUSE RANGE  MMB ORBIT  WHEEL ZOOM"
 	crosshair_label = _label(root, Vector2(624, 340), Vector2(32, 32), 24)
 	crosshair_label.text = "⌖"
 	crosshair_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -146,7 +188,7 @@ func _build_ui() -> void:
 	pause_title.text = "PAUSED / SETTINGS"
 	pause_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var pause_copy := _label(pause_panel, Vector2(40, 90), Vector2(420, 160), 18)
-	pause_copy.text = "Esc — resume\n\n1: place / relocate flak screen  •  Shift+1: cease\n2: guided missile salvo  •  3: one nuclear torpedo\n[ / ]: flak fuse range  •  W/S: throttle\nDouble-click empty space: full-cruise heading\nMiddle-drag: camera orbit  •  Wheel: zoom\n\nEnter — restart encounter"
+	pause_copy.text = "Esc - resume\n\n1: place / relocate flak screen  /  Shift+1: cease\n2: guided missile salvo  /  3: one nuclear torpedo\nB: deploy or retract hangar wings  /  Z/X: individual air groups\n[ / ]: flak fuse range  /  W/S: throttle\nDouble-click empty space: full-cruise heading\nMiddle-drag: camera orbit  /  Wheel: signed zoom\n\nEnter - restart encounter"
 	pause_copy.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pause_panel.visible = false
 	pause_veil.visible = false
@@ -169,18 +211,24 @@ func _process(delta: float) -> void:
 	weapon_label.text = "[1] FLAK  //  %s  •  %s  •  %.1f km  •  R %.0fm\n[2] MISSILES  //  %s  •  %d WEAPONS  •  %.1f km\n[3] NUCLEAR  //  %s  •  ARM %.1f km  •  BLAST %.0fm" % [carrier.flak_screen_status(), flak_status, carrier.flak_screen_range_m / 1000.0, carrier.flak_airburst_radius_m, missile_status, carrier.missile_salvo_count, carrier.missile_weapon.range_m / 1000.0, nuclear_status, carrier.nuclear_arming_distance_m / 1000.0, carrier.nuclear_blast_radius_m]
 	var graphics := get_node_or_null("/root/GraphicsQualityManager")
 	radar_title.text = "TACTICAL RADAR // %s" % (graphics.profile_label() if graphics != null else "ACTIVE")
-	mode_label.text = "TACTICAL MAP — LIVE" if tactical.enabled else "COMMAND VIEW  //  THROTTLE %03d%%" % carrier.throttle_percent()
+	mode_label.text = "TACTICAL MAP - LIVE" if tactical.enabled else "COMMAND VIEW  //  THROTTLE %03d%%  //  ZOOM %+d%%" % [carrier.throttle_percent(), carrier.chase_zoom_percent()]
+	overview_refresh_seconds -= delta
+	if overview_refresh_seconds <= 0.0:
+		overview_refresh_seconds = 0.25
+		_refresh_overview()
 	_update_target_presentation()
 	if tactical.enabled:
 		telemetry_panel.visible = false
 		wing_panel.visible = false
 		weapon_panel.visible = false
-		crosshair_label.visible = false
+		crosshair_label.visible = carrier.flak_placement_active
+		if crosshair_label.visible:
+			crosshair_label.position = get_viewport().get_mouse_position() - crosshair_label.size * 0.5
 		objective_panel.visible = false
 		map_info_panel.visible = true
 		mode_panel.visible = true
 		map_info_label.text = _map_information()
-		controls_label.text = "1–4 GROUPS   LMB SELECT   RMB ORDER   I INTERCEPT   E ESCORT   SHIFT QUEUE   Q STANCE   F FORM   R RECALL   H HOLD   X WITHDRAW   V JUMP   MMB ORBIT   WHEEL ZOOM"
+		controls_label.text = "1 FLAK   F1-F4 GROUPS   LMB SELECT/CONFIRM   RMB ORDER/CANCEL   I INTERCEPT   E ESCORT   SHIFT QUEUE   B WINGS   WHEEL ZOOM"
 	else:
 		telemetry_panel.visible = true
 		wing_panel.visible = true
@@ -192,7 +240,7 @@ func _process(delta: float) -> void:
 		objective_panel.visible = true
 		map_info_panel.visible = false
 		mode_panel.visible = true
-		controls_label.text = "1 FLAK   2 MISSILES   3 NUCLEAR   [ / ] RANGE   %s   DOUBLE-CLICK HELM   MMB ORBIT   Z/X WINGS   TAB MAP" % ("LMB CONFIRM / RMB CANCEL" if carrier.flak_placement_active else "SHIFT+1 CEASE")
+		controls_label.text = "1 FLAK   2 MISSILES   3 NUCLEAR   [ / ] RANGE   %s   DOUBLE-CLICK HELM   MMB ORBIT   B HANGAR   Z/X AIR GROUPS   TAB MAP" % ("LMB CONFIRM / RMB CANCEL" if carrier.flak_placement_active else "SHIFT+1 CEASE")
 	if notification_time > 0.0:
 		notification_time -= delta
 		if notification_time <= 0.0:
@@ -203,6 +251,55 @@ func notify(message: String) -> void:
 	notification_label.text = message
 	notification_time = 3.5
 	notification_panel.visible = true
+
+func _refresh_overview() -> void:
+	if overview_rows.is_empty() or sensors == null:
+		return
+	var contacts: Array[SensorContact] = []
+	for contact in sensors.contacts.values():
+		if contact is SensorContact and contact.confidence > 0.04:
+			contacts.append(contact)
+	contacts.sort_custom(func(a: SensorContact, b: SensorContact) -> bool:
+		return carrier.global_position.distance_squared_to(a.estimated_position) < carrier.global_position.distance_squared_to(b.estimated_position)
+	)
+	for index in overview_rows.size():
+		var row := overview_rows[index]
+		if index >= contacts.size():
+			overview_contact_ids[index] = &""
+			row.text = "—  NO TRACK"
+			row.disabled = true
+			continue
+		var contact := contacts[index]
+		overview_contact_ids[index] = contact.tracked_entity_id
+		row.disabled = false
+		var target := sensors.resolve_combat_target(contact.tracked_entity_id)
+		var target_name := target.display_name if is_instance_valid(target) else String(contact.classification).capitalize()
+		var range_m := carrier.global_position.distance_to(contact.estimated_position)
+		var relative := contact.estimated_velocity - carrier.velocity
+		var line_of_sight := carrier.global_position.direction_to(contact.estimated_position)
+		var closing_speed := -relative.dot(line_of_sight)
+		var state := "ID" if contact.is_targetable() else ("CL" if contact.identification_state == SensorContact.IdentificationState.CLASSIFIED else "??")
+		var selected_marker := ">" if overview_selected_id == contact.tracked_entity_id else " "
+		row.text = "%s %-13s %5.1fK  %+4.0fM/S  %s" % [selected_marker, target_name.left(13).to_upper(), range_m / 1000.0, closing_speed, state]
+		row.add_theme_color_override("font_color", UIStyle.AMBER if overview_selected_id == contact.tracked_entity_id else UIStyle.TEXT_PRIMARY)
+
+func _select_overview_row(index: int) -> void:
+	if index < 0 or index >= overview_contact_ids.size():
+		return
+	var entity_id := overview_contact_ids[index]
+	if entity_id.is_empty():
+		return
+	overview_selected_id = entity_id
+	_refresh_overview()
+
+func _issue_overview_command(command: StringName) -> void:
+	if overview_selected_id.is_empty():
+		notify("TACTICAL OVERVIEW — select a sensor track first")
+		return
+	if command == &"lock":
+		target_lock_requested.emit(overview_selected_id)
+	else:
+		target_command_requested.emit(command, overview_selected_id)
 
 func _wing_state(wing: SidebaySquadron) -> String:
 	return "%s → REDEPLOY" % wing.operation.label() if wing.redeploy_requested else wing.operation.label()
@@ -233,24 +330,32 @@ func update_target(contact: SensorContact, target_name: String = "", target_ship
 		target_armor_bar.value = 0.0
 		target_hull_bar.value = 0.0
 		target_indicator.visible = false
+		target_reticle.visible = false
+		target_caption.visible = false
 		return
 	locked_target = target_ship
+	overview_selected_id = contact.tracked_entity_id
 	var state: String = SensorContact.IdentificationState.keys()[contact.identification_state]
 	var distance := carrier.global_position.distance_to(target_ship.global_position) if is_instance_valid(target_ship) else carrier.global_position.distance_to(contact.estimated_position)
-	target_label.text = "LOCKED  //  %s\n%s  •  CONF %d%%\nRANGE %.0f m\nERROR ±%.0f m" % [target_name if not target_name.is_empty() else String(contact.classification).capitalize(), state, contact.confidence * 100.0, distance, contact.uncertainty_radius_m]
+	var relative_speed := (contact.estimated_velocity - carrier.velocity).length()
+	target_label.text = "LOCKED  //  %s\n%s  •  CONF %d%%\nRANGE %.0f m  •  REL %.0f m/s\nERROR ±%.0f m" % [target_name if not target_name.is_empty() else String(contact.classification).capitalize(), state, contact.confidence * 100.0, distance, relative_speed, contact.uncertainty_radius_m]
 
 func _update_target_presentation() -> void:
 	if not is_instance_valid(locked_target):
 		target_indicator.visible = false
+		target_reticle.visible = false
+		target_caption.visible = false
 		return
 	var layers := locked_target.layer_percentages()
 	target_shield_bar.value = layers.x * 100.0
 	target_armor_bar.value = layers.y * 100.0
 	target_hull_bar.value = layers.z * 100.0
-	if tactical.enabled or not is_instance_valid(carrier.chase_camera):
+	var camera := tactical.camera if tactical.enabled else carrier.chase_camera
+	if not is_instance_valid(camera):
 		target_indicator.visible = false
+		target_reticle.visible = false
+		target_caption.visible = false
 		return
-	var camera := carrier.chase_camera
 	var viewport_size := get_viewport().get_visible_rect().size
 	var center := viewport_size * 0.5
 	var camera_space := camera.global_transform.affine_inverse() * locked_target.global_position
@@ -265,17 +370,34 @@ func _update_target_presentation() -> void:
 	var safe_rect := Rect2(Vector2(54, 78), viewport_size - Vector2(108, 148))
 	var on_screen := not behind and safe_rect.has_point(projected)
 	if on_screen:
-		target_indicator.text = "◇"
-		target_indicator.rotation = 0.0
-		target_indicator.position = projected - target_indicator.size * 0.5
+		target_indicator.visible = false
+		var radius_point := locked_target.global_position + camera.global_transform.basis.x.normalized() * maxf(locked_target.collision_radius_m, 12.0)
+		var screen_radius := camera.unproject_position(radius_point).distance_to(projected)
+		var span := clampf(screen_radius * 2.5, 52.0, 132.0)
+		var range_m := carrier.global_position.distance_to(locked_target.global_position)
+		var in_envelope := carrier.missile_weapon != null and range_m <= carrier.missile_weapon.range_m
+		var lock_color := UIStyle.CYAN if in_envelope else Color(1.0, 0.22, 0.16)
+		var projectile_speed := carrier.missile_weapon.projectile_speed_mps if carrier.missile_weapon != null else 900.0
+		var flight_time := range_m / maxf(projectile_speed, 1.0)
+		var lead_world := locked_target.global_position + locked_target.velocity * flight_time
+		var lead_screen := camera.unproject_position(lead_world)
+		target_reticle.position = projected - target_reticle.size * 0.5
+		target_reticle.set_solution(span, lock_color, lead_screen - projected, true)
+		target_reticle.visible = true
+		var relative_speed := (locked_target.velocity - carrier.velocity).length()
+		target_caption.text = "%s  //  %.1f KM  //  ΔV %.0f M/S" % [locked_target.display_name.to_upper(), range_m / 1000.0, relative_speed]
+		target_caption.position = projected + Vector2(-92.0, span * 0.5 + 10.0)
+		target_caption.visible = true
 	else:
+		target_reticle.visible = false
+		target_caption.visible = false
 		target_indicator.text = "▲"
 		target_indicator.rotation = direction.angle() + PI * 0.5
 		var edge := center + direction * minf(viewport_size.x * 0.42, viewport_size.y * 0.38)
 		edge.x = clampf(edge.x, 54.0, viewport_size.x - 54.0)
 		edge.y = clampf(edge.y, 78.0, viewport_size.y - 70.0)
 		target_indicator.position = edge - target_indicator.size * 0.5
-	target_indicator.visible = true
+		target_indicator.visible = true
 
 func set_result(victory: bool, action_text: String = "Press Enter to restart", outcome: String = "victory") -> void:
 	result_veil.visible = true
@@ -351,6 +473,7 @@ func _panel(parent: Node, position_value: Vector2, size_value: Vector2, color: C
 	var panel := Panel.new()
 	panel.position = position_value
 	panel.size = size_value
+	panel.clip_contents = true
 	panel.add_theme_stylebox_override("panel", UIStyle.hud_panel_style(color, accent))
 	panel.set_meta("military_hud_frame", true)
 	parent.add_child(panel)
@@ -361,12 +484,89 @@ func _add_frame_marks(panel: Panel, accent: Color) -> void:
 	var top_mark := Polygon2D.new()
 	top_mark.polygon = PackedVector2Array([Vector2(0, 0), Vector2(38, 0), Vector2(31, 3), Vector2(0, 3)])
 	top_mark.color = Color(accent.r, accent.g, accent.b, 0.9)
+	top_mark.set_meta("collapsible_chrome", true)
 	panel.add_child(top_mark)
 	var lower_mark := Polygon2D.new()
 	lower_mark.position = Vector2(panel.size.x - 38.0, panel.size.y - 3.0)
 	lower_mark.polygon = PackedVector2Array([Vector2(7, 0), Vector2(38, 0), Vector2(38, 3), Vector2(0, 3)])
 	lower_mark.color = Color(accent.r, accent.g, accent.b, 0.52)
+	lower_mark.set_meta("collapsible_chrome", true)
 	panel.add_child(lower_mark)
+
+func _collapsible_heading(panel: Panel, title: String, accent: Color) -> Button:
+	var heading := Button.new()
+	heading.name = "%sCollapse" % title.replace(" ", "")
+	heading.position = Vector2(8.0, 3.0)
+	heading.size = Vector2(panel.size.x - 16.0, 19.0)
+	heading.text = "[-]  %s" % title
+	heading.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	heading.toggle_mode = true
+	heading.button_pressed = true
+	heading.flat = true
+	heading.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	heading.add_theme_font_size_override("font_size", 10)
+	heading.add_theme_color_override("font_color", Color(accent.r, accent.g, accent.b, 0.94))
+	heading.add_theme_color_override("font_hover_color", Color.WHITE)
+	heading.add_theme_color_override("font_pressed_color", Color(accent.r, accent.g, accent.b, 1.0))
+	heading.set_meta("collapsible_chrome", true)
+	panel.add_child(heading)
+	heading.toggled.connect(_set_panel_expanded.bind(panel, heading, title))
+	var line := ColorRect.new()
+	line.position = Vector2(14.0, 21.0)
+	line.size = Vector2(panel.size.x - 28.0, 1.0)
+	line.color = Color(accent.r, accent.g, accent.b, 0.48)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.set_meta("collapsible_chrome", true)
+	panel.add_child(line)
+	return heading
+
+func _register_collapsible(panel: Panel) -> void:
+	var body: Array[CanvasItem] = []
+	for child in panel.get_children():
+		if child is CanvasItem and not bool(child.get_meta("collapsible_chrome", false)):
+			body.append(child)
+	collapsible_panels[panel.get_instance_id()] = {
+		"expanded_height": panel.size.y,
+		"body": body,
+		"expanded": true,
+	}
+
+func _set_panel_expanded(expanded: bool, panel: Panel, heading: Button, title: String) -> void:
+	if not collapsible_panels.has(panel.get_instance_id()):
+		return
+	var state: Dictionary = collapsible_panels[panel.get_instance_id()]
+	state.expanded = expanded
+	collapsible_panels[panel.get_instance_id()] = state
+	heading.text = "%s  %s" % ["[-]" if expanded else "[+]", title]
+	for child in state.body:
+		if is_instance_valid(child):
+			child.visible = expanded
+	panel.size.y = float(state.expanded_height) if expanded else 25.0
+
+func _overview_button(parent: Control, position_value: Vector2, size_value: Vector2, font_size: int) -> Button:
+	var button := Button.new()
+	button.position = position_value
+	button.size = size_value
+	button.flat = true
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	button.add_theme_font_size_override("font_size", font_size)
+	button.add_theme_color_override("font_color", UIStyle.TEXT_PRIMARY)
+	button.add_theme_color_override("font_hover_color", UIStyle.CYAN)
+	button.add_theme_color_override("font_pressed_color", UIStyle.AMBER)
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.01, 0.05, 0.075, 0.74)
+	normal.border_color = Color(0.12, 0.4, 0.55, 0.42)
+	normal.set_border_width_all(1)
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color(0.025, 0.13, 0.18, 0.92)
+	hover.border_color = Color(UIStyle.CYAN.r, UIStyle.CYAN.g, UIStyle.CYAN.b, 0.72)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", hover)
+	button.add_theme_stylebox_override("focus", hover)
+	parent.add_child(button)
+	return button
 
 func _section_heading(parent: Control, text_value: String, accent: Color) -> void:
 	var heading := _label(parent, Vector2(14, 5), Vector2(parent.size.x - 28.0, 16), 10, Color(accent.r, accent.g, accent.b, 0.9))

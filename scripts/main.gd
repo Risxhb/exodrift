@@ -2,6 +2,7 @@ extends Node3D
 
 const OnboardingController := preload("res://scripts/systems/onboarding_controller.gd")
 const EncounterDirector := preload("res://scripts/systems/encounter_director.gd")
+const SpaceSky := preload("res://scripts/systems/space_sky.gd")
 
 signal return_to_campaign(victory: bool, battle_report: Dictionary)
 
@@ -44,6 +45,9 @@ var pursuit_spawned: bool = false
 var escape_pods: Array[Dictionary] = []
 var destroyed_hostile_count: int = 0
 var emergency_bay_seal: bool = false
+var manual_target_lock_id: StringName = &""
+var aggregate_bay_closure_pending: bool = false
+var aggregate_wing_launch_pending: bool = false
 var onboarding: ExodriftOnboardingController
 var encounter: ExodriftEncounterDirector
 
@@ -89,6 +93,7 @@ func _process(delta: float) -> void:
 	elapsed_seconds += delta
 	if is_instance_valid(escort) and is_instance_valid(carrier):
 		escort.command_link.update_for_distance(escort.global_position.distance_to(carrier.global_position), carrier.definition.command_range_m)
+	_process_aggregate_flight_ops()
 	_update_target_lock()
 	_process_objective(delta)
 	_process_escape_pods()
@@ -121,8 +126,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		hud.notify("Tactical map is live; carrier maintains helm orders." if tactical.enabled else "Direct flight control restored.")
 		audio.play_tone(620.0 if tactical.enabled else 420.0, 0.1)
 		return
-	if tactical.handle_input(event):
-		return
 	if event.is_action_pressed("flak_screen"):
 		if event is InputEventKey and event.shift_pressed:
 			carrier.clear_flak_screen()
@@ -131,13 +134,34 @@ func _unhandled_input(event: InputEvent) -> void:
 			carrier.cancel_flak_placement()
 			hud.notify("FLAK PLACEMENT CANCELLED — previous screen retained")
 		else:
-			carrier.begin_flak_placement(get_viewport().get_mouse_position())
+			var pointer := get_viewport().get_mouse_position()
+			if tactical.enabled:
+				carrier.begin_flak_placement_world(tactical.flak_placement_world_point(pointer, carrier.flak_screen_range_m))
+			else:
+				carrier.begin_flak_placement(pointer)
 			hud.notify("FLAK SCREEN PLACEMENT — move pointer, [ / ] range, LMB confirm, RMB cancel")
 		return
 	if event.is_action_pressed("flak_range_decrease") or event.is_action_pressed("flak_range_increase"):
 		var steps := -1 if event.is_action_pressed("flak_range_decrease") else 1
 		var range_m := carrier.adjust_flak_screen_range(steps)
 		hud.notify("FLAK FUSE PLANE %.1f km" % (range_m / 1000.0))
+		return
+	if carrier.flak_placement_active:
+		if event is InputEventMouseMotion and tactical.enabled and not tactical.middle_dragging:
+			carrier.update_flak_placement_world(tactical.flak_placement_world_point(event.position, carrier.flak_screen_range_m))
+			return
+		if event is InputEventMouseButton and event.pressed:
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				if carrier.confirm_flak_placement():
+					hud.notify("FLAK SCREEN LOCKED — batteries sustaining at %.1f km" % (carrier.flak_screen_range_m / 1000.0))
+				else:
+					hud.notify("INVALID FLAK SCREEN — keep the fuse plane inside the battlespace")
+				return
+			if event.button_index == MOUSE_BUTTON_RIGHT:
+				carrier.cancel_flak_placement()
+				hud.notify("FLAK PLACEMENT CANCELLED — previous screen retained")
+				return
+	if tactical.handle_input(event):
 		return
 	if event.is_action_pressed("missile_salvo"):
 		_fire_missile_salvo()
@@ -191,6 +215,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_toggle_wing(interceptor)
 	elif event.is_action_pressed("scout_wing"):
 		_toggle_wing(scout)
+	elif event.is_action_pressed("toggle_all_wings"):
+		_toggle_all_wings_and_hangars()
 	elif event.is_action_pressed("jump_prep"):
 		request_withdrawal()
 
@@ -412,28 +438,9 @@ func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
 	world_environment.name = "ExodriftSkyEnvironment"
 	var environment := Environment.new()
-	var sky_material := ProceduralSkyMaterial.new()
-	var backdrop_color: Color = sector.background_color
-	var horizon_color := Color(sector.nebula_secondary.r, sector.nebula_secondary.g, sector.nebula_secondary.b).lerp(backdrop_color, 0.72)
-	sky_material.sky_top_color = backdrop_color.darkened(0.35)
-	sky_material.sky_horizon_color = horizon_color
-	sky_material.sky_curve = 0.12
-	sky_material.ground_bottom_color = backdrop_color.darkened(0.35)
-	sky_material.ground_horizon_color = horizon_color
-	sky_material.ground_curve = 0.18
-	sky_material.sun_angle_max = 1.1
-	sky_material.sun_curve = 0.08
-	var sky := Sky.new()
-	sky.radiance_size = Sky.RADIANCE_SIZE_256
-	sky.sky_material = sky_material
-	environment.background_mode = Environment.BG_SKY
-	environment.sky = sky
-	environment.background_energy_multiplier = 0.82
-	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	SpaceSky.apply_to_environment(environment, SpaceSky.sector_preset(campaign_sector_index))
 	environment.ambient_light_color = sector.ambient_color
 	environment.ambient_light_energy = 0.86
-	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	environment.tonemap_exposure = 1.08
 	world_environment.environment = environment
 	add_child(world_environment)
@@ -708,16 +715,75 @@ func _connect_feedback() -> void:
 		objective_ship.ship_destroyed.connect(_on_objective_ship_destroyed)
 	tactical.notification_requested.connect(hud.notify)
 	tactical.selection_changed.connect(func(name: String) -> void: hud.notify("Selected: %s" % name))
+	tactical.target_lock_requested.connect(_on_target_lock_requested)
+	if hud.has_signal("target_lock_requested"):
+		hud.connect("target_lock_requested", Callable(self, "_on_target_lock_requested"))
+	if hud.has_signal("target_command_requested"):
+		hud.connect("target_command_requested", Callable(self, "_on_target_command_requested"))
 
 func _update_target_lock() -> void:
 	if not is_instance_valid(carrier):
 		return
-	target_lock = sensors.best_target_in_direction(carrier.global_position, carrier.aim_direction, 8500.0)
+	var contact: SensorContact
+	if not manual_target_lock_id.is_empty():
+		contact = sensors.get_contact(manual_target_lock_id)
+		var manual_target := sensors.resolve_combat_target(manual_target_lock_id)
+		if contact != null and contact.is_targetable() and is_instance_valid(manual_target) and not manual_target.is_destroyed:
+			target_lock = manual_target
+		else:
+			manual_target_lock_id = &""
+			target_lock = null
+	if manual_target_lock_id.is_empty():
+		target_lock = sensors.best_target_in_direction(carrier.global_position, carrier.aim_direction, 8500.0)
+		contact = sensors.get_contact(target_lock.stable_entity_id) if is_instance_valid(target_lock) else null
 	if is_instance_valid(target_lock):
-		var contact := sensors.get_contact(target_lock.stable_entity_id)
 		hud.update_target(contact, target_lock.display_name, target_lock)
 	else:
 		hud.update_target(null)
+
+func _on_target_lock_requested(entity_id: StringName) -> void:
+	if entity_id.is_empty():
+		manual_target_lock_id = &""
+		target_lock = null
+		hud.notify("TARGET LOCK RELEASED")
+		return
+	var contact := sensors.get_contact(entity_id)
+	var candidate := sensors.resolve_combat_target(entity_id)
+	if contact == null or not contact.is_targetable() or not is_instance_valid(candidate) or candidate.is_destroyed:
+		hud.notify("TARGET LOCK REJECTED — identified combat track required")
+		return
+	manual_target_lock_id = entity_id
+	target_lock = candidate
+	hud.update_target(contact, candidate.display_name, candidate)
+	hud.notify("TARGET LOCKED — %s" % candidate.display_name.to_upper())
+
+func _on_target_command_requested(command: StringName, entity_id: StringName) -> void:
+	var resolved_id := entity_id if not entity_id.is_empty() else manual_target_lock_id
+	if resolved_id.is_empty():
+		hud.notify("NAVIGATION COMMAND REJECTED — select a target")
+		return
+	var contact := sensors.get_contact(resolved_id)
+	var candidate := sensors.resolve_combat_target(resolved_id)
+	if contact == null or not contact.is_targetable() or not is_instance_valid(candidate) or candidate.is_destroyed:
+		hud.notify("NAVIGATION COMMAND REJECTED — target track unavailable")
+		return
+	manual_target_lock_id = resolved_id
+	target_lock = candidate
+	var accepted := false
+	match String(command).to_lower():
+		"approach":
+			accepted = carrier.command_approach(candidate)
+		"orbit":
+			accepted = carrier.command_orbit(candidate)
+		"keep_distance", "keep_range", "keep at range":
+			accepted = carrier.command_keep_distance(candidate)
+		"clear", "stop":
+			carrier.clear_target_navigation()
+			accepted = true
+	if accepted:
+		hud.notify("%s COMMAND — %s" % [String(command).replace("_", " ").to_upper(), candidate.display_name.to_upper()])
+	else:
+		hud.notify("NAVIGATION COMMAND REJECTED")
 
 func _toggle_wing(wing: SidebaySquadron) -> void:
 	if extraction_requested:
@@ -739,6 +805,64 @@ func _toggle_wing(wing: SidebaySquadron) -> void:
 			hud.notify("%s REDEPLOY QUEUED — launch follows servicing" % wing.display_name.to_upper())
 	else:
 		hud.notify("%s is %s" % [wing.display_name, wing.operation.label()])
+
+func _toggle_all_wings_and_hangars() -> void:
+	if extraction_requested:
+		hud.notify("FLIGHT OPS LOCKED — jump preparation is active")
+		return
+	var wings: Array[SidebaySquadron] = [interceptor, scout]
+	if aggregate_bay_closure_pending or carrier.bay_target_closure > 0.5 or carrier.are_bays_closed():
+		aggregate_bay_closure_pending = false
+		aggregate_wing_launch_pending = true
+		carrier.request_bays_open()
+		hud.notify("ALL HANGARS OPENING — wings queued for deployment")
+		return
+	var any_wing_out := false
+	for wing in wings:
+		if is_instance_valid(wing) and wing.operation.state in [BayOperation.State.QUEUED, BayOperation.State.LAUNCHING, BayOperation.State.DEPLOYED, BayOperation.State.RETURNING, BayOperation.State.APPROACH, BayOperation.State.DOCKING]:
+			any_wing_out = true
+			break
+	if any_wing_out:
+		aggregate_wing_launch_pending = false
+		aggregate_bay_closure_pending = true
+		carrier.request_bays_open()
+		for wing in wings:
+			if not is_instance_valid(wing):
+				continue
+			wing.redeploy_requested = false
+			wing.prepare_for_jump()
+		hud.notify("ALL WINGS RECALLING — hangars close when recovery is complete")
+		return
+	_launch_all_available_wings()
+
+func _launch_all_available_wings() -> bool:
+	var waiting_for_recovery := false
+	var action_taken := false
+	for wing in [interceptor, scout]:
+		if not is_instance_valid(wing):
+			continue
+		if wing.operation.state == BayOperation.State.READY:
+			_toggle_wing(wing)
+			action_taken = true
+		elif wing.operation.state == BayOperation.State.SERVICING:
+			wing.request_redeploy()
+			action_taken = true
+		elif wing.operation.state in [BayOperation.State.RETURNING, BayOperation.State.APPROACH, BayOperation.State.DOCKING]:
+			waiting_for_recovery = true
+	if action_taken:
+		hud.notify("ALL WINGS DEPLOYING — port and starboard flight ops active")
+	return not waiting_for_recovery
+
+func _process_aggregate_flight_ops() -> void:
+	if aggregate_bay_closure_pending:
+		var interceptor_aboard := not is_instance_valid(interceptor) or interceptor.all_craft_aboard()
+		var scout_aboard := not is_instance_valid(scout) or scout.all_craft_aboard()
+		if interceptor_aboard and scout_aboard:
+			aggregate_bay_closure_pending = false
+			carrier.request_bays_closed()
+			hud.notify("ALL WINGS SECURED — hangars retracting")
+	if aggregate_wing_launch_pending and carrier.are_bays_open():
+		aggregate_wing_launch_pending = not _launch_all_available_wings()
 
 func _on_order_feedback(_entity_id: StringName, message: String) -> void:
 	var recorder := _playtest_recorder()

@@ -17,11 +17,16 @@ extends Resource
 @export var armor_rib_count: int = 4
 @export var turret_count: int = 2
 @export var fin_scale: float = 0.0
-@export_range(0.0, 1.0) var surface_metallic: float = 0.72
-@export_range(0.0, 1.0) var surface_roughness: float = 0.34
-@export_range(0.0, 0.6) var albedo_lift: float = 0.4
+@export_range(0.0, 1.0) var surface_metallic: float = 0.52
+@export_range(0.0, 1.0) var surface_roughness: float = 0.44
+@export_range(0.0, 0.6) var albedo_lift: float = 0.46
 @export var texture_scale: float = 3.2
 @export_range(0.0, 1.0) var wear_level: float = 0.24
+@export_range(0.3, 1.0) var core_fore_taper: float = 0.68
+@export_range(0.3, 1.0) var core_aft_taper: float = 0.94
+@export_range(0.3, 1.0) var dorsal_fore_taper: float = 0.52
+@export_range(0.3, 1.0) var dorsal_aft_taper: float = 0.86
+@export_range(0.0, 1.0) var rim_strength: float = 0.18
 
 static func for_ship(role: StringName, faction: StringName, identity: StringName = &"") -> ShipVisualProfile:
 	var profile := ShipVisualProfile.new()
@@ -40,11 +45,16 @@ static func for_ship(role: StringName, faction: StringName, identity: StringName
 		profile.marking_color = Color(1.0, 0.62, 0.16)
 		profile.armor_rib_count = 5
 		profile.fin_scale = 0.34
-		profile.surface_metallic = 0.58
-		profile.surface_roughness = 0.62
-		profile.albedo_lift = 0.28
+		profile.surface_metallic = 0.46
+		profile.surface_roughness = 0.68
+		profile.albedo_lift = 0.36
 		profile.texture_scale = 2.55
 		profile.wear_level = 0.72
+		profile.core_fore_taper = 0.58
+		profile.core_aft_taper = 0.96
+		profile.dorsal_fore_taper = 0.46
+		profile.dorsal_aft_taper = 0.82
+		profile.rim_strength = 0.12
 	var identity_text := String(identity)
 	if identity_text.begins_with("vesper_"):
 		profile.faction_style = &"vesper"
@@ -61,11 +71,16 @@ static func for_ship(role: StringName, faction: StringName, identity: StringName
 		profile.marking_color = Color(0.38, 0.95, 1.0)
 		profile.armor_rib_count = 3
 		profile.fin_scale = 0.76
-		profile.surface_metallic = 0.82
-		profile.surface_roughness = 0.24
-		profile.albedo_lift = 0.32
+		profile.surface_metallic = 0.68
+		profile.surface_roughness = 0.3
+		profile.albedo_lift = 0.4
 		profile.texture_scale = 3.8
 		profile.wear_level = 0.08
+		profile.core_fore_taper = 0.4
+		profile.core_aft_taper = 0.78
+		profile.dorsal_fore_taper = 0.34
+		profile.dorsal_aft_taper = 0.7
+		profile.rim_strength = 0.26
 	elif identity_text.begins_with("vanta_") or identity_text.begins_with("crucible_"):
 		profile.faction_style = &"crucible"
 		profile.hull_texture_path = "res://assets/textures/crucible_basalt_hull.svg"
@@ -81,20 +96,27 @@ static func for_ship(role: StringName, faction: StringName, identity: StringName
 		profile.marking_color = Color(0.82, 0.56, 1.0)
 		profile.armor_rib_count = 6
 		profile.fin_scale = 0.62
-		profile.surface_metallic = 0.76
-		profile.surface_roughness = 0.46
-		profile.albedo_lift = 0.26
+		profile.surface_metallic = 0.58
+		profile.surface_roughness = 0.52
+		profile.albedo_lift = 0.34
 		profile.texture_scale = 2.8
 		profile.wear_level = 0.38
+		profile.core_fore_taper = 0.72
+		profile.core_aft_taper = 0.98
+		profile.dorsal_fore_taper = 0.56
+		profile.dorsal_aft_taper = 0.92
+		profile.rim_strength = 0.2
 	var role_text := String(role)
 	if role_text.contains("corvette"):
 		profile.core_scale.z = 0.68
+		profile.core_fore_taper *= 0.82
 		profile.shoulder_scale.x = 0.25
 		profile.bow_scale.z = 0.4
 		profile.turret_count = 1
 	elif role_text in ["frigate", "command"]:
 		profile.dorsal_scale.y = 0.36
 		profile.keel_scale.z = 0.6
+		profile.core_fore_taper *= 0.9
 		profile.turret_count = 3 if role == &"command" else 2
 	elif role_text.contains("destroyer") or role_text.contains("cruiser"):
 		profile.core_scale = Vector3(profile.core_scale.x * 1.05, profile.core_scale.y, profile.core_scale.z)
@@ -102,6 +124,7 @@ static func for_ship(role: StringName, faction: StringName, identity: StringName
 		profile.shoulder_scale.x *= 1.18
 		profile.turret_count = 4 if role_text.contains("cruiser") else 3
 		profile.armor_rib_count += 2
+		profile.core_aft_taper = minf(1.0, profile.core_aft_taper * 1.04)
 	match identity:
 		&"cvn_sidebay":
 			profile.marking_color = Color(0.93, 0.96, 0.88)

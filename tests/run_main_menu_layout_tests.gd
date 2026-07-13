@@ -35,7 +35,8 @@ func _run() -> void:
 	_assert_true(layered_impacts.size() == 4 and layered_impacts.all(func(effect: Node) -> bool: return effect.find_child("WhiteHotCore", true, false) != null and effect.find_child("ShockwaveRing", true, false) != null and effect.find_child("DirectionalDebris", true, false) != null), "menu ship hits use layered core, shockwave, and debris effects")
 	_assert_true(menu.camera.fov <= 51.0 and menu.camera.far >= 30000.0, "battle camera holds the full readable command-view backdrop")
 	var environment_node := menu.world_root.get_child(0) as WorldEnvironment
-	_assert_true(environment_node.environment.background_mode == Environment.BG_SKY and environment_node.environment.sky.sky_material is ProceduralSkyMaterial, "menu battle uses the crisp resolution-independent space dome")
+	var sky_material := environment_node.environment.sky.sky_material if environment_node != null and environment_node.environment != null and environment_node.environment.sky != null else null
+	_assert_true(environment_node.environment.background_mode == Environment.BG_SKY and sky_material is ShaderMaterial and (sky_material as ShaderMaterial).shader.code.contains("star_layer"), "menu battle uses the crisp infinite deep-space star and galactic-band shader")
 	var nebula_veils := get_nodes_in_group("menu_nebula_veil").filter(func(node: Node) -> bool: return menu.world_root.is_ancestor_of(node))
 	_assert_true(nebula_veils.size() == 2, "menu battle layers two scalable vector nebula veils")
 	menu.queue_free()
