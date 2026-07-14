@@ -1,11 +1,14 @@
 extends SceneTree
 
+const TargetDirectionArrow := preload("res://scripts/ui/target_direction_arrow.gd")
+
 var failures: Array[String] = []
 
 func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	root.size = Vector2i(2560, 1440)
 	var scene := (load("res://scenes/main.tscn") as PackedScene).instantiate()
 	root.add_child(scene)
 	for _frame in 6:
@@ -27,10 +30,11 @@ func _run() -> void:
 	_assert_true(military_frames >= 10, "HUD uses the asymmetric military frame language throughout")
 	var panel_style := hud.telemetry_panel.get_theme_stylebox("panel") as StyleBoxFlat
 	_assert_true(panel_style != null and panel_style.border_width_left > panel_style.border_width_right and panel_style.corner_radius_top_right > panel_style.corner_radius_top_left, "HUD frames use asymmetrical rails instead of uniform boxes")
-	_assert_true(hud.collapsible_panels.size() >= 5 and hud.overview_rows.size() == 5, "carrier telemetry, air group, fire control, target solution, and tactical overview are collapsible command surfaces")
+	_assert_true(hud.collapsible_panels.size() >= 6 and hud.overview_rows.size() == 5, "carrier telemetry, air group, fire control, carrier operations, target solution, and tactical overview are collapsible command surfaces")
 	_assert_true(is_equal_approx(hud.telemetry_panel.scale.x, 0.75) and hud.target_context_menu.item_count >= 13, "combat HUD uses the compact 75% layout and shared distance-bearing target menu")
 	_assert_true(int(ProjectSettings.get_setting("display/window/size/window_width_override")) == 2560 and int(ProjectSettings.get_setting("display/window/size/window_height_override")) == 1440, "desktop window defaults to 2560×1440")
 	_assert_true(hud.target_reticle is ExodriftTargetLockReticle and hud.target_panel.find_children("*", "Panel", true, false).is_empty(), "target solution uses projected lock graphics and no placeholder ship portrait panel")
+	_assert_true(hud.target_indicator.get_script() == TargetDirectionArrow and not hud.target_indicator is Label, "off-screen target guidance uses a drawn arrow instead of a font-dependent placeholder glyph")
 	var collapse_button := hud.telemetry_panel.find_children("*Collapse", "Button", true, false).front() as Button if not hud.telemetry_panel.find_children("*Collapse", "Button", true, false).is_empty() else null
 	_assert_true(collapse_button != null, "carrier telemetry exposes an interactive collapse header")
 	if collapse_button != null:
@@ -39,13 +43,45 @@ func _run() -> void:
 		_assert_true(hud.telemetry_panel.size.y <= 26.0 and not hud.status_label.visible, "collapse header hides telemetry content while retaining the command rail")
 		collapse_button.button_pressed = true
 		await process_frame
-	scene.carrier.begin_flak_placement(scene.get_viewport().get_visible_rect().size * 0.5)
+	var safe_rect := Rect2(Vector2(10.0, 10.0), Vector2(root.size) - Vector2(20.0, 20.0))
+	for panel in [hud.objective_panel, hud.telemetry_panel, hud.wing_panel, hud.weapon_panel, hud.carrier_operations_panel, hud.target_panel, hud.overview_panel, hud.radar_panel, hud.mode_panel, hud.controls_panel]:
+		_assert_true(safe_rect.encloses(panel.get_global_rect()), "%s remains within the 2560x1440 safe margins" % panel.name)
+	_assert_true(not hud.weapon_panel.get_global_rect().intersects(hud.carrier_operations_panel.get_global_rect()), "compact carrier operations panel does not overlap fire control")
+	_assert_true(hud.carrier_operations_label.get_theme_font_size("font_size") >= 11 and hud.carrier_operations_label.text.contains("BALANCED"), "compact carrier operations summary remains readable and shows the current preset")
+
+	var console := scene.carrier_operations_console as ExodriftCarrierOperationsConsole
+	_assert_true(console != null and not console.is_open(), "carrier operations console starts closed")
+	console.open_console()
 	await process_frame
-	_assert_true(hud.crosshair_label.visible and hud.weapon_label.text.contains("PLACEMENT"), "flak placement exposes the director and fuse state")
+	_assert_true(console.is_open() and not paused, "carrier operations console remains live without pausing combat")
+	_assert_true(safe_rect.encloses(console.frame.get_global_rect()), "carrier operations console remains inside 1440p safe margins")
+	var power_panel := console.frame.get_node("PowerManagement") as Control
+	var subsystem_panel := console.frame.get_node("SubsystemStatus") as Control
+	var stores_panel := console.frame.get_node("CrewAndStores") as Control
+	var deck_panel := console.frame.get_node("FlightDeck") as Control
+	_assert_true(not power_panel.get_global_rect().intersects(subsystem_panel.get_global_rect()) and not stores_panel.get_global_rect().intersects(deck_panel.get_global_rect()), "console power, subsystem, stores, and deck regions do not overlap")
+	_assert_true(console.preset_label.get_theme_font_size("font_size") >= 14 and console.team_options.size() == 2 and console.loadout_options.size() == 2, "console text and interactive triage/deck controls remain readable")
+	var operations := scene.carrier.carrier_operations as CarrierOperationsState
+	operations.subsystem_condition.command_cic = 0.15
+	operations.create_hazard(&"command_cic", &"fire", 0.9)
+	console.refresh()
+	hud._update_carrier_operations_summary()
+	_assert_true(console.incident_label.text.contains("RESCUE") and console.incident_label.text.contains("SEC"), "operations console visibly presents the officer rescue countdown")
+	_assert_true(hud.carrier_operations_label.text.contains("RESCUE") and hud.carrier_operations_label.text.contains("COMMAND CIC"), "compact HUD presents the officer rescue subsystem and countdown")
+	console.close_console()
+
+	scene.sensors.emit_active_ping()
+	await process_frame
+	hud.open_target_context_menu(Vector2(root.size) - Vector2(4.0, 4.0), scene.hostile_command.stable_entity_id)
+	await process_frame
+	var popup_rect := Rect2(Vector2(hud.target_context_menu.position), Vector2(hud.target_context_menu.size))
+	_assert_true(hud.target_context_menu.visible and Rect2(Vector2.ZERO, Vector2(root.size)).encloses(popup_rect), "target context menu clamps inside the viewport near the lower-right edge")
+	hud.target_context_menu.hide()
+	_assert_true(not hud.crosshair_label.visible and hud.weapon_label.text.contains("LOCK DIRECTED") and hud.weapon_label.text.contains("HAZARD"), "fire-control HUD presents the lock-directed flak wall and friendly-fire hazard")
 	scene.queue_free()
 	await process_frame
 	if failures.is_empty():
-		print("PASS: M18 deep-space sky, collapsible command HUD, overview, and lock-director readability")
+		print("PASS: 1440p sky, carrier-operations console/HUD, lock-directed flak, and command readability")
 		quit(0)
 	else:
 		for failure in failures:

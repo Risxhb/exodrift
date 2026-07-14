@@ -51,6 +51,7 @@ func _show_main_menu() -> void:
 	main_menu.configure(run_state != null or save_manager.has_any_save())
 	main_menu.new_run_requested.connect(_on_menu_new_run)
 	main_menu.continue_requested.connect(_on_menu_continue)
+	main_menu.tutorial_trial_requested.connect(_on_menu_tutorial_trial)
 	main_menu.quit_requested.connect(func() -> void: get_tree().quit())
 
 func _on_menu_new_run() -> void:
@@ -69,6 +70,21 @@ func _on_menu_continue() -> void:
 	generator = SidebayCampaignGenerator.new()
 	generator.generate(run_state.seed)
 	_open_campaign("Operation restored. Choose a reachable node.")
+
+func _on_menu_tutorial_trial() -> void:
+	await _close_main_menu()
+	active_battle = (load("res://scenes/main.tscn") as PackedScene).instantiate()
+	active_battle.training_trial = true
+	active_battle.training_trial_finished.connect(_on_training_trial_finished)
+	add_child(active_battle)
+
+func _on_training_trial_finished(completed: bool) -> void:
+	get_tree().paused = false
+	if is_instance_valid(active_battle):
+		active_battle.queue_free()
+	active_battle = null
+	_show_main_menu()
+	main_menu.set_status("COMBAT TRIAL COMPLETE // CLEARED FOR OPERATIONS" if completed else "COMBAT TRIAL ENDED // TRAINING RECORD DISCARDED")
 
 func _close_main_menu() -> void:
 	if not is_instance_valid(main_menu):
@@ -114,9 +130,8 @@ func _open_campaign(status: String) -> void:
 		campaign_map.title_requested.connect(_show_main_menu)
 		campaign_map.configure(run_state, generator)
 	else:
-		campaign_map.visible = true
 		campaign_map.replace_state(run_state, generator)
-	campaign_map.set_status(status)
+	campaign_map.present(status, run_state.current_node_id != &"")
 	if not run_state.pending_operational_event.is_empty():
 		call_deferred("_show_operational_event")
 
@@ -150,17 +165,21 @@ func _resolve_noncombat_node(node: SidebayCampaignNode) -> void:
 			run_state.requisition += 1
 			message = "Salvage secured: +%d salvage stock, +1 requisition." % recovered
 		SidebayCampaignNode.NodeType.REPAIR:
-			run_state.supplies += node.reward_supplies
-			message = "Fleet support completed: +%d reserve supplies." % node.reward_supplies
+			message = _apply_repair_node_support(node)
 		SidebayCampaignNode.NodeType.INTEL:
 			run_state.intel += node.reward_intel
 			message = "Signals decoded: +%d intel." % node.reward_intel
 	_complete_node(node)
 	campaign_map.refresh()
-	campaign_map.set_status(message)
+	campaign_map.present(message, true)
 	active_node = null
 	if run_state.prepare_operational_event(node.node_type, node.node_id):
 		_show_operational_event()
+
+func _apply_repair_node_support(node: SidebayCampaignNode) -> String:
+	run_state.supplies += node.reward_supplies
+	var crew_restored := run_state.restore_crew_at_repair_node(24)
+	return "Fleet support completed: +%d reserve supplies, +%d replacement crew (%d/240 aboard)." % [node.reward_supplies, crew_restored, run_state.carrier_operations.crew_current]
 
 func _launch_battle(node: SidebayCampaignNode) -> void:
 	campaign_map.visible = false
@@ -264,7 +283,7 @@ func _resolve_after_action(decision: StringName) -> void:
 	pending_battle_victory = false
 	active_node = null
 	campaign_map.refresh()
-	campaign_map.set_status(status)
+	campaign_map.present(status, true)
 
 func _open_fleet_loadout() -> void:
 	if is_instance_valid(fleet_loadout):

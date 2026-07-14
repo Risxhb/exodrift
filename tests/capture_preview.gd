@@ -32,16 +32,16 @@ func _capture() -> void:
 			craft.global_position = scene.carrier.global_position + Vector3(side * (95.0 + rank * 48.0), 38.0 + rank * 18.0, -230.0 - rank * 95.0)
 			craft.set_physics_process(false)
 			formation_index += 1
-	var screen_center := scene.get_viewport().get_visible_rect().size * 0.5
-	scene.carrier.begin_flak_placement(screen_center)
+	scene.hostile_command.global_position = scene.carrier.global_position + Vector3(0.0, 60.0, -2400.0)
+	scene.hostile_command.velocity = Vector3.ZERO
+	scene.carrier.flak_cooldown = 0.0
+	scene.carrier.fire_flak(scene.hostile_command)
 	for _frame in 14:
 		await process_frame
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://build"))
-	var placement_image := await _capture_best_frame(5)
-	if placement_image != null:
-		placement_image.save_png(ProjectSettings.globalize_path("res://build/flak-placement-preview.png"))
-	scene.carrier.confirm_flak_placement()
-	scene.carrier.flak_cooldown = 0.0
+	var flak_wall_image := await _capture_best_frame(5)
+	if flak_wall_image != null:
+		flak_wall_image.save_png(ProjectSettings.globalize_path("res://build/flak-placement-preview.png"))
 	scene.carrier.missile_cooldown = 0.0
 	scene.carrier.fire_missile(scene.hostile_command)
 	scene.carrier.fire_nuclear(scene.hostile_command)
@@ -81,8 +81,16 @@ func _capture() -> void:
 		await physics_frame
 	var sealed_image := await _capture_best_frame(6)
 	sealed_image.save_png(ProjectSettings.globalize_path("res://build/carrier-bays-sealed-preview-1080.png"))
+	root.size = Vector2i(1280, 720)
+	for _frame in 6:
+		await process_frame
 	scene.tactical.set_enabled(true)
 	for _frame in 12:
+		await process_frame
+	var tactical_720 := await _capture_best_frame(6)
+	tactical_720.save_png(ProjectSettings.globalize_path("res://build/tactical-preview-1280.png"))
+	root.size = Vector2i(1920, 1080)
+	for _frame in 8:
 		await process_frame
 	var tactical_image := await _capture_best_frame(6)
 	tactical_image.save_png(ProjectSettings.globalize_path("res://build/tactical-preview-1080.png"))
@@ -92,7 +100,8 @@ func _capture() -> void:
 	var tactical_1440 := await _capture_best_frame(6)
 	tactical_1440.save_png(ProjectSettings.globalize_path("res://build/tactical-preview-1440.png"))
 	scene.tactical.select_commandable(scene.carrier)
-	scene.hud.open_target_context_menu(Vector2(1780.0, 330.0), &"hostile_command")
+	var wheel_position: Vector2 = scene.tactical.camera.unproject_position(command_contact.estimated_position)
+	scene.tactical._open_context_wheel(wheel_position, false)
 	for _frame in 3:
 		await process_frame
 	var context_1440 := await _capture_best_frame(4)

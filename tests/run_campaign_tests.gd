@@ -44,7 +44,7 @@ func _test_run_state_roundtrip() -> void:
 		"carrier_shields": 0.4,
 		"carrier_armor": 0.7,
 		"carrier_hull": 0.9,
-		"interceptor_craft_count": 3,
+		"interceptor_craft_count": 23,
 		"interceptor_ammunition": 51,
 		"scout_craft_count": 2,
 		"scout_ammunition": 21,
@@ -65,11 +65,11 @@ func _test_run_state_roundtrip() -> void:
 	_assert_true(restored.requisition == 2 and restored.recruitment_pool.size() == 4, "requisition and authored recruitment pool survive serialization")
 	_assert_true(restored.get_personnel(&"sora_vale").status == SidebayPersonnelRecord.Status.INJURED and restored.get_personnel(&"sora_vale").injury_severity == 2, "personnel injuries survive serialization")
 	_assert_true(restored.completed_node_ids.has(&"s1_entry_a") and restored.revealed_node_ids.has(&"s1_boss"), "stable node IDs survive serialization")
-	_assert_true(is_equal_approx(restored.carrier_hull, 0.9) and restored.interceptor_craft_count == 3 and restored.interceptor_ammunition == 51, "fleet damage and wing stores survive serialization")
+	_assert_true(is_equal_approx(restored.carrier_hull, 0.9) and restored.interceptor_craft_count == 23 and restored.interceptor_ammunition == 51, "fleet damage and wing stores survive serialization")
 	_assert_true(restored.escort_active and restored.active_escort_id == &"iss_harrier" and restored.lost_escort_ids.has(&"iss_resolute") and restored.unlocked_module_ids.has(unlocked), "escort acquisition, unique losses, and authored unlocks survive version-7 serialization")
 	var service_cost := restored.service_cost()
 	_assert_true(service_cost > 0 and restored.service_fleet(), "supplies can service persistent fleet losses")
-	_assert_true(restored.supplies == 137 - service_cost and restored.interceptor_craft_count == 4 and restored.active_escort_id == &"iss_harrier", "service restores carrier and wing losses without replacing the selected escort")
+	_assert_true(restored.supplies == 137 - service_cost and restored.interceptor_craft_count == 24 and restored.active_escort_id == &"iss_harrier", "service restores carrier and wing losses without replacing the selected escort")
 	var supplier_state := SidebayRunState.create_new(51515)
 	supplier_state.requisition = 3
 	_assert_true(supplier_state.acquire_escort(&"iss_bulwark").contains("sector 2"), "limited suppliers gate advanced authored hulls by route sector")
@@ -95,14 +95,14 @@ func _test_carrier_and_hangar_economy() -> void:
 	var supplies_before := state.supplies
 	var refit_message := state.select_hangar_complement(&"strike_group")
 	_assert_true(refit_message.contains("deck refit") and state.supplies == supplies_before - refit_cost, "changing hangar complements spends the exact quoted supply refit cost")
-	_assert_true(state.maximum_interceptor_craft() == 5 and state.maximum_scout_craft() == 2 and state.interceptor_ammunition == 160 and state.scout_ammunition == 36, "strike complement deploys its fixed craft and ammunition allocation")
+	_assert_true(state.maximum_interceptor_craft() == 30 and state.maximum_scout_craft() == 2 and state.interceptor_ammunition == 840 and state.scout_ammunition == 24, "strike complement deploys six five-craft squadrons and its selected-package ammunition allocation")
 	state.sector_index = 1
 	_assert_true(state.acquire_carrier(&"cvn_vanguard").contains("acquired") and state.requisition == 2, "route progress unlocks the authored Vanguard carrier frame")
 	state.cycle_carrier()
 	_assert_true(state.active_carrier_id == &"cvn_vanguard" and SidebayRunState.carrier_data(state.active_carrier_id).weapon_damage > 1.0, "carrier selection deploys a fixed offensive sidegrade")
 	var restored := SidebayRunState.from_dictionary(state.to_dictionary())
 	_assert_true(restored != null and restored.active_carrier_id == &"cvn_vanguard" and restored.acquired_carrier_ids.has(&"cvn_vanguard"), "selected and acquired carrier frames survive version-8 persistence")
-	_assert_true(restored.active_hangar_complement_id == &"strike_group" and restored.acquired_hangar_complement_ids.has(&"strike_group") and restored.maximum_interceptor_craft() == 5, "selected hangar complement and dynamic capacity survive version-8 persistence")
+	_assert_true(restored.active_hangar_complement_id == &"strike_group" and restored.acquired_hangar_complement_ids.has(&"strike_group") and restored.maximum_interceptor_craft() == 30, "selected hangar complement and dynamic capacity survive version-8 persistence")
 	var legacy := state.to_dictionary()
 	legacy.save_version = 7
 	var legacy_fleet: Dictionary = legacy.fleet
@@ -247,6 +247,14 @@ func _test_application_flow() -> void:
 			break
 		await process_frame
 	_assert_true(app.run_state != null and app.campaign_map.visible and not is_instance_valid(app.main_menu), "new operation transitions from title into the sector map")
+	_assert_true(is_instance_valid(app.campaign_map.dossier_panel) and app.campaign_map.selected_node_id in [&"s1_entry_a", &"s1_entry_b"], "opening deployment presents a selected route in the persistent mission dossier")
+	_assert_true(app.campaign_map.node_buttons[&"s1_entry_a"].size.x > app.campaign_map.node_buttons[&"s1_mid_a"].size.x and app.campaign_map.node_buttons[&"s1_mid_a"].text == "?", "reachable missions dominate while unrevealed forecasts collapse to quiet markers")
+	_assert_true(is_instance_valid(app.campaign_map.course_button) and app.campaign_map.course_button.text == "PLOT COURSE" and not app.campaign_map.course_button.disabled, "opening route requires an explicit plot-course command")
+	app.campaign_map._toggle_system_panel()
+	app.campaign_map._show_restart_confirmation()
+	_assert_true(not app.campaign_map.system_panel.visible and app.campaign_map.restart_confirmation_panel.visible, "destructive new-operation command requires confirmation inside the secondary system menu")
+	app.campaign_map._cancel_restart_confirmation()
+	app.campaign_map._close_system_panel()
 	var command_lead_before: StringName = app.run_state.assigned_person(&"Command").personnel_id
 	app._open_personnel_screen()
 	_assert_true(is_instance_valid(app.personnel_screen) and app.personnel_screen.department_buttons.size() == 6, "sector map opens all six department command cards")
@@ -278,7 +286,9 @@ func _test_application_flow() -> void:
 	var starting_fuel: int = app.run_state.fuel
 	var starting_route_supplies: int = app.run_state.supplies
 	_assert_true(app.campaign_map.node_buttons[&"s1_entry_b"].text.contains("S6"), "campaign nodes quote the active posture's supply overhead")
-	app._on_node_selected(&"s1_entry_b")
+	app.campaign_map._select_node(&"s1_entry_b")
+	_assert_true(app.run_state.fuel == starting_fuel and app.run_state.supplies == starting_route_supplies and app.campaign_map.mission_name_label.text == "SIGNAL ROUTE", "route selection previews the mission without spending campaign resources")
+	app.campaign_map._confirm_course()
 	_assert_true(app.run_state.current_node_id == &"s1_entry_b", "noncombat node resolves immediately")
 	_assert_true(app.run_state.fuel == starting_fuel - 1 and app.run_state.supplies == starting_route_supplies - 6 and app.run_state.intel >= 5, "route executor spends the active posture's quoted fuel and supply costs")
 	_assert_true(is_instance_valid(app.operational_event_screen) and not app.run_state.pending_operational_event.is_empty(), "noncombat nodes open a blocking authored operational decision")
@@ -296,7 +306,8 @@ func _test_application_flow() -> void:
 			break
 		await process_frame
 	_assert_true(app.run_state.fuel == saved_fuel and app.campaign_map.visible, "Continue restores the manual save and returns to the campaign")
-	app._on_node_selected(&"s1_mid_b")
+	app.campaign_map._select_node(&"s1_mid_b")
+	app.campaign_map._confirm_course()
 	for _frame in 6:
 		await process_frame
 	_assert_true(is_instance_valid(app.active_battle) and not app.campaign_map.visible, "combat node launches existing battle scene")
@@ -329,7 +340,8 @@ func _test_application_flow() -> void:
 	_assert_true(app.run_state.supplies == supplies_before_salvage + victory_reward_supplies, "salvage sweep no longer bypasses allocation by granting supplies directly")
 	_assert_true(app.run_state.unlocked_module_ids.size() == 6, "victory unlocks one authored module sidegrade")
 	_assert_true(app.campaign_map.visible, "campaign map becomes visible after battle")
-	app._on_node_selected(&"s1_boss")
+	app.campaign_map._select_node(&"s1_boss")
+	app.campaign_map._confirm_course()
 	for _frame in 6:
 		await process_frame
 	_assert_true(is_instance_valid(app.active_battle), "sector command launches after the completed midpoint")

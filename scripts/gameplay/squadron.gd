@@ -3,6 +3,16 @@ extends Node3D
 
 signal status_changed(squadron_id: StringName, message: String)
 signal squadron_destroyed(squadron_id: StringName)
+signal service_task_changed(squadron_id: StringName, task: StringName)
+signal loadout_changed(squadron_id: StringName, loadout_id: StringName)
+signal order_status_changed(entity_id: StringName, order_id: StringName, status: FleetOrder.Status, reason: String)
+signal doctrine_changed(entity_id: StringName, stance: StringName, formation: StringName, spacing: StringName)
+
+enum ServicePriority { RAPID_TURN, BALANCED, REPAIR_FIRST }
+
+const STORE_AVIATION_ORDNANCE := &"aviation_ordnance"
+const STORE_CRAFT_REFUEL := &"craft_refuel"
+const DISABLED_DECK_RECOVERY_SPEED := 0.35
 
 var stable_entity_id: StringName = &"squadron"
 var display_name: String = "Squadron"
@@ -10,12 +20,35 @@ var team: StringName = &"friendly"
 var definition: SquadronDefinition
 var home_carrier: PlayerCarrier
 var bay_side: StringName = &"port"
+var bay_lane_index: int = 0
 var operation := BayOperation.new()
 var command_link := CommandLinkState.new()
-var current_order: FleetOrder
-var order_queue: Array[FleetOrder] = []
-var stance: StringName = &"balanced"
-var formation_name: StringName = &"wedge"
+var fleet_command := FleetCommandState.new()
+var current_order: FleetOrder:
+	get:
+		return fleet_command.current_order
+	set(value):
+		fleet_command.current_order = value
+var order_queue: Array[FleetOrder]:
+	get:
+		return fleet_command.order_queue
+	set(value):
+		fleet_command.order_queue = value
+var stance: StringName:
+	get:
+		return fleet_command.stance
+	set(value):
+		fleet_command.stance = value
+var formation_name: StringName:
+	get:
+		return fleet_command.formation_name
+	set(value):
+		fleet_command.formation_name = value
+var formation_spacing: StringName:
+	get:
+		return fleet_command.formation_spacing
+	set(value):
+		fleet_command.formation_spacing = value
 var crafts: Array[FighterCraft] = []
 var launch_index: int = 0
 var docking_count: int = 0
@@ -23,6 +56,17 @@ var cycle_timer: float = 0.0
 var formation_spacing_m: float = 55.0
 var is_hostile_air_group: bool = false
 var redeploy_requested: bool = false
+var service_priority: ServicePriority = ServicePriority.BALANCED
+var current_loadout_profile: Dictionary = {}
+var store_consumer: Callable
+var deck_operational_provider: Callable
+var deck_task_speed_multiplier: float = 1.0
+var target_state_provider: Callable
+var _track_lost_order_id: StringName = &""
+
+func _init() -> void:
+	fleet_command.order_status_changed.connect(_on_fleet_order_status_changed)
+	fleet_command.doctrine_changed.connect(_on_fleet_doctrine_changed)
 
 func configure(
 	squadron_definition: SquadronDefinition,
@@ -30,7 +74,8 @@ func configure(
 	faction: StringName,
 	carrier: PlayerCarrier,
 	side: StringName,
-	color: Color
+	color: Color,
+	lane_index: int = 0
 ) -> void:
 	definition = squadron_definition
 	stable_entity_id = entity_id
@@ -38,6 +83,7 @@ func configure(
 	team = faction
 	home_carrier = carrier
 	bay_side = side
+	bay_lane_index = maxi(0, lane_index)
 	stance = StringName(definition.default_stance)
 	add_to_group("commandables")
 	add_to_group("squadrons")
@@ -56,7 +102,138 @@ func configure(
 			definition.ammunition_per_craft,
 			definition.endurance_seconds
 		)
+		if not current_loadout_profile.is_empty():
+			craft.call_deferred("apply_loadout_profile", current_loadout_profile, false)
 		crafts.append(craft)
+
+func configure_target_state_provider(provider: Callable) -> void:
+	target_state_provider = provider
+
+func configure_deck_logistics(
+	consume_store_callback: Callable = Callable(),
+	task_speed_multiplier: float = 1.0,
+	deck_available_callback: Callable = Callable()
+) -> void:
+	store_consumer = consume_store_callback
+	deck_task_speed_multiplier = maxf(0.05, task_speed_multiplier)
+	deck_operational_provider = deck_available_callback
+
+func set_deck_task_speed_multiplier(multiplier: float) -> void:
+	deck_task_speed_multiplier = maxf(0.05, multiplier)
+
+func set_service_priority(priority_value: Variant) -> bool:
+	var resolved := ServicePriority.BALANCED
+	if priority_value is int:
+		resolved = clampi(int(priority_value), ServicePriority.RAPID_TURN, ServicePriority.REPAIR_FIRST) as ServicePriority
+	else:
+		match String(priority_value).to_lower().replace(" ", "_"):
+			"rapid", "rapid_turn":
+				resolved = ServicePriority.RAPID_TURN
+			"repair", "repair_first":
+				resolved = ServicePriority.REPAIR_FIRST
+			"balanced":
+				resolved = ServicePriority.BALANCED
+			_:
+				return false
+	service_priority = resolved
+	status_changed.emit(stable_entity_id, "%s deck priority: %s" % [display_name, service_priority_label()])
+	return true
+
+func service_priority_label() -> String:
+	match service_priority:
+		ServicePriority.RAPID_TURN:
+			return "Rapid Turn"
+		ServicePriority.REPAIR_FIRST:
+			return "Repair First"
+	return "Balanced"
+
+func can_change_loadout() -> bool:
+	return all_craft_aboard() and operation.state in [
+		BayOperation.State.READY,
+		BayOperation.State.SERVICING,
+		BayOperation.State.REPAIRING,
+		BayOperation.State.REFUELING,
+	]
+
+func set_loadout(loadout_definition: Variant) -> bool:
+	if not can_change_loadout():
+		status_changed.emit(stable_entity_id, "%s loadout locked until the wing is aboard and clear of rearming" % display_name)
+		return false
+	var profile := _loadout_to_dictionary(loadout_definition)
+	var next_id := StringName(profile.get("loadout_id", profile.get("id", &"")))
+	if next_id == &"":
+		return false
+	var required_role := String(profile.get("squadron_role", profile.get("wing_role", "")))
+	if not required_role.is_empty() and definition != null and required_role != definition.role:
+		status_changed.emit(stable_entity_id, "%s loadout rejected: incompatible package" % display_name)
+		return false
+	var previous_id := current_loadout_id()
+	var package_changed := previous_id != &"" and previous_id != next_id
+	current_loadout_profile = profile.duplicate(true)
+	for craft in crafts:
+		if is_instance_valid(craft):
+			craft.apply_loadout_profile(current_loadout_profile, package_changed)
+	if package_changed and operation.state == BayOperation.State.READY:
+		operation.transition(BayOperation.State.REARMING)
+		service_task_changed.emit(stable_entity_id, &"rearming")
+	loadout_changed.emit(stable_entity_id, next_id)
+	status_changed.emit(stable_entity_id, "%s package selected: %s" % [display_name, String(profile.get("display_name", next_id))])
+	return true
+
+func current_loadout_id() -> StringName:
+	return StringName(current_loadout_profile.get("loadout_id", current_loadout_profile.get("id", &"")))
+
+func ammunition_capacity_per_craft() -> int:
+	if not current_loadout_profile.is_empty():
+		return maxi(0, int(current_loadout_profile.get("ammunition_per_craft", current_loadout_profile.get("ammo_per_craft", definition.ammunition_per_craft))))
+	return definition.ammunition_per_craft if definition != null else 0
+
+func identification_gain_multiplier() -> float:
+	return maxf(0.0, float(current_loadout_profile.get("identification_gain_multiplier", 1.0)))
+
+func uncertainty_multiplier() -> float:
+	return maxf(0.0, float(current_loadout_profile.get("uncertainty_multiplier", 1.0)))
+
+func escape_pod_recovery_range_m() -> float:
+	return maxf(0.0, float(current_loadout_profile.get("escape_pod_recovery_range_m", 0.0)))
+
+func deck_queue_snapshot() -> Dictionary:
+	var duration := service_task_duration(operation.state) if operation.is_service_state() else 0.0
+	var operation_state := String(operation.label()).to_lower().replace(" ", "_")
+	return {
+		"bay": bay_side,
+		"state": operation_state,
+		"task": operation_state if operation.is_service_state() else "idle",
+		"progress": clampf(operation.state_elapsed_seconds / maxf(0.001, duration), 0.0, 1.0) if duration > 0.0 else 0.0,
+		"priority": service_priority_label(),
+		"loadout_id": current_loadout_id(),
+		"craft_aboard": living_craft_count() - deployed_craft_count(),
+		"craft_total": living_craft_count(),
+	}
+
+func _loadout_to_dictionary(loadout_definition: Variant) -> Dictionary:
+	if loadout_definition is Dictionary:
+		return (loadout_definition as Dictionary).duplicate(true)
+	if loadout_definition is Object:
+		var source := loadout_definition as Object
+		if source.has_method("to_dictionary"):
+			var serialized: Variant = source.call("to_dictionary")
+			if serialized is Dictionary:
+				return (serialized as Dictionary).duplicate(true)
+		var profile: Dictionary = {}
+		var supported := [
+			"loadout_id", "id", "display_name", "squadron_role", "wing_role",
+			"ammunition_per_craft", "ammo_per_craft", "damage_multiplier", "cycle_multiplier",
+			"range_multiplier", "identification_gain_multiplier", "uncertainty_multiplier",
+			"missile_interception", "can_intercept_missiles", "missile_intercept_range_m",
+			"defensive_cycle_multiplier", "escape_pod_recovery_range_m",
+		]
+		for property_data in source.get_property_list():
+			var property_name := String(property_data.get("name", ""))
+			if supported.has(property_name):
+				profile[property_name] = source.get(property_name)
+		return profile
+	return {}
 
 func start_deployed(center: Vector3) -> void:
 	is_hostile_air_group = home_carrier == null
@@ -71,6 +248,9 @@ func start_deployed(center: Vector3) -> void:
 func request_launch() -> bool:
 	if operation.state != BayOperation.State.READY or home_carrier == null:
 		status_changed.emit(stable_entity_id, "%s is %s" % [display_name, operation.label()])
+		return false
+	if not is_deck_operational():
+		status_changed.emit(stable_entity_id, "%s launch rejected: %s deck disabled" % [display_name, String(bay_side)])
 		return false
 	if not home_carrier.are_bays_open():
 		status_changed.emit(stable_entity_id, "%s launch rejected: %s bay is %s" % [display_name, String(bay_side), home_carrier.bay_status()])
@@ -98,7 +278,7 @@ func request_redeploy() -> bool:
 		return false
 	if operation.state == BayOperation.State.READY:
 		return request_launch()
-	if operation.state != BayOperation.State.SERVICING:
+	if not operation.is_service_state():
 		status_changed.emit(stable_entity_id, "%s redeploy rejected: flight deck is %s" % [display_name, operation.label()])
 		return false
 	redeploy_requested = true
@@ -112,9 +292,10 @@ func prepare_for_jump() -> bool:
 	return all_craft_aboard()
 
 func all_craft_aboard() -> bool:
-	return deployed_craft_count() == 0 and operation.state in [BayOperation.State.READY, BayOperation.State.SERVICING]
+	return deployed_craft_count() == 0 and (operation.state == BayOperation.State.READY or operation.is_service_state())
 
 func _process(delta: float) -> void:
+	fleet_command.tick(_now_seconds())
 	operation.tick(delta)
 	cycle_timer += delta
 	_cleanup_destroyed_crafts()
@@ -123,12 +304,12 @@ func _process(delta: float) -> void:
 		set_process(false)
 		return
 	if home_carrier != null and is_instance_valid(home_carrier):
-		command_link.update_for_distance(representative_position().distance_to(home_carrier.global_position), home_carrier.definition.command_range_m)
+		command_link.update_for_distance(representative_position().distance_to(home_carrier.global_position), home_carrier.effective_command_range_m())
 	match operation.state:
 		BayOperation.State.QUEUED:
 			if operation.state_elapsed_seconds >= 0.25:
 				operation.transition(BayOperation.State.LAUNCHING)
-				cycle_timer = definition.launch_interval_seconds
+				cycle_timer = launch_interval_seconds()
 		BayOperation.State.LAUNCHING:
 			_process_launch_cycle()
 		BayOperation.State.DEPLOYED:
@@ -140,18 +321,23 @@ func _process(delta: float) -> void:
 		BayOperation.State.DOCKING:
 			_process_docking()
 		BayOperation.State.SERVICING:
+			# Old snapshots and tests can still resume the former aggregate service state.
 			if operation.state_elapsed_seconds >= definition.service_seconds:
 				for craft in crafts:
 					if is_instance_valid(craft):
 						craft.service(definition.ammunition_per_craft, definition.endurance_seconds)
-				operation.transition(BayOperation.State.READY)
-				status_changed.emit(stable_entity_id, "%s ready to relaunch" % display_name)
-				if redeploy_requested:
-					redeploy_requested = false
-					request_launch()
+				_finish_service_cycle()
+		BayOperation.State.REPAIRING, BayOperation.State.REFUELING, BayOperation.State.REARMING:
+			_process_service_task()
+		BayOperation.State.READY:
+			if redeploy_requested and is_deck_operational():
+				redeploy_requested = false
+				request_launch()
+	if current_order != null and current_order.order_type == FleetOrder.OrderType.RECALL and deployed_craft_count() == 0:
+		_complete_order()
 
 func _process_launch_cycle() -> void:
-	if cycle_timer < definition.launch_interval_seconds:
+	if cycle_timer < launch_interval_seconds():
 		return
 	cycle_timer = 0.0
 	while launch_index < crafts.size() and not is_instance_valid(crafts[launch_index]):
@@ -161,44 +347,132 @@ func _process_launch_cycle() -> void:
 		status_changed.emit(stable_entity_id, "%s launch complete" % display_name)
 		return
 	var craft := crafts[launch_index]
-	var marker := home_carrier.get_bay_marker(bay_side)
-	var outward := -home_carrier.global_transform.basis.x if bay_side == &"port" else home_carrier.global_transform.basis.x
+	var marker := home_carrier.get_bay_marker(bay_side, bay_lane_index)
+	var outward := home_carrier.get_bay_launch_vector(bay_side)
 	craft.deploy(marker.global_position + outward * 12.0, home_carrier.velocity + outward * 180.0)
 	craft.command_move(marker.global_position + outward * (350.0 + launch_index * 45.0) - home_carrier.global_transform.basis.z * 100.0)
 	launch_index += 1
 
 func _process_deployed(_delta: float) -> void:
+	_update_formation_leader()
+	if current_order != null and current_order.order_type in [FleetOrder.OrderType.ATTACK, FleetOrder.OrderType.INTERCEPT]:
+		var designated_state := _resolve_order_target_state(current_order)
+		if bool(designated_state.get("destroyed", false)):
+			status_changed.emit(stable_entity_id, "%s: designated target destroyed" % display_name)
+			_complete_order()
+			return
 	var emergency := false
-	for index in crafts.size():
-		var craft := crafts[index]
+	var slot_index := 0
+	for craft in crafts:
 		if not is_instance_valid(craft) or not craft.deployed:
 			continue
-		if craft.endurance_seconds <= 10.0 or craft.ammunition <= 0 or craft.layer_percentages().z <= 0.25:
+		if _craft_should_return(craft):
 			emergency = true
-		_apply_order_to_craft(craft, index)
+		_apply_order_to_craft(craft, slot_index)
+		slot_index += 1
 	if emergency and home_carrier != null:
 		request_recall()
+	_check_order_completion()
 
 func _apply_order_to_craft(craft: FighterCraft, index: int) -> void:
 	if current_order == null:
 		return
 	match current_order.order_type:
-		FleetOrder.OrderType.MOVE, FleetOrder.OrderType.HOLD, FleetOrder.OrderType.WITHDRAW:
-			craft.command_move(current_order.target_position + _formation_offset(index))
+		FleetOrder.OrderType.MOVE, FleetOrder.OrderType.WITHDRAW:
+			var move_basis := _formation_basis(current_order.target_position, current_order.target_velocity)
+			craft.command_move(current_order.target_position + move_basis * _formation_offset(index))
+		FleetOrder.OrderType.HOLD:
+			var hold_basis := _formation_basis(current_order.target_position, Vector3.ZERO)
+			craft.command_hold(current_order.target_position + hold_basis * _formation_offset(index), -hold_basis.z.normalized())
 		FleetOrder.OrderType.ATTACK, FleetOrder.OrderType.INTERCEPT:
-			var target_node := resolve_command_target(current_order.target_entity_id)
-			if is_instance_valid(target_node):
-				craft.command_attack(target_node)
+			var target_state := _resolve_order_target_state(current_order)
+			if bool(target_state.get("visible", false)):
+				var target_node := target_state.get("node") as CombatShip
+				if is_instance_valid(target_node):
+					current_order.target_position = target_node.global_position
+					current_order.target_velocity = target_node.velocity
+					_track_lost_order_id = &""
+					craft.command_attack(target_node, current_order.order_type == FleetOrder.OrderType.INTERCEPT)
+			else:
+				if _track_lost_order_id != current_order.order_id:
+					_track_lost_order_id = current_order.order_id
+					status_changed.emit(stable_entity_id, "%s: TRACK LOST — searching last confirmed position" % display_name)
+				var search_basis := _formation_basis(current_order.target_position, current_order.target_velocity)
+				craft.command_move(current_order.target_position + search_basis * _formation_offset(index))
 		FleetOrder.OrderType.ESCORT:
 			var escort := resolve_command_target(current_order.target_entity_id)
 			if is_instance_valid(escort):
-				craft.command_move(escort.global_position + _formation_offset(index) + Vector3(0.0, 40.0, 120.0))
+				var escort_basis := escort.global_transform.basis.orthonormalized()
+				var screen_offset := escort_basis.y * 40.0 + escort_basis.z * 120.0
+				craft.command_escort(escort.global_position + escort_basis * _formation_offset(index) + screen_offset, escort.velocity)
 		FleetOrder.OrderType.RECALL:
 			request_recall()
+		FleetOrder.OrderType.INTERACT:
+			var interact_basis := _formation_basis(current_order.target_position, Vector3.ZERO)
+			var interact_position := current_order.target_position + interact_basis * _formation_offset(index)
+			if craft.global_position.distance_to(interact_position) <= maxf(30.0, current_order.interaction_radius_m * 0.65):
+				craft.command_hold(interact_position)
+			else:
+				craft.command_move(interact_position)
+
+func _check_order_completion() -> void:
+	if current_order == null:
+		return
+	if current_order.order_type not in [FleetOrder.OrderType.MOVE, FleetOrder.OrderType.WITHDRAW]:
+		return
+	var arrived := true
+	for index in crafts.size():
+		var craft := crafts[index]
+		if not is_instance_valid(craft) or not craft.deployed:
+			continue
+		var basis := _formation_basis(current_order.target_position, current_order.target_velocity)
+		var destination := current_order.target_position + basis * _formation_offset(index)
+		if craft.global_position.distance_to(destination) > maxf(55.0, formation_spacing_m * fleet_command.spacing_multiplier()):
+			arrived = false
+			break
+	if arrived:
+		_complete_order()
+
+func _craft_should_return(craft: FighterCraft) -> bool:
+	var hull := craft.layer_percentages().z
+	var capacity := maxf(1.0, float(craft.maximum_ammunition()))
+	var ammo_ratio := float(craft.ammunition) / capacity
+	match stance:
+		&"aggressive":
+			return craft.endurance_seconds <= 10.0 or craft.ammunition <= 0 or hull <= 0.20
+		&"defensive":
+			return craft.endurance_seconds <= 25.0 or ammo_ratio <= 0.20 or hull <= 0.40
+		&"evade_return":
+			return true
+		_:
+			return craft.endurance_seconds <= 10.0 or craft.ammunition <= 0 or hull <= 0.25
+
+func _update_formation_leader() -> void:
+	var leader: FighterCraft
+	for craft in crafts:
+		if is_instance_valid(craft) and craft.deployed and not craft.is_destroyed:
+			leader = craft
+			break
+	fleet_command.formation_leader_id = leader.stable_entity_id if is_instance_valid(leader) else &""
+
+func _formation_basis(anchor: Vector3, anchor_velocity: Vector3) -> Basis:
+	var forward := anchor_velocity
+	for craft in crafts:
+		if is_instance_valid(craft) and craft.deployed and not craft.is_destroyed:
+			if forward.length_squared() < 1.0 and craft.velocity.length_squared() > 1.0:
+				forward = craft.velocity
+			if forward.length_squared() < 1.0:
+				return craft.global_transform.basis.orthonormalized()
+			break
+	if forward.length_squared() < 1.0:
+		forward = anchor - representative_position()
+	if forward.length_squared() < 1.0:
+		return Basis.IDENTITY
+	return Basis.looking_at(forward.normalized(), Vector3.UP).orthonormalized()
 
 func _process_approach() -> void:
-	var marker := home_carrier.get_bay_marker(bay_side)
-	var outward := -home_carrier.global_transform.basis.x if bay_side == &"port" else home_carrier.global_transform.basis.x
+	var marker := home_carrier.get_bay_marker(bay_side, bay_lane_index)
+	var outward := home_carrier.get_bay_launch_vector(bay_side)
 	var approach_point := marker.global_position + outward * 260.0 + home_carrier.global_transform.basis.z * 40.0
 	var all_in_approach := true
 	for index in crafts.size():
@@ -211,12 +485,13 @@ func _process_approach() -> void:
 	if all_in_approach:
 		operation.transition(BayOperation.State.DOCKING)
 		docking_count = 0
+		cycle_timer = 0.0
 
 func _process_docking() -> void:
-	if cycle_timer < definition.recovery_interval_seconds:
+	if cycle_timer < recovery_interval_seconds():
 		return
 	cycle_timer = 0.0
-	var marker := home_carrier.get_bay_marker(bay_side)
+	var marker := home_carrier.get_bay_marker(bay_side, bay_lane_index)
 	for craft in crafts:
 		if not is_instance_valid(craft) or not craft.deployed:
 			continue
@@ -225,46 +500,304 @@ func _process_docking() -> void:
 			craft.dock()
 			docking_count += 1
 			break
-	if docking_count >= living_craft_count():
-		operation.transition(BayOperation.State.SERVICING)
-		status_changed.emit(stable_entity_id, "%s servicing" % display_name)
+	if deployed_craft_count() == 0:
+		_begin_service_cycle()
 
-func issue_order(order: FleetOrder) -> bool:
-	if order.requires_command_link and not command_link.can_accept_order():
-		status_changed.emit(stable_entity_id, "%s: command link lost" % display_name)
-		return false
-	order.stance = stance
-	command_link.last_confirmed_order = order
-	if order.queued and current_order != null:
-		order_queue.append(order)
+func _begin_service_cycle() -> void:
+	if service_priority != ServicePriority.RAPID_TURN and _needs_repair():
+		_transition_service_task(BayOperation.State.REPAIRING)
+	elif _needs_refuel():
+		_transition_service_task(BayOperation.State.REFUELING)
+	elif _needs_rearm():
+		_transition_service_task(BayOperation.State.REARMING)
 	else:
-		current_order = order
-		order_queue.clear()
-	status_changed.emit(stable_entity_id, "%s acknowledges %s" % [display_name, FleetOrder.OrderType.keys()[order.order_type]])
+		_finish_service_cycle()
+
+func _process_service_task() -> void:
+	if operation.state_elapsed_seconds < service_task_duration(operation.state):
+		return
+	match operation.state:
+		BayOperation.State.REPAIRING:
+			_complete_repairs()
+			if _needs_refuel():
+				_transition_service_task(BayOperation.State.REFUELING)
+			elif _needs_rearm():
+				_transition_service_task(BayOperation.State.REARMING)
+			else:
+				_finish_service_cycle()
+		BayOperation.State.REFUELING:
+			_complete_refueling()
+			if _needs_rearm():
+				_transition_service_task(BayOperation.State.REARMING)
+			else:
+				_finish_service_cycle()
+		BayOperation.State.REARMING:
+			_complete_rearming()
+			_finish_service_cycle()
+
+func _transition_service_task(next_state: BayOperation.State) -> void:
+	if not operation.transition(next_state):
+		return
+	var task := StringName(BayOperation.State.keys()[next_state].to_lower())
+	service_task_changed.emit(stable_entity_id, task)
+	status_changed.emit(stable_entity_id, "%s %s" % [display_name, operation.label().to_lower()])
+
+func _finish_service_cycle() -> void:
+	for craft in crafts:
+		if is_instance_valid(craft) and craft.damage_state != null and craft.damage_state.definition != null:
+			craft.damage_state.shields = craft.damage_state.definition.max_shields
+	if operation.state != BayOperation.State.READY:
+		operation.transition(BayOperation.State.READY)
+	service_task_changed.emit(stable_entity_id, &"ready")
+	status_changed.emit(stable_entity_id, "%s ready to relaunch" % display_name)
+	if redeploy_requested and is_deck_operational():
+		redeploy_requested = false
+		request_launch()
+
+func service_task_duration(state_value: BayOperation.State) -> float:
+	if definition == null:
+		return 0.0
+	var task_weight := 1.0
+	match state_value:
+		BayOperation.State.REPAIRING:
+			task_weight = 0.4
+		BayOperation.State.REFUELING:
+			task_weight = 0.25
+		BayOperation.State.REARMING:
+			task_weight = 0.35
+		BayOperation.State.SERVICING:
+			return definition.service_seconds
+		_:
+			return 0.0
+	var priority_time_multiplier := 1.0
+	match service_priority:
+		ServicePriority.RAPID_TURN:
+			priority_time_multiplier = 0.75
+		ServicePriority.REPAIR_FIRST:
+			priority_time_multiplier = 1.35
+	var speed := deck_task_speed_multiplier
+	if not is_deck_operational():
+		speed *= DISABLED_DECK_RECOVERY_SPEED
+	return definition.service_seconds * task_weight * priority_time_multiplier / maxf(0.05, speed)
+
+func recovery_interval_seconds() -> float:
+	if definition == null:
+		return 0.0
+	var speed := deck_task_speed_multiplier
+	if not is_deck_operational():
+		speed *= DISABLED_DECK_RECOVERY_SPEED
+	return definition.recovery_interval_seconds / maxf(0.05, speed)
+
+
+func launch_interval_seconds() -> float:
+	if definition == null:
+		return 0.0
+	return definition.launch_interval_seconds / maxf(0.05, deck_task_speed_multiplier)
+
+func is_deck_operational() -> bool:
+	if deck_operational_provider.is_valid():
+		return bool(deck_operational_provider.call(bay_side))
+	if home_carrier != null and home_carrier.has_method("is_flight_deck_operational"):
+		return bool(home_carrier.call("is_flight_deck_operational", bay_side))
 	return true
 
+func _needs_repair() -> bool:
+	for craft in crafts:
+		if not is_instance_valid(craft) or craft.damage_state == null or craft.damage_state.definition == null:
+			continue
+		if craft.damage_state.shields < craft.damage_state.definition.max_shields or craft.damage_state.armor < craft.damage_state.definition.max_armor:
+			return true
+	return false
+
+func _needs_refuel() -> bool:
+	if definition == null:
+		return false
+	for craft in crafts:
+		if is_instance_valid(craft) and craft.endurance_seconds < definition.endurance_seconds - 0.001:
+			return true
+	return false
+
+func _needs_rearm() -> bool:
+	var capacity := ammunition_capacity_per_craft()
+	for craft in crafts:
+		if is_instance_valid(craft) and craft.ammunition < capacity:
+			return true
+	return false
+
+func _complete_repairs() -> void:
+	var recovery := 0.6 if service_priority == ServicePriority.REPAIR_FIRST else 0.35
+	for craft in crafts:
+		if is_instance_valid(craft):
+			craft.service_repair(recovery)
+
+func _complete_refueling() -> void:
+	if definition == null:
+		return
+	var awaiting: Array[FighterCraft] = []
+	for craft in crafts:
+		if is_instance_valid(craft) and craft.endurance_seconds < definition.endurance_seconds - 0.001:
+			awaiting.append(craft)
+	var supplied := _consume_store(STORE_CRAFT_REFUEL, awaiting.size())
+	for index in mini(supplied, awaiting.size()):
+		awaiting[index].service_refuel(definition.endurance_seconds)
+	if supplied < awaiting.size():
+		status_changed.emit(stable_entity_id, "%s refuel partial: %d/%d craft" % [display_name, supplied, awaiting.size()])
+
+func _complete_rearming() -> void:
+	var capacity := ammunition_capacity_per_craft()
+	var requested := 0
+	for craft in crafts:
+		if is_instance_valid(craft):
+			requested += maxi(0, capacity - craft.ammunition)
+	var supplied := _consume_store(STORE_AVIATION_ORDNANCE, requested)
+	var remaining := supplied
+	for craft in crafts:
+		if not is_instance_valid(craft) or remaining <= 0:
+			continue
+		remaining -= craft.service_rearm(capacity, remaining)
+	if supplied < requested:
+		status_changed.emit(stable_entity_id, "%s rearm partial: %d/%d rounds" % [display_name, supplied, requested])
+
+func _consume_store(store_id: StringName, requested_amount: int) -> int:
+	if requested_amount <= 0:
+		return 0
+	var result: Variant = requested_amount
+	if store_consumer.is_valid():
+		result = store_consumer.call(store_id, requested_amount)
+	elif home_carrier != null and home_carrier.has_method("consume_carrier_store"):
+		result = home_carrier.call("consume_carrier_store", store_id, requested_amount)
+	elif home_carrier != null:
+		var operations: Variant = home_carrier.get("carrier_operations")
+		if operations is Object and (operations as Object).has_method("consume_store_partial"):
+			result = (operations as Object).call("consume_store_partial", store_id, requested_amount)
+	if result is bool:
+		return requested_amount if bool(result) else 0
+	if result is Dictionary:
+		return clampi(int(result.get("consumed", result.get("amount", 0))), 0, requested_amount)
+	return clampi(int(result), 0, requested_amount)
+
+func issue_order(order: FleetOrder) -> bool:
+	if order == null:
+		return false
+	order.origin_position = representative_position()
+	if not order.target_entity_id.is_empty():
+		var target := resolve_command_target(order.target_entity_id)
+		if is_instance_valid(target):
+			order.target_position = target.global_position
+			order.target_velocity = target.velocity
+	order.stance = stance
+	return fleet_command.submit(order, command_link, _now_seconds())
+
+func _complete_order() -> void:
+	fleet_command.complete_current(_now_seconds())
+	if current_order == null and operation.state == BayOperation.State.DEPLOYED:
+		var hold := FleetOrder.at_position(FleetOrder.OrderType.HOLD, representative_position(), _now_seconds())
+		hold.requires_command_link = false
+		var leader := _first_surviving_deployed_craft()
+		if is_instance_valid(leader):
+			hold.target_facing = -leader.global_transform.basis.z.normalized()
+		fleet_command.submit(hold, command_link, _now_seconds())
+
+
+func _first_surviving_deployed_craft() -> FighterCraft:
+	for craft in crafts:
+		if is_instance_valid(craft) and craft.deployed and not craft.is_destroyed:
+			return craft
+	return null
+
+func cancel_orders(reason: String = "CANCELLED") -> void:
+	fleet_command.cancel_all(reason)
+
 func set_stance(next_stance: StringName) -> void:
-	stance = next_stance
-	status_changed.emit(stable_entity_id, "%s stance: %s" % [display_name, String(stance).capitalize()])
+	if fleet_command.set_stance(next_stance):
+		status_changed.emit(stable_entity_id, "%s stance: %s" % [display_name, String(stance).replace("_", " ").capitalize()])
 
 func cycle_formation() -> void:
-	var formations: Array[StringName] = [&"wedge", &"line", &"screen", &"column"]
-	formation_name = formations[(formations.find(formation_name) + 1) % formations.size()]
-	status_changed.emit(stable_entity_id, "%s formation: %s" % [display_name, String(formation_name).capitalize()])
+	var index := FleetCommandState.VALID_FORMATIONS.find(formation_name)
+	set_formation(FleetCommandState.VALID_FORMATIONS[(index + 1) % FleetCommandState.VALID_FORMATIONS.size()], formation_spacing)
+
+func set_formation(next_formation: StringName, spacing: StringName = &"") -> void:
+	if fleet_command.set_formation(next_formation, spacing):
+		status_changed.emit(stable_entity_id, "%s formation: %s / %s" % [display_name, String(formation_name).capitalize(), String(formation_spacing).capitalize()])
+
+func set_formation_spacing(next_spacing: StringName) -> void:
+	if fleet_command.set_spacing(next_spacing):
+		status_changed.emit(stable_entity_id, "%s spacing: %s" % [display_name, String(formation_spacing).capitalize()])
 
 func _formation_offset(index: int) -> Vector3:
+	var spacing := formation_spacing_m * fleet_command.spacing_multiplier()
 	match formation_name:
 		&"line":
-			return Vector3((index - (definition.craft_count - 1) * 0.5) * formation_spacing_m, 0.0, 0.0)
+			return Vector3((index - (definition.craft_count - 1) * 0.5) * spacing, 0.0, 0.0)
 		&"screen":
 			var angle := TAU * float(index) / maxf(1.0, float(definition.craft_count))
-			return Vector3(cos(angle), sin(angle) * 0.35, sin(angle)) * formation_spacing_m
+			return Vector3(cos(angle), sin(angle) * 0.35, sin(angle)) * spacing
 		&"column":
-			return Vector3(0.0, 0.0, index * formation_spacing_m)
+			return Vector3(0.0, 0.0, index * spacing)
 		_:
 			var side := -1.0 if index % 2 == 0 else 1.0
 			var rank := (index + 1) / 2
-			return Vector3(side * rank * formation_spacing_m, 0.0, rank * formation_spacing_m)
+			return Vector3(side * rank * spacing, 0.0, rank * spacing)
+
+func command_snapshot() -> Dictionary:
+	var snapshot := fleet_command.snapshot(_now_seconds())
+	var layer_total := Vector3.ZERO
+	var living := 0
+	for craft in crafts:
+		if is_instance_valid(craft) and not craft.is_destroyed:
+			layer_total += craft.layer_percentages()
+			living += 1
+	var layers := layer_total / float(maxi(1, living))
+	snapshot.merge({
+		"entity_id": String(stable_entity_id),
+		"display_name": display_name,
+		"link": command_link.label(),
+		"link_latency_seconds": command_link.latency_seconds,
+		"health": {"shields": layers.x, "armor": layers.y, "hull": layers.z},
+		"ammunition": total_ammunition(),
+		"endurance_seconds": average_endurance(),
+		"craft": living,
+		"operation": operation.label(),
+		"leader_id": String(fleet_command.formation_leader_id)
+	}, true)
+	return snapshot
+
+func _resolve_order_target_state(order: FleetOrder) -> Dictionary:
+	if target_state_provider.is_valid():
+		var provided: Variant = target_state_provider.call(order.target_entity_id)
+		if provided is Dictionary:
+			var state: Dictionary = provided
+			if bool(state.get("visible", false)):
+				return state
+			return {
+				"visible": false,
+				"destroyed": bool(state.get("destroyed", false)),
+				"position": state.get("position", order.target_position),
+				"velocity": state.get("velocity", order.target_velocity),
+				"node": state.get("node")
+			}
+	var target := resolve_command_target(order.target_entity_id)
+	if is_instance_valid(target) and not target.is_destroyed:
+		return {"visible": true, "position": target.global_position, "velocity": target.velocity, "node": target}
+	return {"visible": false, "destroyed": is_instance_valid(target) and target.is_destroyed, "position": order.target_position, "velocity": order.target_velocity, "node": target}
+
+func _on_fleet_order_status_changed(order: FleetOrder) -> void:
+	if order.status == FleetOrder.Status.ACTIVE:
+		command_link.last_confirmed_order = order
+		status_changed.emit(stable_entity_id, "%s acknowledges %s" % [display_name, order.type_label().to_upper()])
+	elif order.status == FleetOrder.Status.TRANSMITTING:
+		status_changed.emit(stable_entity_id, "%s transmitting %s — %.1fs" % [display_name, order.type_label().to_upper(), maxf(0.0, order.activation_time_seconds - _now_seconds())])
+	elif order.status == FleetOrder.Status.QUEUED:
+		status_changed.emit(stable_entity_id, "%s queues %s" % [display_name, order.type_label().to_upper()])
+	elif order.status == FleetOrder.Status.REJECTED:
+		status_changed.emit(stable_entity_id, "%s rejects %s — %s" % [display_name, order.type_label().to_upper(), order.rejection_reason])
+	order_status_changed.emit(stable_entity_id, order.order_id, order.status, order.rejection_reason)
+
+func _on_fleet_doctrine_changed(next_stance: StringName, next_formation: StringName, next_spacing: StringName) -> void:
+	doctrine_changed.emit(stable_entity_id, next_stance, next_formation, next_spacing)
+
+func _now_seconds() -> float:
+	return float(Time.get_ticks_msec()) / 1000.0
 
 func representative_position() -> Vector3:
 	var total := Vector3.ZERO
@@ -325,6 +858,36 @@ func total_ammunition() -> int:
 		if is_instance_valid(craft):
 			total += craft.ammunition
 	return total
+
+func maximum_craft_count() -> int:
+	return definition.craft_count if definition != null else crafts.size()
+
+func wing_health_fraction() -> float:
+	var maximum_per_craft := 0.0
+	if definition != null and definition.craft_definition != null and definition.craft_definition.damage_layers != null:
+		var maximum_layers := definition.craft_definition.damage_layers
+		maximum_per_craft = maximum_layers.max_shields + maximum_layers.max_armor + maximum_layers.max_hull
+	var maximum_total := maximum_per_craft * maximum_craft_count()
+	var current_total := 0.0
+	for craft in crafts:
+		if not is_instance_valid(craft) or craft.damage_state == null or craft.damage_state.definition == null:
+			continue
+		if not craft.is_destroyed:
+			current_total += craft.damage_state.shields + craft.damage_state.armor + craft.damage_state.hull
+	return clampf(current_total / maxf(1.0, maximum_total), 0.0, 1.0)
+
+func wing_health_percent() -> int:
+	return roundi(wing_health_fraction() * 100.0)
+
+func wing_health_label() -> String:
+	var health := wing_health_fraction()
+	if living_craft_count() <= 0 or health < 0.25:
+		return "CRITICAL"
+	if health < 0.55:
+		return "DEGRADED"
+	if health < 0.85:
+		return "DAMAGED"
+	return "NOMINAL"
 
 func _cleanup_destroyed_crafts() -> void:
 	# Invalid references remain as empty launch slots so craft identities never shift or duplicate.

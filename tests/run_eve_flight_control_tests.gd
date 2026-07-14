@@ -14,7 +14,7 @@ func _run() -> void:
 	_assert_true(InputMap.has_action("accelerate") and InputMap.has_action("decelerate"), "W/S throttle actions are registered")
 	_assert_true(InputMap.has_action("flak_screen") and InputMap.has_action("missile_salvo") and InputMap.has_action("nuclear_torpedo"), "1/2/3 ordnance actions are registered")
 	_assert_true(not ExodriftInputSettings.ACTION_LABELS.has("move_left") and not ExodriftInputSettings.ACTION_LABELS.has("move_up"), "lateral and vertical strafe bindings are removed from player controls")
-	_assert_true(not ExodriftInputSettings.DEFAULT_KEYS.values().has(KEY_C) and not ExodriftInputSettings.DEFAULT_KEYS.values().has(KEY_G), "obsolete camera-mode keys are absent from command bindings")
+	_assert_true(ExodriftInputSettings.DEFAULT_KEYS.get("carrier_operations") == KEY_C and not ExodriftInputSettings.DEFAULT_KEYS.values().has(KEY_G), "C is reserved for carrier operations while obsolete camera-mode bindings remain absent")
 	_assert_true(ExodriftInputSettings.action_key("flak_screen") == KEY_1 and ExodriftInputSettings.action_key("missile_salvo") == KEY_2 and ExodriftInputSettings.action_key("nuclear_torpedo") == KEY_3, "1/2/3 provide remappable flak, missile, and nuclear controls")
 
 	var observed_throttles: Array[float] = []

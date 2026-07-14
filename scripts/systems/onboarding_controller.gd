@@ -1,7 +1,7 @@
 class_name ExodriftOnboardingController
 extends CanvasLayer
 
-enum Step { WELCOME, HELM, SENSOR, FLIGHT, COMMAND, ORDERS, COMPLETE }
+enum Step { WELCOME, HELM, SENSOR, OPERATIONS, FLIGHT, COMMAND, ORDERS, COMPLETE }
 
 var carrier: PlayerCarrier
 var interceptor: SidebaySquadron
@@ -12,6 +12,7 @@ var current_step: Step = Step.WELCOME
 var step_elapsed: float = 0.0
 var starting_position: Vector3
 var active_ping_observed: bool = false
+var operations_console_observed: bool = false
 var dismissed: bool = false
 var panel: Panel
 var step_label: Label
@@ -89,6 +90,9 @@ func _process(delta: float) -> void:
 				_set_step(Step.SENSOR)
 		Step.SENSOR:
 			if step_elapsed >= 1.25 and active_ping_observed:
+				_set_step(Step.OPERATIONS)
+		Step.OPERATIONS:
+			if step_elapsed >= 1.25 and operations_console_observed:
 				_set_step(Step.FLIGHT)
 		Step.FLIGHT:
 			if step_elapsed >= 1.25 and (interceptor.operation.state != BayOperation.State.READY or scout.operation.state != BayOperation.State.READY):
@@ -110,6 +114,9 @@ func _on_active_ping(_position: Vector3, _radius_m: float) -> void:
 	if current_step == Step.SENSOR:
 		active_ping_observed = true
 
+func notify_operations_console_opened() -> void:
+	operations_console_observed = true
+
 func _set_step(next_step: Step) -> void:
 	current_step = next_step
 	step_elapsed = 0.0
@@ -117,7 +124,7 @@ func _set_step(next_step: Step) -> void:
 		return
 	step_label.text = _step_title(next_step)
 	instruction_label.text = _step_instruction(next_step)
-	progress_label.text = "ORIENTATION   [F3] HIDE" if next_step == Step.WELCOME else "%d / 6   [F3] HIDE" % mini(int(next_step), 6)
+	progress_label.text = "ORIENTATION   [F3] HIDE" if next_step == Step.WELCOME else "%d / 7   [F3] HIDE" % mini(int(next_step), 7)
 	var recorder := get_node_or_null("/root/PlaytestRecorder") as ExodriftPlaytestRecorder
 	if recorder != null:
 		recorder.record_event(&"onboarding_step", {"step": Step.keys()[next_step]})
@@ -129,9 +136,10 @@ func _step_title(step: Step) -> String:
 		Step.WELCOME: return "FLIGHT ORIENTATION"
 		Step.HELM: return "01  //  HELM CONTROL"
 		Step.SENSOR: return "02  //  SENSOR PICTURE"
-		Step.FLIGHT: return "03  //  FLIGHT OPERATIONS"
-		Step.COMMAND: return "04  //  LIVE COMMAND"
-		Step.ORDERS: return "05  //  ISSUE INTENT"
+		Step.OPERATIONS: return "03  //  CARRIER OPERATIONS"
+		Step.FLIGHT: return "04  //  FLIGHT OPERATIONS"
+		Step.COMMAND: return "05  //  LIVE COMMAND"
+		Step.ORDERS: return "06  //  ISSUE INTENT"
 		_: return "ORIENTATION COMPLETE"
 
 func _step_instruction(step: Step) -> String:
@@ -142,6 +150,8 @@ func _step_instruction(step: Step) -> String:
 			return "Use W/S to set the carrier's persistent throttle. Double-click empty space to order a full-cruise heading; middle-drag orbits the command camera."
 		Step.SENSOR:
 			return "Contacts begin uncertain. Press P for an active ping: it identifies nearby targets, but broadcasts your position."
+		Step.OPERATIONS:
+			return "Press %s for Carrier Operations. Try a power preset, then inspect damage-control teams, deck priorities, finite stores, and the rescue timer shown when an officer is trapped." % ("[%s]" % ExodriftInputSettings.key_label("carrier_operations"))
 		Step.FLIGHT:
 			return "Launch with Z or X. Re-press during servicing to queue an automatic redeploy after the craft recover and rearm."
 		Step.COMMAND:

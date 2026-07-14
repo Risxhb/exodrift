@@ -6,32 +6,42 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
+	root.size = Vector2i(2560, 1440)
 	var menu := ExodriftMainMenu.new()
 	root.add_child(menu)
 	menu.configure(false)
 	await process_frame
 	_assert_true(menu.main_panel.size.y <= 110.0, "primary menu is a compact command bar")
 	_assert_true(is_equal_approx(menu.main_panel.anchor_top, 1.0) and menu.main_panel.offset_top < 0.0, "primary menu is bottom anchored")
+	var menu_rect := menu.main_panel.get_global_rect()
+	_assert_true(menu_rect.position.x >= 18.0 and menu_rect.end.x <= root.size.x - 18.0 and menu_rect.position.y >= 18.0 and menu_rect.end.y <= root.size.y - 18.0, "1440p command bar remains inside safe margins")
 	var command_buttons: Array[Button] = []
 	for child in menu.main_panel.get_children():
 		if child is Button:
 			command_buttons.append(child)
 	_assert_true(command_buttons.size() == 6, "command bar exposes new, continue, tutorial, settings, credits, and quit actions")
-	_assert_true(command_buttons.all(func(button: Button) -> bool: return is_equal_approx(button.position.y, command_buttons[0].position.y)), "primary commands share one horizontal row")
+	_assert_true(menu.primary_action_button != null and menu.primary_action_button.text == "NEW OPERATION" and menu.primary_action_button.size.y > menu.continue_button.size.y, "new operation owns the primary title action when no checkpoint is available")
+	_assert_true(command_buttons.filter(func(button: Button) -> bool: return button != menu.primary_action_button).all(func(button: Button) -> bool: return button.size.y <= 40.0), "tutorial and system actions remain visually secondary to the primary operation command")
+	var branding_copy := " ".join(menu.main_panel.get_children().filter(func(child: Node) -> bool: return child is Label).map(func(child: Node) -> String: return (child as Label).text))
+	_assert_true(not branding_copy.contains("M19") and branding_copy.contains("CARRIER COMMAND"), "title branding presents the game identity without development milestone copy")
 	_assert_true(menu.settings_panel.size == Vector2(440.0, 552.0) and menu.controls_panel.size == Vector2(440.0, 552.0), "secondary settings and controls remain focused overlays")
-	_assert_true(menu.ships.size() == 19, "background battle contains two capital formations and twelve fighter craft")
+	_assert_true(menu.ships.size() == 20, "background battle contains two capital formations, six Raptor leaders, one Watcher, and six hostile attack craft")
 	var capital_models := menu.ships.filter(func(ship_data: Dictionary) -> bool: return not bool(ship_data.fighter))
 	var fighter_models := menu.ships.filter(func(ship_data: Dictionary) -> bool: return bool(ship_data.fighter))
 	_assert_true(capital_models.all(func(ship_data: Dictionary) -> bool: return ship_data.node is CombatShip and not ship_data.node is FighterCraft), "menu capital formation uses the current CombatShip model builder")
 	_assert_true(fighter_models.all(func(ship_data: Dictionary) -> bool: return ship_data.node is FighterCraft), "menu wings use the current FighterCraft model builder")
 	var sidebay := capital_models[0].node as CombatShip
 	_assert_true(sidebay is PlayerCarrier, "menu flagship instantiates the exact playable carrier model")
-	_assert_true(sidebay.find_child("ArmoredCore", true, false) != null and sidebay.find_child("PortBayAssembly", true, false) != null and sidebay.find_child("StarboardBayAssembly", true, false) != null, "menu flagship carries the playable armored core and mirrored hangar assemblies")
+	var gallery_names := ["PortBay1Assembly", "PortBay2Assembly", "PortBay3Assembly", "StarboardBay1Assembly", "StarboardBay2Assembly", "StarboardBay3Assembly"]
+	_assert_true(sidebay.find_child("ArmoredCore", true, false) != null and gallery_names.all(func(node_name: String) -> bool: return sidebay.find_child(node_name, true, false) != null) and sidebay.find_child("ScoutEWHive", true, false) != null, "menu flagship carries the playable armored core, six fighter galleries, and Watcher EW hive")
 	var armored_core := sidebay.find_child("ArmoredCore", true, false) as MeshInstance3D
 	var sidebay_material := armored_core.material_override as StandardMaterial3D if armored_core != null else null
 	_assert_true(sidebay_material != null and sidebay_material.albedo_texture != null, "menu flagship renders the current textured hull surface")
 	_assert_true(sidebay.find_child("RecessedWaist", true, false) != null and sidebay.find_child("OverlappingArmorRib06", true, false) != null and sidebay.find_child("CarrierEngineCorePlume", true, false) != null, "menu flagship uses the Sidebay-specific recessed hull, armor courses, and layered engine plume")
-	_assert_true(get_nodes_in_group("menu_missile_trail").size() >= 5 and get_nodes_in_group("menu_flak_tracer").size() >= 20, "menu battle layers missile plumes and dense flak tracer streaks")
+	var friendly_air_group := fighter_models.filter(func(ship_data: Dictionary) -> bool: return bool(ship_data.friendly))
+	_assert_true(friendly_air_group.size() == 7 and friendly_air_group.filter(func(ship_data: Dictionary) -> bool: return ship_data.model_id == &"raptor_interceptor").size() == 6 and friendly_air_group.filter(func(ship_data: Dictionary) -> bool: return ship_data.model_id == &"watcher_drone").size() == 1, "menu air group presents six Raptor squadron leaders and the dedicated Watcher EW wing")
+	_assert_true(get_nodes_in_group("menu_missile_trail").size() == 6 and get_nodes_in_group("menu_flak_tracer").size() == 28 and get_nodes_in_group("menu_flak_airburst").size() == 14, "menu battle layers guided salvos, three seven-round friendly flak curtains, reciprocal fire, and a dense airburst wall")
+	_assert_true(menu.tracers.filter(func(tracer_data: Dictionary) -> bool: return not bool(tracer_data.missile) and bool(tracer_data.friendly)).size() == 21, "title-screen flak uses three lock-directed seven-round friendly curtains")
 	var layered_impacts := get_nodes_in_group("menu_layered_explosion")
 	_assert_true(layered_impacts.size() == 4 and layered_impacts.all(func(effect: Node) -> bool: return effect.find_child("WhiteHotCore", true, false) != null and effect.find_child("ShockwaveRing", true, false) != null and effect.find_child("DirectionalDebris", true, false) != null), "menu ship hits use layered core, shockwave, and debris effects")
 	_assert_true(menu.camera.fov <= 51.0 and menu.camera.far >= 30000.0, "battle camera holds the full readable command-view backdrop")
@@ -42,9 +52,11 @@ func _run() -> void:
 	_assert_true(nebula_veils.size() == 2, "menu battle layers two scalable vector nebula veils")
 	menu._show_tutorial()
 	await process_frame
-	_assert_true(is_instance_valid(menu.tutorial_screen) and menu.tutorial_screen.LESSON_TITLES.size() == 8, "main-menu tutorial opens an eight-lesson communications sequence")
+	_assert_true(is_instance_valid(menu.tutorial_screen) and menu.tutorial_screen.LESSON_TITLES.size() == 9, "main-menu tutorial opens a nine-lesson communications sequence")
 	if is_instance_valid(menu.tutorial_screen):
 		var tutorial := menu.tutorial_screen
+		var communications_frame := tutorial.root.find_child("CommunicationsFrame", true, false) as Control
+		_assert_true(communications_frame != null and communications_frame.get_global_rect().position.x >= 18.0 and communications_frame.get_global_rect().end.x <= root.size.x - 18.0 and communications_frame.get_global_rect().position.y >= 18.0 and communications_frame.get_global_rect().end.y <= root.size.y - 18.0, "tutorial communications frame stays within 1440p safe margins")
 		_assert_true(tutorial.portrait.texture is AtlasTexture and tutorial.dialogue_label.visible_characters >= 0 and tutorial.dialogue_label.visible_characters < tutorial.full_text.length(), "tutorial starts with the generated portrait atlas and typewriter text")
 		tutorial._advance()
 		_assert_true(tutorial.dialogue_label.visible_characters == -1 and not tutorial.mouth_open, "first advance completes the current transmission without skipping a lesson")
@@ -56,7 +68,7 @@ func _run() -> void:
 	menu.queue_free()
 	await process_frame
 	if failures.is_empty():
-		print("PASS: compact bottom command menu and readable fleet engagement layout")
+		print("PASS: hierarchical title command menu and readable fleet engagement layout")
 		quit(0)
 	else:
 		for failure in failures:

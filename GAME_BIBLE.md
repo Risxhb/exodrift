@@ -36,7 +36,7 @@ The defining experience is moving continuously between two forms of command:
 - Keyboard thrust: fore/aft, lateral, vertical, boost, and brake.
 - The vertical combat volume is capped at ±1,400 meters on the Godot Y axis for every capital ship and craft; outward velocity is canceled at the boundary. `[PROVISIONAL]`
 - The carrier keeps its current velocity or assigned autopilot destination while the tactical map is open.
-- Flak is a carrier-relative area-denial screen. `1` opens a temporary placement view, the pointer places a visible 250 m airburst volume 1.0–3.2 km from the carrier in 250 m steps, and distributed batteries sustain staggered seven-round curtains into that volume until ceased or relocated. The flak-director upgrade extends the placement maximum to 4 km.
+- Flak is a lock-directed area-denial firing solution inspired by a “holy wall of flak.” With an identified target inside the 3.2 km envelope, `1` leads the moving lock and sends a staggered seven-round curtain into a 250 m saturation sector on that bearing. The wall destroys interceptable missiles and nuclear torpedoes, deals full damage to strikecraft, and applies only 25% damage to capital ships. There is deliberately no IFF immunity: allied craft, capital ships, and ordnance caught in the firing solution take the same role-scaled effects. The flak-director upgrade extends the maximum to 4 km.
 - `2` fires the four-round identified-lock missile salvo. `3` fires one interceptable nuclear torpedo per battle; it arms after 1.2 km and applies a 650 m falloff blast to friendly and hostile ships.
 - Missiles lock identified targets and launch four-weapon salvos for deliberate anti-ship attacks out to 8.5 kilometers.
 - Automated close defense throws visible three-round flak curtains at interceptable projectiles and remains active while the tactical map is open.
@@ -76,7 +76,7 @@ Role AI executes maneuvers. The player does not steer individual allied craft.
 
 ### Carrier `[LOCKED]`
 
-The starting human carrier has a long industrial armored hull, obvious bridge and engine masses, flak emplacements, missile cells, and mirrored port/starboard flight galleries. Each gallery visibly retracts toward the hull while split armor doors seal the opening. Doors, approach lighting, traffic direction, launch rails, and recovery lanes clearly communicate deck state. Flight operations require fully extended bays; jump execution requires both bays fully retracted and sealed.
+The starting human carrier has a 220-meter industrial armored hull, offset command island and flag bridge, sensor mast and EW arrays, aircraft elevators, six main engines, flak emplacements, missile cells, three port and three starboard flight galleries, and a dedicated dorsal Watcher drone hive. Each fighter gallery visibly retracts toward the hull while split armor doors seal the opening. Doors, approach lighting, traffic direction, launch rails, and recovery lanes clearly communicate deck state. Flight operations require fully extended bays; jump execution requires all galleries retracted and sealed.
 
 Carrier builds use authored module slots for weapons, defenses, sensors, support systems, and hangar complements. The core hull and side-bay silhouette remain recognizable. Equipment is composed of authored sidegrades with fixed tactical identities; randomized affix loot is excluded.
 
@@ -130,9 +130,9 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 
 ### Friendly force `[LOCKED]`
 
-- One player carrier with mirrored side bays, placed sustained flak, lock-on missiles, one nuclear torpedo, automated point defense, layered durability, passive sensors, and active ping.
-- Port bay: one four-craft interceptor squadron.
-- Starboard bay: one three-craft scout-drone squadron.
+- One player fleet carrier with six retractable side galleries, a dorsal EW-drone hive, lock-directed hazardous flak walls, lock-on missiles, one nuclear torpedo, automated point defense, layered durability, passive sensors, and active ping.
+- Fighter group: six named four-craft Raptor squadrons distributed across six independent side galleries.
+- Scout group: one three-craft Watcher EW/scout wing operating from the dorsal drone hive.
 - One commandable missile frigate escort.
 
 ### Hostile force `[LOCKED]`
@@ -189,11 +189,13 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - `FleetOrder`: order type, target entity ID or 3D position, issue time, queue state, stance, and command-link requirement.
 - `SensorContact`: contact ID, classification, estimated position/velocity, confidence, uncertainty radius, identification state, and last update.
 - `CommandLinkState`: linked, delayed, or disconnected, including the last confirmed order.
-- `BayOperation`: queued, launching, deployed, returning, approach, docking, servicing, or ready.
+- `BayOperation`: queued, launching, deployed, returning, approach, docking, repairing, refueling, rearming, or ready; the former aggregate servicing state remains migration-compatible.
+- `CarrierOperationsState`: power, subsystem condition, hazards, damage-control teams, crew, stores, deck priorities, selected wing packages, battle incidents, and persistent reporting.
+- `WingLoadoutDefinition`: data-driven package ammunition and combat/sensor/rescue behavior for one interceptor or scout role.
 
 ## 8. Milestones and acceptance gates
 
-**Implementation status (2026-07-12):** M1–M18 are implemented. Fourteen contract, campaign, integrated battle, encounter, onboarding, playtest-reporting, save/settings, ship-readability, audio/narrative, helm/presentation, and ordnance suites pass. The M18 600-frame combat gate measures 144.9 FPS at 1920×1080 with p95 7.40 ms/p99 7.59 ms. The sustained all-wings/flak/missile/nuclear/point-defense gate measures 144.9 FPS with p95 9.57 ms/p99 9.99 ms and zero dropped effects; the full-runtime-model animated menu measures 144.9 effective FPS on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
+**Implementation status (2026-07-13):** M1–M20 are implemented. Twenty-two functional, integration, campaign, carrier-operations, fleet-command, onboarding, presentation, and regression suites are maintained. At 2560×1440, the M20 normal gate measures 144.9 effective FPS with p95 7.41 ms/p99 7.58 ms; the carrier-incident/all-wings/ordnance stress gate measures 144.9 effective FPS with p95 9.17 ms/p99 9.45 ms and bounded nodes/VFX on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
 
 ### M1 — Canonical bible and Godot foundation `[IMPLEMENTED]`
 
@@ -268,7 +270,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - Assigned Command, Flight, Gunnery, Engineering, and Sensors leads modify command range, servicing time, carrier weapon damage, carrier hull, and sensor range. Medical skill reduces injuries sustained during rescue operations.
 - Escape-pod source IDs map endangered craft and ships to appropriate named personnel. The after-action report identifies recovered and adrift officers before the rescue/salvage/departure decision.
 - Rescued officers suffer persistent injuries and recover across completed nodes. Abandoned officers die permanently; bonded survivors gain a Grieving trait that reduces effective skill.
-- Direct combat uses independent mouse free-look with a camera/cursor-directed flak solution; the hull retains its helm attitude, and every combat ship is held inside the ±1,400-meter vertical battlespace.
+- Direct combat uses independent mouse free-look while the identified combat lock directs the flak firing solution; the hull retains its helm attitude, and every combat ship is held inside the ±1,400-meter vertical battlespace.
 
 ### M12 — Personnel progression and operational events `[IMPLEMENTED]`
 
@@ -284,7 +286,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - Extend requisition into authored escort acquisition, replacement hull choices, hangar-complement changes, and limited suppliers while preserving fixed tactical identities.
 - Add salvage allocation and route-level logistics decisions without randomized affix loot or grind-based permanent power.
 - **Implemented slice (2026-07-12):** The starting ISS Resolute, fast ISS Harrier screen corvette, and armored ISS Bulwark line frigate form a fixed authored escort catalog. Requisition purchases unique hulls from sector-gated suppliers; acquired, selected, and permanently lost escort identities persist in version-7 saves. The active hull's dimensions, mobility, durability, weapon, interception capability, name, and stable ID reach tactical combat. Supplies service the carrier and air group but no longer recreate a destroyed escort.
-- **Implemented slice (2026-07-12):** CVN Sidebay, CVN Vanguard, and CVN Citadel form a fixed carrier-frame catalog with balanced, assault, and armored-command identities. Balanced, Raptor Strike, and Watcher Recon air groups provide authored 4/3, 5/2, and 3/4 interceptor/scout allocations with distinct ammunition, endurance, and service profiles. Requisition unlocks sector-gated frames and complements; supply-funded deck refits quote their exact repair/rearm cost. Selections persist in version-8 saves and drive tactical identity, movement, durability, weapon output, command/sensor reach, craft counts, stores, endurance, and servicing.
+- **Implemented slice (2026-07-14):** CVN Sidebay, CVN Vanguard, and CVN Citadel form a fixed carrier-frame catalog with balanced, assault, and armored-command identities. Balanced, Raptor Strike, and Watcher Recon air groups provide authored 24/3, 30/2, and 18/4 fighter/scout allocations distributed across six named fighter squadrons and one Watcher EW/scout wing, with distinct ammunition, endurance, and service profiles. Requisition unlocks sector-gated frames and complements; supply-funded deck refits quote their exact repair/rearm cost. Selections persist in version-8 saves and drive tactical identity, movement, durability, weapon output, command/sensor reach, craft counts, stores, endurance, and servicing.
 - **Implemented slice (2026-07-12):** Battle sweeps and salvage nodes recover persistent allocation stock. Fixed recipes convert stock into supplies, fuel, or requisition. Balanced Stores, Lean Burn, and Recovery Rig postures expose exact route fuel/supply and salvage-yield tradeoffs; affordability, node cards, route execution, after-action projections, and version-9 persistence all use the selected posture. No randomized affixes, grind currency, or permanent stat power are introduced.
 
 ### M14 — Combat graphics and performance foundation `[IMPLEMENTED]`
@@ -319,18 +321,18 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 ### M17 — Fleet authenticity and strategic ordnance `[IMPLEMENTED]`
 
 - Direct combat uses one visible-pointer command view: double-click sets full-cruise heading, middle-drag orbits, wheel zooms, and `W/S`, `Ctrl`, and `Shift` operate persistent heavy-carrier throttle, stop, and boost. Acceleration is 14 m/s² times frame profile and turn response is 0.30 rad/s times frame profile.
-- `1` opens a temporary camera move toward a visible carrier-relative flak volume. Left click confirms, right click or `Esc` cancels, `Shift+1` ceases, and brackets adjust a 1.0–3.2 km range in 250 m steps, or to 4 km with the flak director. Confirmed screens retain their local bearing as the carrier moves and turns and sustain staggered seven-round fire into a 250 m interception/airburst radius.
+- `1` immediately computes a lead on the identified target lock and fires a staggered seven-round curtain along that bearing. Every round bursts inside a 250 m hazardous sector at the computed intercept distance, up to 3.2 km or 4 km with the flak director. The sector destroys friendly or hostile interceptable ordnance, heavily damages friendly or hostile strikecraft, and lightly damages capital ships.
 - `2` fires four guided missiles at an identified lock. `3` fires the battle's single 10 km nuclear torpedo, which arms after 1.2 km, can be intercepted, leaves a two-stage trail, and applies a 650 m falloff blast with friendly fire.
 - Missile, nuclear, fighter, and carrier engine trails plus layered hull hits, ship detonations, shock rings, cores, and debris use the existing quality-scaled 80-slot pool. Reduced-flash behavior and zero-drop stress acceptance remain intact.
-- Pressing `Z` or `X` during servicing queues the surviving wing to physically relaunch as soon as deck turnaround completes; the HUD exposes the queued state.
+- `Z` opens the fighter-squadron deployment submenu; selecting a servicing squadron queues it to relaunch as soon as deck turnaround completes. `X` retains direct control of the Watcher EW/scout wing.
 - The title battle instantiates the exact playable carrier plus current textured capital/fighter builders against the procedural sky, with 22 flak tracers, six arcing missile plumes, and four layered explosion rigs. The public fleet archive replaces seven CSS glyphs with 900×506 direct Godot renders of the actual Sidebay, Resolute, Raptor, Watcher, Acheron, Vesper, and Crucible models.
 - Fourteen automated suites pass. Normal combat measures 144.9 FPS (p95 7.19 ms/p99 7.28 ms), sustained maximum ordnance measures 144.9 FPS (p95 8.83 ms/p99 9.37 ms, zero dropped effects), and the runtime-model menu measures 165.0 effective FPS on the development RTX 3060.
 
 ### M18 — Tactical interface and deep-space polish `[IMPLEMENTED]`
 
-- Flak placement keeps the carrier centered and zooms aft to frame the hull and screen volume. The authored 125 m framing is signed zoom 0%; players can zoom in to +100% or out to -100% at 650 m.
-- `1` places flak in direct combat or the tactical overlay. Tactical LMB confirms and RMB cancels without leaving the command map.
-- Remappable `B` opens both hangar wings and deploys available air groups, or recalls both groups and retracts the galleries after recovery. `Z` and `X` remain granular wing controls.
+- Flak fire leaves the authored carrier camera framing unchanged. The 230 m framing is signed zoom 0%; players can zoom in to +100% or out to -100% at 900 m.
+- `1` fires toward the current identified lock from either direct combat or the tactical overlay. No placement mode or fuse-range adjustment is required.
+- Remappable `B` opens all hangars and deploys available air groups, or recalls all seven groups and retracts the galleries after recovery. `Z` opens granular fighter-squadron control and `X` controls the Watcher EW/scout wing.
 - Carrier Telemetry, Air Group, Fire Control, Target Solution, and Tactical Overview are collapsible. Target Solution no longer contains a placeholder ship silhouette.
 - The interactive overview lists contact name, range, closing speed, and identification state. Identified contacts can be manually locked and issued persistent Approach, Orbit, or Keep 2.5K carrier commands.
 - Projected target graphics now use scalable corner brackets, envelope color, range/relative-velocity annotation, a motion-lead pip, and the existing off-screen direction indicator.
@@ -341,25 +343,46 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 
 ### Combat presentation and tutorial upgrade `[IMPLEMENTED]`
 
-- Sidebay's base flak envelope is 1.0–3.2 km in 250 m fuse steps, extended to 4 km by the flak director. Seven-round curtains now use a 250 m falloff volume and pooled WWII-inspired flashes, smoke clusters, fragments, and pressure rings while retaining interception, faction safety, and reduced-flash behavior.
+- Sidebay's base flak envelope is 3.2 km, extended to 4 km by the flak director. Lock-led seven-round curtains use a 250 m falloff volume and pooled WWII-inspired flashes, smoke clusters, fragments, and pressure rings. They retain ordnance interception and reduced-flash behavior while intentionally removing faction safety from the firing sector.
 - Carrier and menu propulsion use layered white-blue cores, cyan tapered exhaust, and outer ion glow. Plume length and opacity respond to propulsion demand with per-nozzle flicker.
 - CVN Sidebay retains its 120 m gameplay envelope, bays, hardpoints, and statistics while presenting a tapered armored bow, overlapping ribbed plates, recessed waist, side hangar pods, aft engineering spine, paired nacelles, dark gunmetal plating, cyan registry marks, and restrained amber hazards.
 - A seam-feathered 3840×1920 galaxy-arm panorama blends with the existing procedural sky in menu and combat, at reduced combat intensity for target and HUD legibility.
 - Desktop output defaults to 2560×1440. Edge-anchored combat HUD groups render at 75% visual scale while preserving the logical canvas, all information, and collapsible panels.
 - Right-clicking an identified contact marker or Tactical Overview row with the carrier selected opens one menu for lock, 500 m approach, 500 m/5 km/10 km/25 km orbit, the same keep-at-distance values, and clear relative navigation. Empty-space moves and wing/escort orders retain their established behavior.
-- The title menu includes an eight-lesson standalone communications tutorial with Commander Mara Voss. It resolves live key bindings and uses three consistent poses, four eye/mouth facial states per pose, 36-character-per-second text, punctuation pauses, speaking-only mouth animation, and randomized blinks.
+- The title menu includes a nine-lesson standalone communications briefing with Commander Mara Voss. It resolves live key bindings and uses three consistent poses, four eye/mouth facial states per pose, 36-character-per-second text, punctuation pauses, speaking-only mouth animation, and randomized blinks.
+- Completing the briefing launches a repeatable, campaign-isolated eight-step combat trial. An inert amber target drone, cyan navigation gate, and live guide teach carrier movement, fixed group slots, the click/flick command wheel, queued waypoints, doctrine/spacing, active identification, interceptor launch, and either carrier- or wing-led target engagement; completion and early exit both return cleanly to the title.
+
+### M19 — Integrated Carrier Operations `[IMPLEMENTED]`
+
+- Version-10 run state persists eight subsystem conditions, surviving generic crew, finite carrier/aviation stores, damage-control spares, and selected wing packages while resetting power, hazards, and team assignments safely at battle start. Versions 1–9 migrate to the canonical full state.
+- Eight reactor points feed propulsion, defense, weapons, and flight operations through four presets or manual allocation. Reactor damage reduces the budget and deterministically sheds excess allocation; subsystem condition and emergency damage-control functionality independently modify the corresponding systems.
+- Hull penetrations deterministically map impact location and weapon role into reactor, propulsion, shield grid, fire control, sensors, command/CIC, or either deck. Two four-second-transit teams contain fires/breaches before spending persistent spares on repairs; uncontained hazards cause deterministic crew casualties.
+- The carrier consumes 2,100 flak rounds, 24 guided missiles, one nuclear torpedo, one selected-air-group reload, and 14 refuel units. Siege cells, expanded magazines, fleet repair drones, and rapid turnaround decks modify their exact authored systems.
+- Both decks run explicit repair, refuel, and rearm queues with Rapid Turn, Balanced, or Repair First priority, partial service, and disabled-deck emergency recovery. Raptor CAP/Multirole/Strike and Watcher Recon/Screen/Rescue are data-driven packages changeable only while aboard before rearming.
+- Severe uncontained subsystem incidents trap the assigned department lead behind a ten-second rescue countdown. Rescue or death produces immediate severity-three injury, succession, bond, telemetry, and after-action consequences; unresolved battle-end incidents receive a deterministic emergency recovery and cannot disappear.
+- Remappable `C` opens a responsive, non-pausing Carrier Operations console from direct or tactical view. A compact collapsible HUD summary shows the live binding, power preset, warnings, and officer countdown. Mara Voss's tutorial now has nine lessons and first-operation onboarding has seven steps.
+- Fleet logistics separates repair, rearm, air-group restoration, and full service with exact supply breakdowns. Repair nodes restore at most 24 missing generic crew; routine fleet service never replaces casualties.
+
+### M20 — Finished Core Combat and Fleet Command `[IMPLEMENTED]`
+
+- Ships and squadrons share one battle-local command state with unique order IDs, transmitting/queued/active/completed/rejected/cancelled lifecycle, eight-entry queues, real link latency, disconnect retention, doctrine, formation, spacing, leadership, and consistent CIC snapshots.
+- The live tactical map uses a full-battlespace carrier-origin grid with Home recenter/follow and Shift+middle-mouse panning, then teaches a target-sensitive right-click wheel with quick flick and precise click paths, Shift queuing, fixed F1 Carrier/F2 Escort/F3 Interceptors/F4 Scouts slots, contextual objectives, carrier autopilot geometry, and persistent numbered paths with status, ETA, and transmission countdowns.
+- Role AI uses predictive arrival, velocity matching, collision separation, boundary recovery, leader-local Wedge/Line/Screen/Column slots, 0.75x/1.0x/1.5x spacing, doctrine-specific range/leash/return thresholds, lost-track last-known behavior, and fighter approach/firing-run/breakaway/reform passes.
+- Unguided weapons lead moving targets and point defense ranks incoming ordnance by time-to-impact, protected-unit risk, and warhead danger. Existing flak, missile, nuclear, layered damage, subsystem, and finite-store mechanics remain unchanged.
+- Direct and tactical CIC layers show deconflicted allied brackets, orders, links, health, ammunition, endurance, formation, facing/velocity, selected envelopes/footprints, uncertainty volumes, missile state/TTI, point-defense state, nuclear warnings, and resolved hit direction/layer.
+- Acheron, Vesper, and Crucible forces receive authored opening doctrines and phase orders for screens, interceptions, flanking entry, range commitment, and withdrawal. Fleet telemetry records order type/lifecycle, wheel cancellation, rejection reason, link latency, doctrine changes, queue completion, and acknowledgement time.
 
 ## 9. Test matrix
 
 Automated tests cover damage-layer transitions, missile-lock eligibility, FIFO order queues, sensor confidence decay and track drift, command-link transitions, and every valid bay-state transition.
 
-Campaign and integration tests also cover all six objective assignments, defense/escort/capture success conditions, withdrawal pursuit, jump-range stragglers, escape-pod accounting, after-action rescue and salvage choices, persistent consequences, and save migration through version 9.
+Campaign and integration tests also cover all six objective assignments, defense/escort/capture success conditions, withdrawal pursuit, jump-range stragglers, escape-pod accounting, after-action rescue and salvage choices, persistent consequences, and save migration through version 10.
 
 M11 tests cover camera orbit independence, vertical bounds, authored roster construction, all department cards, assignment changes, tactical skill modifiers, named risk previews, injuries, medical mitigation, recovery, succession, bonds, permanent death, and version-4 roster migration.
 
 M12 tests cover treatment quotes and recovery, promotion eligibility and costs, requisition recruitment, rare-candidate unlocks, mutual relationship bonds, authored event selection and outcomes, unaffordable-choice gating, pending-event persistence, event UI flow, and version-5 recruitment migration.
 
-M13 tests cover escort, carrier-yard, and flight-group supplier sector gates; exact requisition, refit, route, and salvage-conversion costs; authored acquisition and selection; unique permanent escort loss; version-9 persistence and older-save migration; dynamic 4/3, 5/2, and 3/4 hangar capacities; logistics and fleet-screen interaction; adjusted route affordability and salvage yields; and propagation of every selected tactical profile into combat.
+M13 tests cover escort, carrier-yard, and flight-group supplier sector gates; exact requisition, refit, route, and salvage-conversion costs; authored acquisition and selection; unique permanent escort loss; version-9 persistence and older-save migration; dynamic 24/3, 30/2, and 18/4 hangar capacities; logistics and fleet-screen interaction; adjusted route affordability and salvage yields; and propagation of every selected tactical profile into combat.
 
 M14 tests cover ship visual profiles, immediate quality switching, backdrop tier visibility, VFX budgets, original texture resources, shared projectile mesh/material identity, combat-registry population, radar animation, normal p95/p99 frame time, sustained legal maximum fire, all deployed wings, hostile missile pressure, node stability, effect drops, and clean ObjectDB shutdown.
 
@@ -367,15 +390,19 @@ M15 tests cover deterministic onboarding progression and minimum card dwell, act
 
 M16 tests cover heading navigation, persistent throttle and stop/boost behavior, removed strafe bindings, cursor restoration, the compact adaptive bottom menu, live engagement composition, faction surface atlases/material response/modeling budgets, procedural-sky construction, nebula/star readability, asymmetric HUD styling, and control-strip copy.
 
-M17 tests cover remappable 1/2/3 and bracket actions, placement-camera travel and return, carrier-local screen anchoring, range clamps, staggered fire, airburst interception, nuclear inventory/arming/AoE/friendly fire/interception/trails, heavy carrier limits, speed-reactive engine trails, queued wing redeploy, exact runtime title/archive models, layered menu effects, pooled VFX bounds, and regression compatibility.
+M17 tests cover remappable 1/2/3 actions, lock-directed flak fire, the fixed range envelope, staggered curtains, hazardous airburst interception and role-scaled damage, nuclear inventory/arming/AoE/friendly fire/interception/trails, heavy carrier limits, speed-reactive engine trails, queued wing redeploy, exact runtime title/archive models, layered menu effects, pooled VFX bounds, and regression compatibility.
 
-M18 tests cover signed carrier zoom, carrier-centered flak framing, direct/tactical placement parity, remappable aggregate hangar-wing control, persistent manual target locks, orbit/approach/keep-distance geometry, collapsible command panels, the interactive overview, projected lock brackets and lead, shader-driven deep space, tapered hull construction, and all prior campaign/combat contracts.
+M18 tests cover signed carrier zoom, remappable aggregate hangar-wing control, persistent manual target locks, orbit/approach/keep-distance geometry, collapsible command panels, the interactive overview, projected lock brackets and lead, shader-driven deep space, tapered hull construction, and all prior campaign/combat contracts.
 
-The combat-presentation upgrade tests cover 250 m flak falloff and immunity, fuse clamps and upgrades, layered pooled airbursts, propulsion-demand plume layers, Sidebay geometry and material identity, panorama integration, 1440p HUD density and menu placement, every relative-navigation distance and clear command, all eight tutorial lessons, live bindings, typewriter completion, pose selection, blink/mouth timing, and clean repeated entry.
+M20 tests cover lifecycle replacement/cancellation, eight-entry queues, delayed/disconnected links, objective interactions, status snapshots, click/flick/Shift/cancel wheel paths, stable F1–F4 slots, every stance and formation/spacing combination, lost/destroyed targets, move/hold/interact behavior, attack passes and reform, leader handoff, boundary/separation recovery, projectile lead, point-defense prioritization, carrier autopilot snapshots, eight-step training, direct/tactical visual captures, and normal/stress performance gates.
+
+The combat-presentation upgrade tests cover 250 m flak falloff, target-lock direction, hostile and friendly ordnance interception, strikecraft damage, reduced capital damage, layered pooled airbursts, propulsion-demand plume layers, Sidebay geometry and material identity, panorama integration, 1440p HUD density and menu placement, every relative-navigation distance and clear command, all eight tutorial lessons, live bindings, typewriter completion, pose selection, blink/mouth timing, and clean repeated entry.
+
+M19 tests cover reactor budgets and shedding, all subsystem effects, deterministic impacts and hazard propagation, team transit/containment/repair/spare depletion, casualties and crew penalties, officer rescue/death/battle-end resolution/succession, every carrier and aviation store, partial deck service, all priorities and six packages, disabled-deck recovery, dynamic air-group reload capacity, exact service costs, version-10 migration/round trips, remapped responsive operations UI, nine tutorial lessons, seven onboarding steps, and non-pausing repeated entry.
 
 Presentation tests cover menu-first startup, continuous background battle motion, accessibility settings, title-to-campaign fades, manual-save Continue, and return-to-title state preservation.
 
-Carrier-combat integration tests cover unified mouse heading/camera control without hull snap, placed seven-round flak screening, four-missile salvos, nuclear safety behavior, pulsing contact radar, layered deep-space backdrop, flight-operation locks and redeploy, emergency sealing, pursuit exposure, and the closed-bay jump interlock.
+Carrier-combat integration tests cover unified mouse heading/camera control without hull snap, lock-directed seven-round flak walls, four-missile salvos, nuclear safety behavior, pulsing contact radar, layered deep-space backdrop, flight-operation locks and redeploy, emergency sealing, pursuit exposure, and the closed-bay jump interlock.
 
 Verbose headless integration exits without leaked ObjectDB instances; procedural tones and score generation are skipped only under the headless display driver so desktop and Web audio remain unchanged.
 
@@ -429,3 +456,5 @@ Each `/goal` owns exactly one milestone. Before work begins, read this bible and
 - **2026-07-12:** Completed M16 with a compact bottom title command row, a reframed fleet engagement, intent-driven helm controls, double-click vector flight, persistent throttle, an asymmetric military HUD, faction-specific surface refits, and updated landing-page media. Replaced the blurry panorama with a crisp procedural sky after direct-render visual QA. All thirteen regression suites, normal/stress/menu performance gates, both release exports, and the packaged-build smoke check pass.
 - **2026-07-12:** Completed M17 with a unified visible-pointer command view, heavy carrier inertia, carrier-relative placed flak screening, guided and nuclear ordnance hotkeys, physical post-service wing redeploy, speed-reactive trails, layered bounded impacts/explosions, exact runtime models in the title engagement, and direct Godot model renders in the public fleet archive. Fourteen suites and normal/stress/menu gates pass; release exports and live-site verification are the remaining packaging checks.
 - **2026-07-12:** Completed the combat-presentation and tutorial upgrade: 3.2 km/250 m flak airbursts, demand-driven layered carrier exhaust, the dark gunmetal Sidebay silhouette refit, a seam-feathered galaxy panorama, 2560×1440 output with a 75% HUD, carrier right-click relative-navigation distances, and an eight-part animated Commander Mara Voss tutorial.
+- **2026-07-13:** Completed M19 Integrated Carrier Operations with version-10 persistence, engineering triage, power distribution, deterministic internal hazards, damage-control teams, persistent crew survival, finite magazines and aviation stores, explicit deck logistics, six wing packages, officer rescue/succession, exact fleet-service actions, a responsive live operations console, nine tutorial lessons, and seven-step first-operation onboarding. Twenty functional suites and all 1080p/1440p performance profiles pass.
+- **2026-07-14:** Replaced carrier-relative flak placement with a lock-directed seven-round wall. The firing solution leads moving locks, destroys friendly or hostile missiles and nuclear torpedoes inside its 250 m sector, heavily damages strikecraft, applies 25% damage to capital ships, and deliberately enforces friendly-fire risk for craft, ships, and ordnance.

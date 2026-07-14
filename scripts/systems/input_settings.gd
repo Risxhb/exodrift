@@ -3,18 +3,28 @@ extends RefCounted
 
 const ACTION_LABELS := {
 	"accelerate": "Increase Throttle", "decelerate": "Decrease Throttle", "boost": "Boost", "brake": "Full Stop",
-	"flak_screen": "Place Flak Screen", "missile_salvo": "Missile Salvo", "nuclear_torpedo": "Nuclear Torpedo",
-	"flak_range_decrease": "Flak Range Down", "flak_range_increase": "Flak Range Up",
+	"flak_screen": "Fire Flak Wall", "missile_salvo": "Missile Salvo", "nuclear_torpedo": "Nuclear Torpedo",
 	"toggle_tactical": "Tactical Map", "sensor_ping": "Active Ping", "interceptor_wing": "Interceptor Wing",
-	"scout_wing": "Scout Wing", "toggle_all_wings": "All Wings / Hangars", "jump_prep": "Jump Preparation"
+	"scout_wing": "Scout Wing", "toggle_all_wings": "All Wings / Hangars", "jump_prep": "Jump Preparation",
+	"carrier_operations": "Carrier Operations",
+	"fleet_group_1": "Fleet Group 1 / Carrier", "fleet_group_2": "Fleet Group 2 / Escort",
+	"fleet_group_3": "Fleet Group 3 / Interceptors", "fleet_group_4": "Fleet Group 4 / Scouts",
+	"command_stance": "Cycle Fleet Stance", "command_formation": "Cycle Formation",
+	"command_recall": "Recall Selected Group", "command_intercept": "Intercept Nearest",
+	"command_escort": "Escort Carrier", "command_hold": "Hold Position", "command_withdraw": "Withdraw Selected Group",
+	"tactical_center_carrier": "Center Tactical Camera on Carrier"
 }
 
 const DEFAULT_KEYS := {
 	"accelerate": KEY_W, "decelerate": KEY_S, "boost": KEY_SHIFT, "brake": KEY_CTRL,
 	"flak_screen": KEY_1, "missile_salvo": KEY_2, "nuclear_torpedo": KEY_3,
-	"flak_range_decrease": KEY_BRACKETLEFT, "flak_range_increase": KEY_BRACKETRIGHT,
 	"toggle_tactical": KEY_TAB, "sensor_ping": KEY_P, "interceptor_wing": KEY_Z,
-	"scout_wing": KEY_X, "toggle_all_wings": KEY_B, "jump_prep": KEY_V
+	"scout_wing": KEY_X, "toggle_all_wings": KEY_B, "jump_prep": KEY_V,
+	"carrier_operations": KEY_C,
+	"fleet_group_1": KEY_F1, "fleet_group_2": KEY_F2, "fleet_group_3": KEY_F3, "fleet_group_4": KEY_F4,
+	"command_stance": KEY_Q, "command_formation": KEY_F, "command_recall": KEY_R,
+	"command_intercept": KEY_I, "command_escort": KEY_E, "command_hold": KEY_H, "command_withdraw": KEY_X,
+	"tactical_center_carrier": KEY_HOME
 }
 
 static func ensure_actions() -> void:

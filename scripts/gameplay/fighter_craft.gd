@@ -1,6 +1,9 @@
 class_name FighterCraft
 extends CombatShip
 
+enum ManeuverMode { MOVE, HOLD, ESCORT, ATTACK, INTERCEPT }
+enum AttackPhase { APPROACH, FIRING_RUN, BREAKAWAY, REFORM }
+
 var deployed: bool = false
 var desired_position: Vector3
 var assigned_target: CombatShip
@@ -8,6 +11,25 @@ var ammunition: int = 0
 var endurance_seconds: float = 0.0
 var home_squadron: SidebaySquadron
 var engine_trails: Array[MeshInstance3D] = []
+var loadout_id: StringName = &""
+var loadout_ammunition_capacity: int = -1
+var loadout_damage_multiplier: float = 1.0
+var loadout_cycle_multiplier: float = 1.0
+var loadout_range_multiplier: float = 1.0
+var identification_gain_multiplier: float = 1.0
+var uncertainty_multiplier: float = 1.0
+var missile_interception_enabled: bool = false
+var missile_intercept_range_m: float = 650.0
+var defensive_cycle_multiplier: float = 1.0
+var escape_pod_recovery_range_m: float = 0.0
+var interception_cooldown: float = 0.0
+var maneuver_mode: ManeuverMode = ManeuverMode.MOVE
+var attack_phase: AttackPhase = AttackPhase.APPROACH
+var attack_phase_elapsed: float = 0.0
+var breakaway_position: Vector3 = Vector3.ZERO
+var reform_offset: Vector3 = Vector3.ZERO
+var anchor_velocity: Vector3 = Vector3.ZERO
+var desired_facing: Vector3 = Vector3.ZERO
 
 func _build_visual() -> void:
 	var identity := String(definition.ship_id)
@@ -141,10 +163,34 @@ func configure_craft(
 ) -> void:
 	configure(ship_definition, entity_id, faction, color)
 	home_squadron = squadron
-	ammunition = starting_ammunition
+	ammunition = mini(starting_ammunition, maximum_ammunition())
 	endurance_seconds = starting_endurance
 	visible = false
 	process_mode = Node.PROCESS_MODE_DISABLED
+
+func apply_loadout_profile(profile: Dictionary, discard_loaded_ordnance: bool = false) -> void:
+	loadout_id = StringName(profile.get("loadout_id", profile.get("id", loadout_id)))
+	loadout_ammunition_capacity = maxi(0, int(profile.get("ammunition_per_craft", profile.get("ammo_per_craft", maximum_ammunition()))))
+	loadout_damage_multiplier = maxf(0.0, float(profile.get("damage_multiplier", 1.0)))
+	loadout_cycle_multiplier = maxf(0.05, float(profile.get("cycle_multiplier", 1.0)))
+	loadout_range_multiplier = maxf(0.05, float(profile.get("range_multiplier", 1.0)))
+	identification_gain_multiplier = maxf(0.0, float(profile.get("identification_gain_multiplier", 1.0)))
+	uncertainty_multiplier = maxf(0.0, float(profile.get("uncertainty_multiplier", 1.0)))
+	missile_interception_enabled = bool(profile.get("missile_interception", profile.get("can_intercept_missiles", false)))
+	missile_intercept_range_m = maxf(50.0, float(profile.get("missile_intercept_range_m", 650.0)))
+	defensive_cycle_multiplier = maxf(0.05, float(profile.get("defensive_cycle_multiplier", 1.0)))
+	escape_pod_recovery_range_m = maxf(0.0, float(profile.get("escape_pod_recovery_range_m", 0.0)))
+	if discard_loaded_ordnance:
+		ammunition = 0
+	else:
+		ammunition = mini(ammunition, maximum_ammunition())
+
+func maximum_ammunition() -> int:
+	if loadout_ammunition_capacity >= 0:
+		return loadout_ammunition_capacity
+	if home_squadron != null and home_squadron.definition != null:
+		return home_squadron.definition.ammunition_per_craft
+	return maxi(0, ammunition)
 
 func deploy(at_position: Vector3, initial_velocity: Vector3) -> void:
 	global_position = at_position
@@ -153,40 +199,144 @@ func deploy(at_position: Vector3, initial_velocity: Vector3) -> void:
 	deployed = true
 	process_mode = Node.PROCESS_MODE_INHERIT
 	desired_position = at_position - global_transform.basis.z * 250.0
+	maneuver_mode = ManeuverMode.MOVE
+	attack_phase = AttackPhase.APPROACH
 
 func dock() -> void:
 	deployed = false
 	visible = false
 	velocity = Vector3.ZERO
 	assigned_target = null
+	maneuver_mode = ManeuverMode.MOVE
 	process_mode = Node.PROCESS_MODE_DISABLED
 
-func service(maximum_ammunition: int, maximum_endurance: float) -> void:
-	ammunition = maximum_ammunition
-	endurance_seconds = maximum_endurance
+func service(maximum_ammunition_value: int, maximum_endurance: float) -> void:
+	# Compatibility path for callers that have not adopted finite deck stores yet.
+	service_repair(0.35)
+	service_refuel(maximum_endurance)
+	service_rearm(maximum_ammunition_value, maximum_ammunition_value)
+
+func service_repair(armor_recovery_fraction: float) -> void:
+	if damage_state == null or damage_state.definition == null:
+		return
 	damage_state.shields = damage_state.definition.max_shields
-	damage_state.armor = minf(damage_state.definition.max_armor, damage_state.armor + damage_state.definition.max_armor * 0.35)
+	damage_state.armor = minf(
+		damage_state.definition.max_armor,
+		damage_state.armor + damage_state.definition.max_armor * maxf(0.0, armor_recovery_fraction)
+	)
+
+func service_refuel(maximum_endurance: float) -> void:
+	endurance_seconds = maxf(0.0, maximum_endurance)
+
+func service_rearm(maximum_ammunition_value: int, available_rounds: int) -> int:
+	var target := mini(maxi(0, maximum_ammunition_value), maximum_ammunition())
+	var loaded := mini(maxi(0, available_rounds), maxi(0, target - ammunition))
+	ammunition += loaded
+	return loaded
 
 func command_move(position_value: Vector3) -> void:
 	desired_position = position_value
 	assigned_target = null
+	anchor_velocity = Vector3.ZERO
+	desired_facing = Vector3.ZERO
+	maneuver_mode = ManeuverMode.MOVE
 
-func command_attack(target_ship: CombatShip) -> void:
+func command_hold(position_value: Vector3, facing: Vector3 = Vector3.ZERO) -> void:
+	desired_position = position_value
+	assigned_target = null
+	anchor_velocity = Vector3.ZERO
+	desired_facing = facing
+	maneuver_mode = ManeuverMode.HOLD
+
+func command_escort(position_value: Vector3, velocity_value: Vector3) -> void:
+	desired_position = position_value
+	assigned_target = null
+	anchor_velocity = velocity_value
+	desired_facing = velocity_value.normalized()
+	maneuver_mode = ManeuverMode.ESCORT
+
+func command_attack(target_ship: CombatShip, intercept_mode: bool = false) -> void:
+	var next_mode := ManeuverMode.INTERCEPT if intercept_mode else ManeuverMode.ATTACK
+	if assigned_target != target_ship or maneuver_mode != next_mode:
+		attack_phase = AttackPhase.APPROACH
+		attack_phase_elapsed = 0.0
 	assigned_target = target_ship
+	maneuver_mode = next_mode
 
 func _physics_process(delta: float) -> void:
 	if not deployed or is_destroyed:
 		return
 	damage_state.tick(delta)
 	weapon_cooldown = maxf(0.0, weapon_cooldown - delta)
+	interception_cooldown = maxf(0.0, interception_cooldown - delta)
 	endurance_seconds = maxf(0.0, endurance_seconds - delta)
+	attack_phase_elapsed += delta
 	_update_engine_trails()
+	_process_missile_interception()
 	if is_instance_valid(assigned_target) and not assigned_target.is_destroyed:
-		desired_position = assigned_target.global_position
-		if global_position.distance_to(assigned_target.global_position) <= _preferred_weapon_range():
-			_try_fire_craft_weapon()
+		_process_attack_maneuver()
+	elif assigned_target != null:
+		assigned_target = null
+		maneuver_mode = ManeuverMode.HOLD
+		desired_position = global_position
 	_move_fighter(delta)
 	_enforce_battlespace_bounds()
+
+func _process_attack_maneuver() -> void:
+	var distance_to_target := global_position.distance_to(assigned_target.global_position)
+	var preferred_range := _preferred_weapon_range()
+	if maneuver_mode == ManeuverMode.INTERCEPT:
+		var intercept_seconds := distance_to_target / maxf(1.0, definition.maximum_speed_mps + assigned_target.velocity.length())
+		desired_position = assigned_target.global_position + assigned_target.velocity * clampf(intercept_seconds, 0.0, 6.0)
+		if distance_to_target <= preferred_range:
+			_try_fire_craft_weapon()
+		return
+	match attack_phase:
+		AttackPhase.APPROACH:
+			var lead_seconds := distance_to_target / maxf(1.0, definition.maximum_speed_mps)
+			desired_position = assigned_target.global_position + assigned_target.velocity * clampf(lead_seconds, 0.0, 4.0)
+			if distance_to_target <= preferred_range * 1.08:
+				attack_phase = AttackPhase.FIRING_RUN
+				attack_phase_elapsed = 0.0
+		AttackPhase.FIRING_RUN:
+			desired_position = assigned_target.global_position + assigned_target.velocity * 0.35
+			if distance_to_target <= preferred_range:
+				_try_fire_craft_weapon()
+			if distance_to_target <= maxf(150.0, assigned_target.collision_radius_m * 4.0) or attack_phase_elapsed >= 2.4:
+				_begin_breakaway(preferred_range)
+		AttackPhase.BREAKAWAY:
+			desired_position = breakaway_position
+			if global_position.distance_to(breakaway_position) <= 75.0 or distance_to_target >= preferred_range * 1.15:
+				_begin_reform(preferred_range)
+		AttackPhase.REFORM:
+			desired_position = assigned_target.global_position + reform_offset
+			if global_position.distance_to(desired_position) <= 110.0 or attack_phase_elapsed >= 2.2:
+				attack_phase = AttackPhase.APPROACH
+				attack_phase_elapsed = 0.0
+
+func _begin_breakaway(preferred_range: float) -> void:
+	var forward := velocity.normalized()
+	if forward.length_squared() < 0.1:
+		forward = assigned_target.global_position.direction_to(global_position)
+	var lateral := forward.cross(Vector3.UP).normalized()
+	if stable_entity_id.hash() % 2 == 0:
+		lateral = -lateral
+	breakaway_position = global_position + forward * preferred_range * 0.85 + lateral * preferred_range * 0.42
+	breakaway_position.y = clampf(breakaway_position.y + (45.0 if stable_entity_id.hash() % 3 == 0 else -45.0), -VERTICAL_BATTLESPACE_LIMIT_M, VERTICAL_BATTLESPACE_LIMIT_M)
+	attack_phase = AttackPhase.BREAKAWAY
+	attack_phase_elapsed = 0.0
+
+
+func _begin_reform(preferred_range: float) -> void:
+	var target_forward := assigned_target.velocity.normalized()
+	if target_forward.length_squared() < 0.1:
+		target_forward = -assigned_target.global_transform.basis.z.normalized()
+	var lateral := target_forward.cross(Vector3.UP).normalized()
+	if stable_entity_id.hash() % 2 == 0:
+		lateral = -lateral
+	reform_offset = -target_forward * preferred_range * 1.05 + lateral * preferred_range * 0.3
+	attack_phase = AttackPhase.REFORM
+	attack_phase_elapsed = 0.0
 
 func _update_engine_trails() -> void:
 	var speed_ratio := clampf(velocity.length() / maxf(1.0, definition.maximum_speed_mps), 0.15, 1.0)
@@ -197,9 +347,19 @@ func _update_engine_trails() -> void:
 func _move_fighter(delta: float) -> void:
 	var offset := desired_position - global_position
 	if offset.length_squared() < 25.0:
-		velocity = velocity.move_toward(Vector3.ZERO, definition.acceleration_mps2 * delta)
+		var target_velocity := anchor_velocity if maneuver_mode == ManeuverMode.ESCORT else Vector3.ZERO
+		velocity = velocity.move_toward(target_velocity, definition.acceleration_mps2 * delta)
+		if maneuver_mode == ManeuverMode.HOLD and desired_facing.length_squared() > 0.5:
+			var desired_yaw := atan2(-desired_facing.x, -desired_facing.z)
+			rotation.y = lerp_angle(rotation.y, desired_yaw, clampf(definition.rotation_speed_radians * delta, 0.0, 1.0))
 	else:
-		var desired_velocity := offset.normalized() * definition.maximum_speed_mps
+		var slow_radius := maxf(180.0, _preferred_weapon_range() * 0.3)
+		var speed_ratio := clampf(offset.length() / slow_radius, 0.18, 1.0)
+		var desired_velocity := offset.normalized() * definition.maximum_speed_mps * speed_ratio
+		if maneuver_mode == ManeuverMode.ESCORT:
+			desired_velocity += anchor_velocity * (1.0 - speed_ratio) * 0.8
+		desired_velocity += _separation_velocity() * definition.maximum_speed_mps * 0.42
+		desired_velocity = desired_velocity.limit_length(definition.maximum_speed_mps)
 		velocity = velocity.move_toward(desired_velocity, definition.acceleration_mps2 * delta)
 		var forward := velocity.normalized()
 		if forward.length_squared() > 0.1:
@@ -210,6 +370,46 @@ func _try_fire_craft_weapon() -> void:
 	if ammunition <= 0 or weapon_cooldown > 0.0 or definition.weapons.is_empty():
 		return
 	var weapon := definition.weapons[0]
-	spawn_projectile(weapon, global_position, global_position.direction_to(assigned_target.global_position), assigned_target if weapon.tracks_target else null)
+	var fire_direction := CombatShip.intercept_direction(global_position, assigned_target.global_position, assigned_target.velocity, weapon.projectile_speed_mps)
+	var projectile := spawn_projectile(weapon, global_position, fire_direction, assigned_target if weapon.tracks_target else null)
+	projectile.damage *= loadout_damage_multiplier
+	projectile.maximum_distance_m *= loadout_range_multiplier
 	ammunition -= 1
-	weapon_cooldown = weapon.cooldown_seconds
+	weapon_cooldown = weapon_cycle_seconds(weapon.cooldown_seconds)
+
+
+func weapon_cycle_seconds(base_cooldown_seconds: float) -> float:
+	var defensive_cycle := defensive_cycle_multiplier if loadout_id == &"watcher_screen" else 1.0
+	return base_cooldown_seconds * loadout_cycle_multiplier * defensive_cycle
+
+func _preferred_weapon_range() -> float:
+	if definition == null or definition.weapons.is_empty():
+		return 1200.0 * loadout_range_multiplier
+	return definition.weapons[0].range_m * loadout_range_multiplier
+
+func _process_missile_interception() -> void:
+	if not missile_interception_enabled or interception_cooldown > 0.0 or ammunition <= 0:
+		return
+	var registry := _combat_registry()
+	var projectiles: Array = registry.active_projectiles() if registry != null else get_tree().get_nodes_in_group("projectiles")
+	var best: SidebayProjectile
+	var best_score := INF
+	for candidate in projectiles:
+		if not candidate is SidebayProjectile or candidate.team == team or not candidate.can_be_intercepted:
+			continue
+		var distance := global_position.distance_to(candidate.global_position)
+		if distance > missile_intercept_range_m:
+			continue
+		var protected_target: CombatShip = candidate.target if is_instance_valid(candidate.target) and candidate.target.team == team else home_squadron.home_carrier
+		var threat_distance: float = candidate.global_position.distance_to(protected_target.global_position) if is_instance_valid(protected_target) else distance
+		var time_to_impact: float = threat_distance / maxf(1.0, candidate.speed_mps)
+		var score: float = time_to_impact - (5.0 if is_instance_valid(protected_target) and protected_target == home_squadron.home_carrier else 0.0)
+		if candidate.radial_warhead:
+			score -= 3.0
+		if score < best_score:
+			best = candidate
+			best_score = score
+	if is_instance_valid(best):
+		best.intercept()
+		ammunition -= 1
+		interception_cooldown = 0.65 * defensive_cycle_multiplier

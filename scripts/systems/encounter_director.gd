@@ -35,6 +35,41 @@ func _process(delta: float) -> void:
 	elif not reinforcement_triggered and elapsed_seconds >= _reinforcement_time():
 		_spawn_layout_reinforcement()
 
+
+func apply_opening_doctrine() -> void:
+	if battle == null:
+		return
+	match sector_index:
+		0:
+			battle.hostile_command.set_stance(&"defensive")
+			battle.hostile_command.set_formation(&"column", &"tight")
+			_issue_entity_order(battle.hostile_command, FleetOrder.OrderType.ATTACK, battle.carrier.stable_entity_id)
+			battle.hostile_corvette.set_stance(&"defensive")
+			battle.hostile_corvette.set_formation(&"screen", &"standard")
+			_issue_entity_order(battle.hostile_corvette, FleetOrder.OrderType.ESCORT, battle.hostile_command.stable_entity_id)
+			battle.hostile_fighters.set_stance(&"balanced")
+			battle.hostile_fighters.set_formation(&"screen", &"wide")
+			_issue_entity_order(battle.hostile_fighters, FleetOrder.OrderType.INTERCEPT, battle.carrier.stable_entity_id)
+		1:
+			battle.hostile_command.set_stance(&"balanced")
+			battle.hostile_command.set_formation(&"line", &"wide")
+			_issue_entity_order(battle.hostile_command, FleetOrder.OrderType.ATTACK, battle.carrier.stable_entity_id)
+			battle.hostile_corvette.set_stance(&"aggressive")
+			_issue_entity_order(battle.hostile_corvette, FleetOrder.OrderType.INTERCEPT, battle.carrier.stable_entity_id)
+			battle.hostile_fighters.set_stance(&"aggressive")
+			battle.hostile_fighters.set_formation(&"wedge", &"wide")
+			_issue_entity_order(battle.hostile_fighters, FleetOrder.OrderType.ATTACK, battle.carrier.stable_entity_id)
+		_:
+			battle.hostile_command.set_stance(&"defensive")
+			battle.hostile_command.set_formation(&"column", &"standard")
+			_issue_entity_order(battle.hostile_command, FleetOrder.OrderType.ATTACK, battle.carrier.stable_entity_id)
+			battle.hostile_corvette.set_stance(&"defensive")
+			battle.hostile_corvette.set_formation(&"screen", &"tight")
+			_issue_entity_order(battle.hostile_corvette, FleetOrder.OrderType.ESCORT, battle.hostile_command.stable_entity_id)
+			battle.hostile_fighters.set_stance(&"balanced")
+			battle.hostile_fighters.set_formation(&"line", &"standard")
+			_issue_entity_order(battle.hostile_fighters, FleetOrder.OrderType.INTERCEPT, battle.carrier.stable_entity_id)
+
 func _select_layout_id() -> StringName:
 	if not bool(battle.hosted_campaign):
 		return &"standalone"
@@ -136,6 +171,8 @@ func _process_sector_command() -> void:
 		0:
 			if boss_phase == 0 and bool(battle.hostile_corvette_destroyed) and bool(battle.hostile_fighters_destroyed):
 				boss_phase = 1
+				battle.hostile_command.set_stance(&"aggressive")
+				_issue_entity_order(battle.hostile_command, FleetOrder.OrderType.ATTACK, battle.carrier.stable_entity_id)
 				battle.hostile_command.incoming_damage_multiplier = 1.0
 				battle.hostile_command.outgoing_damage_multiplier = 1.15
 				battle.hostile_command.definition.weapons[0].cooldown_seconds *= 0.78
@@ -145,6 +182,8 @@ func _process_sector_command() -> void:
 			var layers: Vector3 = battle.hostile_command.layer_percentages()
 			if boss_phase == 0 and layers.x <= 0.15:
 				boss_phase = 1
+				battle.hostile_command.set_stance(&"aggressive")
+				_issue_entity_order(battle.hostile_command, FleetOrder.OrderType.INTERCEPT, battle.carrier.stable_entity_id)
 				battle.hostile_command.incoming_damage_multiplier = 1.0
 				battle.hostile_command.definition.maximum_speed_mps *= 1.22
 				battle.hostile_command.definition.weapons[0].cooldown_seconds *= 0.68
@@ -153,17 +192,24 @@ func _process_sector_command() -> void:
 				_announce(&"vesper_turn", "VESPER: Second Needle, close the other side of the trap.")
 			elif boss_phase == 1 and layers.z <= 0.5:
 				boss_phase = 2
+				battle.hostile_command.set_stance(&"evade_return")
+				var withdrawal_direction: Vector3 = battle.carrier.global_position.direction_to(battle.hostile_command.global_position)
+				_issue_position_order(battle.hostile_command, FleetOrder.OrderType.WITHDRAW, battle.hostile_command.global_position + withdrawal_direction * 4200.0)
 				battle.hostile_command.outgoing_damage_multiplier = 1.3
 				_announce(&"vesper_desperate", "VESPER: All ships, burn through the carrier before we break.")
 		2:
 			if boss_phase == 0 and _living_support_count() == 0:
 				boss_phase = 1
+				battle.hostile_command.set_stance(&"balanced")
+				_issue_entity_order(battle.hostile_command, FleetOrder.OrderType.ATTACK, battle.carrier.stable_entity_id)
 				battle.hostile_command.incoming_damage_multiplier = 1.0
 				_set_command_objective("CRUCIBLE CITADEL  Shield lattice broken — attack the Regent")
 				_announce(&"crucible_exposed", "SENSORS: Lattice failure. Regent armor is exposed.")
 			var crucible_layers: Vector3 = battle.hostile_command.layer_percentages()
 			if boss_phase == 1 and crucible_layers.z <= 0.62:
 				boss_phase = 2
+				battle.hostile_command.set_stance(&"aggressive")
+				_issue_entity_order(battle.hostile_command, FleetOrder.OrderType.INTERCEPT, battle.carrier.stable_entity_id)
 				battle.hostile_command.outgoing_damage_multiplier = 1.28
 				battle.hostile_command.definition.weapons[0].cooldown_seconds *= 0.7
 				_spawn_named_reinforcement("crucible_bastion", "Crucible Ember Bastion", Vector3(-1450, -620, -3600), Color(0.82, 0.34, 0.08), 1.2)
@@ -204,8 +250,25 @@ func _spawn_named_reinforcement(entity_name: String, display_name: String, posit
 	var definition := _support_definition(entity_id, display_name, "corvette", strength, false)
 	definition.weapons = [_weapon_definition(StringName("%s_weapon" % entity_name), "Reinforcement Cannon", "cannon", 2100.0, 0.9, 20.0 * strength, 960.0)]
 	var ship := _spawn_support(definition, entity_id, position_value, color, true, reinforcement_ships)
+	_issue_entity_order(ship, FleetOrder.OrderType.INTERCEPT, battle.carrier.stable_entity_id)
 	_announce(StringName("%s_arrival" % entity_name), "%s entering the battlespace." % display_name.to_upper())
 	return ship
+
+
+func _issue_entity_order(group: Node, order_type: FleetOrder.OrderType, entity_id: StringName) -> void:
+	if not is_instance_valid(group):
+		return
+	var order := FleetOrder.at_entity(order_type, entity_id, battle.elapsed_seconds)
+	order.requires_command_link = false
+	group.issue_order(order)
+
+
+func _issue_position_order(group: Node, order_type: FleetOrder.OrderType, position_value: Vector3) -> void:
+	if not is_instance_valid(group):
+		return
+	var order := FleetOrder.at_position(order_type, position_value, battle.elapsed_seconds)
+	order.requires_command_link = false
+	group.issue_order(order)
 
 func _spawn_support(definition: ShipDefinition, entity_id: StringName, position_value: Vector3, color: Color, armed: bool, collection: Array[CombatShip]) -> CombatShip:
 	var ship := CombatShip.new()
@@ -213,6 +276,8 @@ func _spawn_support(definition: ShipDefinition, entity_id: StringName, position_
 	ship.configure(definition, entity_id, &"hostile", color)
 	ship.global_position = position_value
 	ship.ai_enabled = armed
+	ship.set_stance(&"aggressive" if armed else &"defensive")
+	ship.set_formation(&"column", &"wide")
 	ship.ship_destroyed.connect(_on_support_destroyed.bind(ship))
 	if armed:
 		var order := FleetOrder.at_entity(FleetOrder.OrderType.ATTACK, battle.carrier.stable_entity_id, battle.elapsed_seconds)

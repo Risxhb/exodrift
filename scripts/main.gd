@@ -1,14 +1,18 @@
 extends Node3D
 
 const OnboardingController := preload("res://scripts/systems/onboarding_controller.gd")
+const TrainingTrialController := preload("res://scripts/systems/training_trial_controller.gd")
 const EncounterDirector := preload("res://scripts/systems/encounter_director.gd")
 const SpaceSky := preload("res://scripts/systems/space_sky.gd")
+const UIStyle := preload("res://scripts/ui/ui_style.gd")
 
 signal return_to_campaign(victory: bool, battle_report: Dictionary)
+signal training_trial_finished(completed: bool)
 
 var carrier: PlayerCarrier
 var escort: CombatShip
 var interceptor: SidebaySquadron
+var fighter_squadrons: Array[SidebaySquadron] = []
 var scout: SidebaySquadron
 var hostile_fighters: SidebaySquadron
 var hostile_command: CombatShip
@@ -16,11 +20,13 @@ var hostile_corvette: CombatShip
 var sensors: SidebaySensorSystem
 var tactical: TacticalController
 var hud: SidebayHUD
+var carrier_operations_console: ExodriftCarrierOperationsConsole
 var audio: SidebayAudio
 var battle_finished: bool = false
 var target_lock: CombatShip
 var elapsed_seconds: float = 0.0
 var hosted_campaign: bool = false
+var training_trial: bool = false
 var campaign_node_id: StringName = &""
 var campaign_sector_index: int = 0
 var guided_onboarding: bool = false
@@ -48,8 +54,13 @@ var emergency_bay_seal: bool = false
 var manual_target_lock_id: StringName = &""
 var aggregate_bay_closure_pending: bool = false
 var aggregate_wing_launch_pending: bool = false
+var pending_squadron_launches: Array[SidebaySquadron] = []
 var onboarding: ExodriftOnboardingController
+var training_controller: ExodriftTrainingTrialController
 var encounter: ExodriftEncounterDirector
+var training_exit_emitted: bool = false
+var training_navigation_gate: Node3D
+var issued_order_telemetry: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -59,24 +70,38 @@ func _ready() -> void:
 	_configure_input_map()
 	_build_environment()
 	_build_battlefield()
-	_configure_objective()
-	encounter = EncounterDirector.new()
-	add_child(encounter)
-	encounter.configure(self)
-	audio.configure_sector(campaign_sector_index, encounter.is_sector_command)
-	var recorder := _playtest_recorder()
-	if recorder != null:
-		recorder.begin_battle({"node_id": String(campaign_node_id), "sector": campaign_sector_index, "layout": String(encounter.layout_id), "objective": campaign_objective_type, "boss": encounter.is_sector_command})
+	if training_trial:
+		_configure_training_arena()
+		audio.configure_sector(0, false)
+	else:
+		_configure_objective()
+		encounter = EncounterDirector.new()
+		add_child(encounter)
+		encounter.configure(self)
+		audio.configure_sector(campaign_sector_index, encounter.is_sector_command)
+		var recorder := _playtest_recorder()
+		if recorder != null:
+			recorder.begin_battle({"node_id": String(campaign_node_id), "sector": campaign_sector_index, "layout": String(encounter.layout_id), "objective": campaign_objective_type, "boss": encounter.is_sector_command})
 	_apply_carrier_mouse_mode()
 	await get_tree().process_frame
 	await get_tree().process_frame
 	_apply_campaign_fleet_snapshot()
-	_deploy_initial_forces()
+	if training_trial:
+		_deploy_training_forces()
+	else:
+		_deploy_initial_forces()
 	_connect_feedback()
-	var opening_call := "SENSORS: Passive contacts detected. Launch scouts or use active ping."
+	var opening_call := "TRAINING RANGE: Systems safe. Follow the combat trial prompts." if training_trial else "SENSORS: Passive contacts detected. Launch scouts or use active ping."
 	hud.notify(opening_call)
 	audio.play_radio(opening_call, 0.32)
-	if guided_onboarding:
+	if training_trial:
+		training_controller = TrainingTrialController.new()
+		add_child(training_controller)
+		training_controller.configure(carrier, escort, interceptor, sensors, tactical, hostile_command, hud, training_navigation_gate)
+		training_controller.target_lock_requested.connect(_on_target_lock_requested)
+		training_controller.completed.connect(_finish_training_trial)
+		training_controller.exit_requested.connect(_exit_training_trial)
+	elif guided_onboarding:
 		onboarding = OnboardingController.new()
 		add_child(onboarding)
 		onboarding.configure(carrier, interceptor, scout, sensors, tactical)
@@ -92,9 +117,13 @@ func _process(delta: float) -> void:
 		return
 	elapsed_seconds += delta
 	if is_instance_valid(escort) and is_instance_valid(carrier):
-		escort.command_link.update_for_distance(escort.global_position.distance_to(carrier.global_position), carrier.definition.command_range_m)
+		escort.command_link.update_for_distance(escort.global_position.distance_to(carrier.global_position), carrier.effective_command_range_m())
+	_update_flight_operations_effects()
 	_process_aggregate_flight_ops()
 	_update_target_lock()
+	if training_trial:
+		audio.set_intensity(0.18)
+		return
 	_process_objective(delta)
 	_process_escape_pods()
 	var carrier_pressure := 1.0 - carrier.damage_state.normalized_layers().z if carrier.damage_state != null else 0.0
@@ -103,20 +132,28 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_ENTER:
+		if event.keycode == KEY_ENTER and battle_finished:
 			_restart_encounter()
 			return
 		if event.keycode == KEY_ESCAPE:
-			if is_instance_valid(carrier) and carrier.cancel_flak_placement():
-				hud.notify("FLAK PLACEMENT CANCELLED — previous screen retained")
+			if is_instance_valid(carrier_operations_console) and carrier_operations_console.consume_escape():
+				hud.notify("CARRIER OPERATIONS CONSOLE CLOSED")
+				return
+			if is_instance_valid(tactical) and tactical.consume_escape():
 				return
 			_toggle_pause()
 			return
 	if battle_finished or get_tree().paused:
 		return
+	if event.is_action_pressed("carrier_operations"):
+		carrier_operations_console.toggle_console()
+		if carrier_operations_console.is_open() and is_instance_valid(onboarding):
+			onboarding.notify_operations_console_opened()
+		hud.notify("CARRIER OPERATIONS CONSOLE %s — combat remains live" % ("OPEN" if carrier_operations_console.is_open() else "CLOSED"))
+		return
+	if is_instance_valid(carrier_operations_console) and carrier_operations_console.is_open():
+		return
 	if event.is_action_pressed("toggle_tactical"):
-		if carrier.flak_placement_active:
-			carrier.cancel_flak_placement()
 		tactical.set_enabled(not tactical.enabled)
 		_apply_carrier_mouse_mode()
 		if tactical.enabled:
@@ -127,40 +164,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		audio.play_tone(620.0 if tactical.enabled else 420.0, 0.1)
 		return
 	if event.is_action_pressed("flak_screen"):
-		if event is InputEventKey and event.shift_pressed:
-			carrier.clear_flak_screen()
-			hud.notify("FLAK SCREEN CEASE FIRE")
-		elif carrier.flak_placement_active:
-			carrier.cancel_flak_placement()
-			hud.notify("FLAK PLACEMENT CANCELLED — previous screen retained")
-		else:
-			var pointer := get_viewport().get_mouse_position()
-			if tactical.enabled:
-				carrier.begin_flak_placement_world(tactical.flak_placement_world_point(pointer, carrier.flak_screen_range_m))
-			else:
-				carrier.begin_flak_placement(pointer)
-			hud.notify("FLAK SCREEN PLACEMENT — move pointer, [ / ] range, LMB confirm, RMB cancel")
+		_fire_flak_barrage()
 		return
-	if event.is_action_pressed("flak_range_decrease") or event.is_action_pressed("flak_range_increase"):
-		var steps := -1 if event.is_action_pressed("flak_range_decrease") else 1
-		var range_m := carrier.adjust_flak_screen_range(steps)
-		hud.notify("FLAK FUSE PLANE %.1f km" % (range_m / 1000.0))
-		return
-	if carrier.flak_placement_active:
-		if event is InputEventMouseMotion and tactical.enabled and not tactical.middle_dragging:
-			carrier.update_flak_placement_world(tactical.flak_placement_world_point(event.position, carrier.flak_screen_range_m))
-			return
-		if event is InputEventMouseButton and event.pressed:
-			if event.button_index == MOUSE_BUTTON_LEFT:
-				if carrier.confirm_flak_placement():
-					hud.notify("FLAK SCREEN LOCKED — batteries sustaining at %.1f km" % (carrier.flak_screen_range_m / 1000.0))
-				else:
-					hud.notify("INVALID FLAK SCREEN — keep the fuse plane inside the battlespace")
-				return
-			if event.button_index == MOUSE_BUTTON_RIGHT:
-				carrier.cancel_flak_placement()
-				hud.notify("FLAK PLACEMENT CANCELLED — previous screen retained")
-				return
 	if tactical.handle_input(event):
 		return
 	if event.is_action_pressed("missile_salvo"):
@@ -176,12 +181,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			carrier.set_web_cursor_steering(event.position, get_viewport().get_visible_rect().size)
 	elif event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			if carrier.flak_placement_active:
-				if carrier.confirm_flak_placement():
-					hud.notify("FLAK SCREEN LOCKED — batteries sustaining at %.1f km" % (carrier.flak_screen_range_m / 1000.0))
-				else:
-					hud.notify("INVALID FLAK SCREEN — keep the fuse plane inside the battlespace")
-			elif event.double_click:
+			if event.double_click:
 				if carrier.command_flight_from_screen(event.position, true, true):
 					hud.notify("FULL CRUISE VECTOR SET")
 				else:
@@ -199,11 +199,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			carrier.adjust_chase_zoom(-1.0)
 			hud.notify("Combat camera zoom %d%%" % carrier.chase_zoom_percent())
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			if carrier.flak_placement_active:
-				carrier.cancel_flak_placement()
-				hud.notify("FLAK PLACEMENT CANCELLED — previous screen retained")
-			else:
-				_fire_missile_salvo()
+			_fire_missile_salvo()
 	elif event.is_action_pressed("sensor_ping"):
 		sensors.emit_active_ping()
 		var recorder := _playtest_recorder()
@@ -212,7 +208,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		hud.notify("ACTIVE PING — emissions reveal the carrier")
 		audio.play_tone(880.0, 0.45, -12.0)
 	elif event.is_action_pressed("interceptor_wing"):
-		_toggle_wing(interceptor)
+		if is_instance_valid(hud):
+			hud.open_fighter_deployment_menu()
 	elif event.is_action_pressed("scout_wing"):
 		_toggle_wing(scout)
 	elif event.is_action_pressed("toggle_all_wings"):
@@ -230,18 +227,35 @@ func _fire_missile_salvo() -> bool:
 		hud.notify("MISSILE REJECTED — no identified target in lock cone")
 		return false
 	if not carrier.fire_missile(target_lock):
-		hud.notify("MISSILE REJECTED — target outside envelope or cells reloading")
+		var store_message := carrier.carrier_operations.last_store_message if carrier.carrier_operations != null else ""
+		hud.notify(store_message if not store_message.is_empty() else "MISSILE REJECTED — target outside envelope or cells reloading")
 		return false
 	var recorder := _playtest_recorder()
 	if recorder != null:
 		recorder.increment(&"missile_salvos")
-	hud.notify("MISSILE SALVO AWAY — %d weapons tracking %s" % [carrier.missile_salvo_count, target_lock.display_name])
+	hud.notify("MISSILE SALVO AWAY — %d weapons tracking %s" % [carrier.last_missile_salvo_count, target_lock.display_name])
 	audio.play_tone(110.0, 0.3, -14.0)
+	return true
+
+func _fire_flak_barrage() -> bool:
+	if target_lock == null:
+		hud.notify("FLAK REJECTED — identified target lock required")
+		return false
+	if not carrier.fire_flak(target_lock):
+		var store_message := carrier.carrier_operations.last_store_message if carrier.carrier_operations != null else ""
+		hud.notify(store_message if not store_message.is_empty() else "FLAK REJECTED — target outside firing envelope or batteries cycling")
+		return false
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		recorder.increment(&"flak_barrages")
+	hud.notify("FLAK WALL AWAY — firing sector saturated toward %s; FRIENDLIES KEEP CLEAR" % target_lock.display_name.to_upper())
+	audio.play_tone(150.0, 0.28, -13.0)
 	return true
 
 func _fire_nuclear_torpedo() -> bool:
 	if not carrier.nuclear_available:
-		hud.notify("NUCLEAR TORPEDO EXPENDED — one strategic warhead per battle")
+		var store_message := carrier.carrier_operations.last_store_message if carrier.carrier_operations != null else ""
+		hud.notify(store_message if not store_message.is_empty() else "NUCLEAR TORPEDO EXPENDED — strategic magazine empty")
 		return false
 	if target_lock == null:
 		hud.notify("NUCLEAR LAUNCH REJECTED — identified target lock required")
@@ -459,6 +473,49 @@ func _build_environment() -> void:
 	_build_starfield()
 	_apply_graphics_quality()
 
+func _configure_training_arena() -> void:
+	hud.set_objective("COMBAT TRIAL  Awaiting helm calibration")
+	training_navigation_gate = _training_ring("NavigationGate", 185.0, UIStyle.CYAN, "NAV GATE // 01")
+	training_navigation_gate.position = Vector3(0.0, 0.0, 1950.0)
+	add_child(training_navigation_gate)
+	if is_instance_valid(hostile_command):
+		var target_marker := _training_ring("TargetDummyMarker", 150.0, UIStyle.AMBER, "TARGET DUMMY // INERT")
+		target_marker.rotation.z = PI * 0.25
+		hostile_command.add_child(target_marker)
+
+func _training_ring(node_name: String, radius: float, color: Color, caption: String) -> Node3D:
+	var marker := Node3D.new()
+	marker.name = node_name
+	var ring := MeshInstance3D.new()
+	var mesh := ImmediateMesh.new()
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color = Color(color.r, color.g, color.b, 0.82)
+	material.emission_enabled = true
+	material.emission = color * 2.4
+	mesh.surface_begin(Mesh.PRIMITIVE_LINES, material)
+	for ring_index in 3:
+		var ring_radius := radius + float(ring_index - 1) * 6.0
+		for segment in 48:
+			var angle_a := TAU * float(segment) / 48.0
+			var angle_b := TAU * float(segment + 1) / 48.0
+			mesh.surface_add_vertex(Vector3(cos(angle_a) * ring_radius, sin(angle_a) * ring_radius, float(ring_index - 1) * 2.0))
+			mesh.surface_add_vertex(Vector3(cos(angle_b) * ring_radius, sin(angle_b) * ring_radius, float(ring_index - 1) * 2.0))
+	mesh.surface_end()
+	ring.mesh = mesh
+	marker.add_child(ring)
+	var label := Label3D.new()
+	label.name = "TrainingMarkerLabel"
+	label.text = caption
+	label.font_size = 30
+	label.outline_size = 8
+	label.modulate = color
+	label.position = Vector3(0.0, radius + 38.0, 0.0)
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	marker.add_child(label)
+	return marker
+
 func _build_starfield() -> void:
 	var sector := _sector_encounter_profile()
 	var mesh := SphereMesh.new()
@@ -622,6 +679,10 @@ func _build_battlefield() -> void:
 	carrier = PlayerCarrier.new()
 	add_child(carrier)
 	carrier.configure(_carrier_definition(), &"player_carrier", &"friendly", Color(0.18, 0.38, 0.58))
+	var operations_payload: Dictionary = campaign_fleet_snapshot.get("carrier_operations", {})
+	var installed_modules: Dictionary = campaign_fleet_snapshot.get("installed_modules", {})
+	var department_leads: Dictionary = operations_payload.get("department_leads", campaign_fleet_snapshot.get("department_leads", {}))
+	carrier.configure_carrier_operations(operations_payload, installed_modules, department_leads)
 	carrier.global_position = Vector3(0.0, 0.0, 2600.0)
 	carrier.chase_camera.current = true
 	if bool(campaign_fleet_snapshot.get("escort_active", true)):
@@ -631,49 +692,161 @@ func _build_battlefield() -> void:
 		escort.configure(_friendly_escort_definition(escort_id), escort_id, &"friendly", _friendly_escort_color(escort_id))
 		escort.global_position = Vector3(-520.0, 40.0, 2820.0)
 		escort.ai_enabled = true
-	interceptor = SidebaySquadron.new()
-	add_child(interceptor)
-	interceptor.configure(_interceptor_squadron_definition(), &"interceptor_wing", &"friendly", carrier, &"port", Color(0.25, 0.7, 1.0))
+	fighter_squadrons.clear()
+	var total_fighter_craft := int(campaign_fleet_snapshot.get("interceptor_craft_count", SidebayRunState.MAX_INTERCEPTOR_CRAFT))
+	for squadron_index in 6:
+		var fighter_squadron := SidebaySquadron.new()
+		add_child(fighter_squadron)
+		var side := &"port" if squadron_index < 3 else &"starboard"
+		var color_shift := float(squadron_index) * 0.035
+		fighter_squadron.configure(
+			_interceptor_squadron_definition(squadron_index, total_fighter_craft),
+			StringName("fighter_squadron_%d" % (squadron_index + 1)),
+			&"friendly", carrier, side,
+			Color(0.25 + color_shift, 0.7, 1.0 - color_shift),
+			squadron_index % 3
+		)
+		fighter_squadrons.append(fighter_squadron)
+	interceptor = fighter_squadrons[0]
 	scout = SidebaySquadron.new()
 	add_child(scout)
-	scout.configure(_scout_squadron_definition(), &"scout_wing", &"friendly", carrier, &"starboard", Color(0.35, 1.0, 0.82))
+	scout.configure(_scout_squadron_definition(), &"scout_wing", &"friendly", carrier, &"scout", Color(0.35, 1.0, 0.82))
+	var persisted_loadouts: Dictionary = carrier.carrier_operations.wing_loadouts
+	for fighter_squadron in fighter_squadrons:
+		fighter_squadron.set_loadout(WingLoadoutDefinition.definition(StringName(persisted_loadouts.get("interceptor", "raptor_multirole"))))
+	scout.set_loadout(WingLoadoutDefinition.definition(StringName(persisted_loadouts.get("scout", "watcher_recon"))))
+	for fighter_squadron in fighter_squadrons:
+		fighter_squadron.loadout_changed.connect(func(_wing_id: StringName, loadout_id: StringName) -> void: carrier.carrier_operations.set_wing_loadout(&"interceptor", loadout_id))
+	scout.loadout_changed.connect(func(_wing_id: StringName, loadout_id: StringName) -> void: carrier.carrier_operations.set_wing_loadout(&"scout", loadout_id))
+	for fighter_squadron in fighter_squadrons:
+		fighter_squadron.configure_deck_logistics(Callable(self, "_consume_aviation_store"), carrier.flight_operations_multiplier(fighter_squadron.bay_side), Callable(carrier, "is_flight_deck_operational"))
+	scout.configure_deck_logistics(Callable(self, "_consume_aviation_store"), carrier.flight_operations_multiplier(&"starboard"), Callable(carrier, "is_flight_deck_operational"))
 	hostile_command = CombatShip.new()
 	add_child(hostile_command)
-	hostile_command.configure(_frigate_definition(sector.command_name, true), &"hostile_command", &"hostile", sector.command_color)
-	hostile_command.is_command_ship = true
-	hostile_command.global_position = sector.command_position
-	hostile_command.ai_enabled = true
-	hostile_corvette = CombatShip.new()
-	add_child(hostile_corvette)
-	hostile_corvette.configure(_corvette_definition(), &"hostile_corvette", &"hostile", sector.corvette_color)
-	hostile_corvette.global_position = sector.corvette_position
-	hostile_corvette.ai_enabled = true
-	hostile_fighters = SidebaySquadron.new()
-	add_child(hostile_fighters)
-	hostile_fighters.configure(_hostile_squadron_definition(), &"hostile_fighter_wing", &"hostile", null, &"port", sector.fighter_color)
+	if training_trial:
+		hostile_command.configure(_training_target_definition(), &"training_target_dummy", &"hostile", Color(0.96, 0.54, 0.08))
+		hostile_command.global_position = Vector3(0.0, 0.0, -1800.0)
+		hostile_command.ai_enabled = false
+	else:
+		hostile_command.configure(_frigate_definition(sector.command_name, true), &"hostile_command", &"hostile", sector.command_color)
+		hostile_command.is_command_ship = true
+		hostile_command.global_position = sector.command_position
+		hostile_command.ai_enabled = true
+		hostile_corvette = CombatShip.new()
+		add_child(hostile_corvette)
+		hostile_corvette.configure(_corvette_definition(), &"hostile_corvette", &"hostile", sector.corvette_color)
+		hostile_corvette.global_position = sector.corvette_position
+		hostile_corvette.ai_enabled = true
+		hostile_fighters = SidebaySquadron.new()
+		add_child(hostile_fighters)
+		hostile_fighters.configure(_hostile_squadron_definition(), &"hostile_fighter_wing", &"hostile", null, &"port", sector.fighter_color)
 	sensors = SidebaySensorSystem.new()
 	add_child(sensors)
 	sensors.configure(carrier)
+	var target_provider := Callable(self, "_friendly_target_state")
+	if is_instance_valid(escort):
+		escort.configure_target_state_provider(target_provider)
+	for fighter_squadron in fighter_squadrons:
+		fighter_squadron.configure_target_state_provider(target_provider)
+	scout.configure_target_state_provider(target_provider)
 	tactical = TacticalController.new()
 	add_child(tactical)
-	var commandables: Array[Node] = [interceptor, scout]
-	if is_instance_valid(escort):
-		commandables.append(escort)
-	commandables.append(carrier)
+	var commandables: Array[Node] = [carrier, escort, interceptor, scout]
+	for fighter_index in range(1, fighter_squadrons.size()):
+		commandables.append(fighter_squadrons[fighter_index])
 	tactical.configure(carrier, sensors, commandables)
 	hud = SidebayHUD.new()
 	add_child(hud)
-	hud.configure(carrier, interceptor, scout, sensors, tactical)
+	hud.configure(carrier, interceptor, scout, sensors, tactical, fighter_squadrons)
+	hud.fighter_squadron_toggle_requested.connect(_on_fighter_squadron_toggle_requested)
+	hud.fighter_group_action_requested.connect(_on_fighter_group_action_requested)
+	hud.bind_carrier_operations(carrier.carrier_operations)
+	carrier_operations_console = ExodriftCarrierOperationsConsole.new()
+	add_child(carrier_operations_console)
+	carrier_operations_console.configure(carrier.carrier_operations)
+	if carrier_operations_console.has_method("bind_wings"):
+		carrier_operations_console.call("bind_wings", interceptor, scout)
+	hud.carrier_operations_requested.connect(_toggle_carrier_operations_console)
+	carrier_operations_console.deck_priority_requested.connect(_on_deck_priority_requested)
+	carrier_operations_console.wing_loadout_requested.connect(_on_wing_loadout_requested)
+	for fighter_squadron in fighter_squadrons:
+		fighter_squadron.set_service_priority(carrier.carrier_operations.service_priority)
+	scout.set_service_priority(carrier.carrier_operations.service_priority)
+
+func _friendly_target_state(entity_id: StringName) -> Dictionary:
+	if not is_instance_valid(sensors):
+		return {"visible": false}
+	var contact := sensors.get_contact(entity_id)
+	if contact == null:
+		return {"visible": false}
+	var target := sensors.resolve_combat_target(entity_id)
+	return {
+		"visible": contact.is_targetable() and is_instance_valid(target) and not target.is_destroyed,
+		"destroyed": is_instance_valid(target) and target.is_destroyed,
+		"position": contact.estimated_position,
+		"velocity": contact.estimated_velocity,
+		"node": target
+	}
+
+func _consume_aviation_store(store_id: StringName, requested_amount: int) -> int:
+	if not is_instance_valid(carrier) or carrier.carrier_operations == null:
+		return requested_amount
+	return carrier.carrier_operations.consume_store_partial(store_id, requested_amount)
+
+func _update_flight_operations_effects() -> void:
+	if not is_instance_valid(carrier):
+		return
+	for fighter_squadron in fighter_squadrons:
+		if is_instance_valid(fighter_squadron):
+			fighter_squadron.set_deck_task_speed_multiplier(carrier.flight_operations_multiplier(fighter_squadron.bay_side))
+	if is_instance_valid(scout):
+		scout.set_deck_task_speed_multiplier(carrier.flight_operations_multiplier(&"starboard"))
+
+func _toggle_carrier_operations_console() -> void:
+	if not is_instance_valid(carrier_operations_console):
+		return
+	carrier_operations_console.toggle_console()
+	if carrier_operations_console.is_open() and is_instance_valid(onboarding):
+		onboarding.notify_operations_console_opened()
+
+func _on_deck_priority_requested(deck: StringName, priority: StringName) -> void:
+	var accepted := false
+	for fighter_squadron in fighter_squadrons:
+		if is_instance_valid(fighter_squadron) and fighter_squadron.bay_side == deck:
+			accepted = fighter_squadron.set_service_priority(priority) or accepted
+	if deck == &"starboard" and is_instance_valid(scout):
+		accepted = scout.set_service_priority(priority) or accepted
+	if accepted:
+		carrier.carrier_operations.set_service_priority(priority)
+		hud.notify("%s DECK PRIORITY — %s" % [String(deck).to_upper(), String(priority).replace("_", " ").to_upper()])
+
+func _on_wing_loadout_requested(wing_name: StringName, loadout_id: StringName) -> void:
+	var role := &"interceptor" if wing_name in [&"raptor", &"interceptor"] else &"scout"
+	var definition_value := WingLoadoutDefinition.definition(loadout_id)
+	var accepted := false
+	if definition_value != null and role == &"interceptor":
+		for fighter_squadron in fighter_squadrons:
+			if is_instance_valid(fighter_squadron):
+				accepted = fighter_squadron.set_loadout(definition_value) or accepted
+	elif definition_value != null and is_instance_valid(scout):
+		accepted = scout.set_loadout(definition_value)
+	if accepted:
+		carrier.carrier_operations.set_wing_loadout(role, loadout_id)
+		hud.notify("%s PACKAGE SELECTED — %s" % [String(role).to_upper(), definition_value.display_name.to_upper()])
 
 func _deploy_initial_forces() -> void:
 	var sector := _sector_encounter_profile()
 	var fighter_position: Vector3 = get_meta("encounter_fighter_position", sector.fighter_position)
 	hostile_fighters.start_deployed(fighter_position)
+	hostile_command.set_stance(&"defensive")
+	hostile_corvette.set_stance(&"aggressive")
+	hostile_fighters.set_stance(&"aggressive")
+	hostile_fighters.set_formation(&"line", &"wide")
 	var priority_target_id := objective_ship.stable_entity_id if is_instance_valid(objective_ship) else carrier.stable_entity_id
 	var priority_attack := FleetOrder.at_entity(FleetOrder.OrderType.ATTACK, priority_target_id, elapsed_seconds)
 	priority_attack.requires_command_link = false
 	hostile_command.issue_order(priority_attack)
-	var corvette_attack := FleetOrder.at_entity(FleetOrder.OrderType.ATTACK, priority_target_id, elapsed_seconds)
+	var corvette_attack := FleetOrder.at_entity(FleetOrder.OrderType.INTERCEPT, priority_target_id, elapsed_seconds)
 	corvette_attack.requires_command_link = false
 	hostile_corvette.issue_order(corvette_attack)
 	var fighter_attack := FleetOrder.at_entity(FleetOrder.OrderType.ATTACK, priority_target_id, elapsed_seconds)
@@ -684,11 +857,24 @@ func _deploy_initial_forces() -> void:
 		convoy_order.requires_command_link = false
 		objective_ship.issue_order(convoy_order)
 	if is_instance_valid(escort):
+		escort.set_stance(&"defensive")
+		escort.set_formation(&"screen", &"standard")
 		var escort_order := FleetOrder.at_entity(FleetOrder.OrderType.ESCORT, carrier.stable_entity_id, elapsed_seconds)
 		escort.issue_order(escort_order)
+	if is_instance_valid(encounter):
+		encounter.apply_opening_doctrine()
+
+func _deploy_training_forces() -> void:
+	if is_instance_valid(hostile_command):
+		hostile_command.ai_enabled = false
+		hostile_command.velocity = Vector3.ZERO
+	if is_instance_valid(escort):
+		var hold_order := FleetOrder.at_position(FleetOrder.OrderType.HOLD, escort.global_position, elapsed_seconds)
+		escort.issue_order(hold_order)
 
 func _connect_feedback() -> void:
 	carrier.ship_destroyed.connect(_on_ship_destroyed)
+	carrier.carrier_operations_message.connect(hud.notify)
 	carrier.navigation_commanded.connect(func(_direction: Vector3, full_cruise: bool) -> void:
 		if full_cruise:
 			audio.play_tone(540.0, 0.08, -18.0)
@@ -696,27 +882,42 @@ func _connect_feedback() -> void:
 	if is_instance_valid(escort):
 		escort.ship_destroyed.connect(_on_ship_destroyed)
 		escort.ship_destroyed.connect(_on_friendly_capital_destroyed.bind(escort))
-	hostile_command.ship_destroyed.connect(_on_ship_destroyed)
-	hostile_corvette.ship_destroyed.connect(_on_ship_destroyed)
-	for ship in [escort, hostile_command, hostile_corvette]:
+	if is_instance_valid(hostile_command):
+		hostile_command.ship_destroyed.connect(_on_ship_destroyed)
+	if is_instance_valid(hostile_corvette):
+		hostile_corvette.ship_destroyed.connect(_on_ship_destroyed)
+	for ship in [carrier, escort, hostile_command, hostile_corvette]:
 		if is_instance_valid(ship):
 			ship.order_acknowledged.connect(_on_order_feedback)
-	for wing in [interceptor, scout, hostile_fighters]:
-		wing.status_changed.connect(_on_wing_feedback)
-	hostile_fighters.squadron_destroyed.connect(_on_hostile_squadron_destroyed)
-	for wing in [interceptor, scout]:
+			ship.order_status_changed.connect(_on_order_status_changed)
+			ship.doctrine_changed.connect(_on_doctrine_changed)
+	var feedback_wings: Array[SidebaySquadron] = _friendly_wings()
+	if is_instance_valid(hostile_fighters):
+		feedback_wings.append(hostile_fighters)
+	for wing in feedback_wings:
+		if is_instance_valid(wing):
+			wing.status_changed.connect(_on_wing_feedback)
+			wing.order_status_changed.connect(_on_order_status_changed)
+			wing.doctrine_changed.connect(_on_doctrine_changed)
+	if is_instance_valid(hostile_fighters):
+		hostile_fighters.squadron_destroyed.connect(_on_hostile_squadron_destroyed)
+	for wing in _friendly_wings():
 		for craft in wing.crafts:
 			if is_instance_valid(craft):
 				craft.ship_destroyed.connect(_on_friendly_craft_destroyed.bind(craft))
-	for craft in hostile_fighters.crafts:
-		if is_instance_valid(craft):
-			craft.ship_destroyed.connect(_on_hostile_craft_destroyed)
+	if is_instance_valid(hostile_fighters):
+		for craft in hostile_fighters.crafts:
+			if is_instance_valid(craft):
+				craft.ship_destroyed.connect(_on_hostile_craft_destroyed)
 	if is_instance_valid(objective_ship):
 		objective_ship.ship_destroyed.connect(_on_objective_ship_destroyed)
 	tactical.notification_requested.connect(hud.notify)
 	tactical.selection_changed.connect(func(name: String) -> void: hud.notify("Selected: %s" % name))
 	tactical.target_lock_requested.connect(_on_target_lock_requested)
 	tactical.context_menu_requested.connect(hud.open_target_context_menu)
+	tactical.carrier_navigation_requested.connect(_on_target_navigation_requested)
+	tactical.command_issued.connect(_on_tactical_command_issued)
+	tactical.wheel_cancelled.connect(_on_tactical_wheel_cancelled)
 	if hud.has_signal("target_lock_requested"):
 		hud.connect("target_lock_requested", Callable(self, "_on_target_lock_requested"))
 	if hud.has_signal("target_command_requested"):
@@ -798,27 +999,60 @@ func _toggle_wing(wing: SidebaySquadron) -> void:
 		hud.notify("FLIGHT OPS LOCKED — jump preparation is active")
 		return
 	if wing.operation.state == BayOperation.State.READY:
+		if not carrier.are_bays_open():
+			if not pending_squadron_launches.has(wing):
+				pending_squadron_launches.append(wing)
+			carrier.request_bays_open()
+			hud.notify("%s QUEUED — opening assigned gallery" % wing.display_name.to_upper())
+			return
 		if wing.request_launch():
 			var recorder := _playtest_recorder()
 			if recorder != null:
 				recorder.increment(&"wing_launches")
 			audio.play_tone(340.0, 0.16)
-	elif wing.operation.state in [BayOperation.State.DEPLOYED, BayOperation.State.LAUNCHING]:
+	elif wing.operation.state in [BayOperation.State.QUEUED, BayOperation.State.DEPLOYED, BayOperation.State.LAUNCHING]:
+		pending_squadron_launches.erase(wing)
 		wing.request_recall()
 		var recorder := _playtest_recorder()
 		if recorder != null:
 			recorder.increment(&"wing_recalls")
-	elif wing.operation.state == BayOperation.State.SERVICING:
+	elif wing.operation.is_service_state():
 		if wing.request_redeploy():
 			hud.notify("%s REDEPLOY QUEUED — launch follows servicing" % wing.display_name.to_upper())
 	else:
 		hud.notify("%s is %s" % [wing.display_name, wing.operation.label()])
 
+func _friendly_wings() -> Array[SidebaySquadron]:
+	var wings: Array[SidebaySquadron] = []
+	for fighter_squadron in fighter_squadrons:
+		if is_instance_valid(fighter_squadron):
+			wings.append(fighter_squadron)
+	if is_instance_valid(scout):
+		wings.append(scout)
+	return wings
+
+func _on_fighter_squadron_toggle_requested(squadron_index: int) -> void:
+	if squadron_index < 0 or squadron_index >= fighter_squadrons.size():
+		return
+	_toggle_wing(fighter_squadrons[squadron_index])
+
+func _on_fighter_group_action_requested(action: StringName) -> void:
+	match action:
+		&"deploy_all":
+			for fighter_squadron in fighter_squadrons:
+				if is_instance_valid(fighter_squadron) and (fighter_squadron.operation.state == BayOperation.State.READY or fighter_squadron.operation.is_service_state()):
+					_toggle_wing(fighter_squadron)
+		&"recall_all":
+			pending_squadron_launches.clear()
+			for fighter_squadron in fighter_squadrons:
+				if is_instance_valid(fighter_squadron) and fighter_squadron.operation.state in [BayOperation.State.QUEUED, BayOperation.State.LAUNCHING, BayOperation.State.DEPLOYED]:
+					fighter_squadron.request_recall()
+
 func _toggle_all_wings_and_hangars() -> void:
 	if extraction_requested:
 		hud.notify("FLIGHT OPS LOCKED — jump preparation is active")
 		return
-	var wings: Array[SidebaySquadron] = [interceptor, scout]
+	var wings: Array[SidebaySquadron] = _friendly_wings()
 	if aggregate_bay_closure_pending or carrier.bay_target_closure > 0.5 or carrier.are_bays_closed():
 		aggregate_bay_closure_pending = false
 		aggregate_wing_launch_pending = true
@@ -846,13 +1080,13 @@ func _toggle_all_wings_and_hangars() -> void:
 func _launch_all_available_wings() -> bool:
 	var waiting_for_recovery := false
 	var action_taken := false
-	for wing in [interceptor, scout]:
+	for wing in _friendly_wings():
 		if not is_instance_valid(wing):
 			continue
 		if wing.operation.state == BayOperation.State.READY:
 			_toggle_wing(wing)
 			action_taken = true
-		elif wing.operation.state == BayOperation.State.SERVICING:
+		elif wing.operation.is_service_state():
 			wing.request_redeploy()
 			action_taken = true
 		elif wing.operation.state in [BayOperation.State.RETURNING, BayOperation.State.APPROACH, BayOperation.State.DOCKING]:
@@ -863,21 +1097,89 @@ func _launch_all_available_wings() -> bool:
 
 func _process_aggregate_flight_ops() -> void:
 	if aggregate_bay_closure_pending:
-		var interceptor_aboard := not is_instance_valid(interceptor) or interceptor.all_craft_aboard()
-		var scout_aboard := not is_instance_valid(scout) or scout.all_craft_aboard()
-		if interceptor_aboard and scout_aboard:
+		var all_wings_aboard := true
+		for wing in _friendly_wings():
+			if not wing.all_craft_aboard():
+				all_wings_aboard = false
+				break
+		if all_wings_aboard:
 			aggregate_bay_closure_pending = false
 			carrier.request_bays_closed()
 			hud.notify("ALL WINGS SECURED — hangars retracting")
 	if aggregate_wing_launch_pending and carrier.are_bays_open():
 		aggregate_wing_launch_pending = not _launch_all_available_wings()
+	if carrier.are_bays_open() and not pending_squadron_launches.is_empty():
+		var queued_launches: Array[SidebaySquadron] = pending_squadron_launches.duplicate()
+		pending_squadron_launches.clear()
+		for wing in queued_launches:
+			if is_instance_valid(wing) and wing.operation.state == BayOperation.State.READY:
+				_toggle_wing(wing)
 
 func _on_order_feedback(_entity_id: StringName, message: String) -> void:
-	var recorder := _playtest_recorder()
-	if recorder != null and message.contains("acknowledges"):
-		recorder.increment(&"orders_issued")
 	if hud != null:
 		hud.notify(message)
+	if is_instance_valid(audio):
+		var rejected := message.to_lower().contains("reject") or message.to_lower().contains("lost")
+		audio.play_tone(190.0 if rejected else 690.0, 0.14 if rejected else 0.08, -12.0 if rejected else -18.0)
+
+func _on_tactical_command_issued(entity_id: StringName, order: FleetOrder) -> void:
+	var commandable := _commandable_by_id(entity_id)
+	var link_latency: float = commandable.command_link.latency_seconds if is_instance_valid(commandable) and "command_link" in commandable else 0.0
+	issued_order_telemetry[order.order_id] = {
+		"issued_msec": Time.get_ticks_msec(),
+		"link_latency_seconds": link_latency
+	}
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		recorder.increment(&"orders_issued")
+		recorder.record_event(&"fleet_order_issued", {
+			"entity_id": String(entity_id), "order_id": String(order.order_id),
+			"type": order.type_label(), "queued": order.queued, "stance": String(order.stance),
+			"link_latency_seconds": link_latency
+		})
+
+func _on_order_status_changed(entity_id: StringName, order_id: StringName, status: FleetOrder.Status, reason: String) -> void:
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		var timing: Dictionary = issued_order_telemetry.get(order_id, {})
+		var acknowledgement_seconds := float(Time.get_ticks_msec() - int(timing.get("issued_msec", Time.get_ticks_msec()))) / 1000.0
+		recorder.record_event(&"fleet_order_status", {
+			"entity_id": String(entity_id), "order_id": String(order_id),
+			"status": FleetOrder.Status.keys()[status], "reason": reason,
+			"link_latency_seconds": float(timing.get("link_latency_seconds", 0.0)),
+			"time_to_acknowledgement_seconds": acknowledgement_seconds if status == FleetOrder.Status.ACTIVE else -1.0
+		})
+		if status == FleetOrder.Status.COMPLETED:
+			recorder.increment(&"orders_completed")
+		elif status == FleetOrder.Status.REJECTED:
+			recorder.increment(&"orders_rejected")
+	if status in [FleetOrder.Status.ACTIVE, FleetOrder.Status.COMPLETED, FleetOrder.Status.REJECTED, FleetOrder.Status.CANCELLED]:
+		issued_order_telemetry.erase(order_id)
+
+
+func _on_doctrine_changed(entity_id: StringName, next_stance: StringName, next_formation: StringName, next_spacing: StringName) -> void:
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		recorder.increment(&"stance_changes")
+		recorder.record_event(&"fleet_doctrine_changed", {
+			"entity_id": String(entity_id), "stance": String(next_stance),
+			"formation": String(next_formation), "spacing": String(next_spacing)
+		})
+
+
+func _commandable_by_id(entity_id: StringName) -> Node:
+	var candidates: Array[Node] = [carrier, escort, scout, hostile_command, hostile_corvette, hostile_fighters]
+	for fighter_squadron in fighter_squadrons:
+		candidates.append(fighter_squadron)
+	for candidate in candidates:
+		if is_instance_valid(candidate) and candidate.stable_entity_id == entity_id:
+			return candidate
+	return null
+
+func _on_tactical_wheel_cancelled() -> void:
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		recorder.increment(&"command_wheel_cancels")
 
 func _on_wing_feedback(_entity_id: StringName, message: String) -> void:
 	if hud != null:
@@ -943,22 +1245,39 @@ func _process_escape_pods() -> void:
 		if bool(pod.get("rescued", false)):
 			continue
 		var pod_node: Node3D = pod.get("node")
-		if is_instance_valid(pod_node) and carrier.global_position.distance_to(pod_node.global_position) <= 180.0:
+		if is_instance_valid(pod_node) and _escape_pod_recovery_distance(pod_node) > 0.0:
 			pod["rescued"] = true
 			pod_node.visible = false
 			escape_pods[index] = pod
 			hud.notify("SURVIVORS RECOVERED — %d personnel aboard" % int(pod.get("occupants", 1)))
 
+func _escape_pod_recovery_distance(pod_node: Node3D) -> float:
+	if carrier.global_position.distance_to(pod_node.global_position) <= 180.0:
+		return 180.0
+	if is_instance_valid(scout) and scout.operation.state == BayOperation.State.DEPLOYED:
+		var rescue_range := scout.escape_pod_recovery_range_m()
+		if rescue_range > 0.0 and scout.representative_position().distance_to(pod_node.global_position) <= rescue_range:
+			return rescue_range
+	return 0.0
+
 func _on_ship_destroyed(entity_id: StringName) -> void:
 	if battle_finished:
+		return
+	if training_trial:
+		if is_instance_valid(hostile_command) and entity_id == hostile_command.stable_entity_id:
+			destroyed_hostile_count += 1
+			if is_instance_valid(training_controller):
+				training_controller.complete_trial()
+			else:
+				_finish_training_trial()
 		return
 	if entity_id in [&"hostile_command", &"hostile_corvette", &"hostile_pursuit"]:
 		destroyed_hostile_count += 1
 	if entity_id == carrier.stable_entity_id:
 		_finish_battle(false, "carrier_lost")
-	elif entity_id == hostile_command.stable_entity_id and campaign_objective_type == SidebayCampaignNode.ObjectiveType.COMMAND_STRIKE:
+	elif is_instance_valid(hostile_command) and entity_id == hostile_command.stable_entity_id and campaign_objective_type == SidebayCampaignNode.ObjectiveType.COMMAND_STRIKE:
 		_finish_battle(true, "command_strike")
-	elif entity_id == hostile_corvette.stable_entity_id:
+	elif is_instance_valid(hostile_corvette) and entity_id == hostile_corvette.stable_entity_id:
 		hostile_corvette_destroyed = true
 		_check_objective_completion()
 
@@ -1011,6 +1330,24 @@ func _configure_objective() -> void:
 			hud.set_objective("CAPTURE  Hold friendly forces inside the violet control zone")
 		_:
 			hud.set_objective("COMMAND STRIKE  Identify and destroy the hostile command frigate")
+	_refresh_tactical_objectives()
+
+func _refresh_tactical_objectives() -> void:
+	if not is_instance_valid(tactical):
+		return
+	var descriptors: Array[TacticalObjectiveDescriptor] = []
+	match campaign_objective_type:
+		SidebayCampaignNode.ObjectiveType.DEFENSE:
+			if is_instance_valid(objective_ship):
+				descriptors.append(TacticalObjectiveDescriptor.create(&"longwatch_defense", "Longwatch Relay", "Defend", TacticalObjectiveDescriptor.InteractionKind.DEFEND, objective_ship.global_position, 520.0, objective_ship.stable_entity_id))
+		SidebayCampaignNode.ObjectiveType.ESCORT:
+			if is_instance_valid(objective_ship):
+				descriptors.append(TacticalObjectiveDescriptor.create(&"atlas_escort", "Atlas Convoy", "Escort", TacticalObjectiveDescriptor.InteractionKind.ESCORT, objective_ship.global_position, 420.0, objective_ship.stable_entity_id))
+		SidebayCampaignNode.ObjectiveType.CAPTURE:
+			descriptors.append(TacticalObjectiveDescriptor.create(&"capture_zone", "Control Zone", "Secure", TacticalObjectiveDescriptor.InteractionKind.SECURE, objective_destination, 420.0))
+	if extraction_requested and is_instance_valid(extraction_beacon):
+		descriptors.append(TacticalObjectiveDescriptor.create(&"extraction_corridor", "Extraction Corridor", "Withdraw", TacticalObjectiveDescriptor.InteractionKind.WITHDRAW, extraction_position, 300.0))
+	tactical.set_objective_descriptors(descriptors)
 
 func _spawn_defense_objective() -> void:
 	objective_ship = CombatShip.new()
@@ -1058,6 +1395,9 @@ func _spawn_mission_marker(marker_name: String, at_position: Vector3, color: Col
 func request_withdrawal() -> void:
 	if battle_finished:
 		return
+	if training_trial:
+		hud.notify("JUMP PREPARATION LOCKED — complete or exit the combat trial first")
+		return
 	if extraction_requested:
 		if not carrier.are_bays_closed() and not emergency_bay_seal:
 			emergency_bay_seal = true
@@ -1077,9 +1417,9 @@ func request_withdrawal() -> void:
 	audio.play_tone(510.0, 0.5, -10.0)
 
 func _prepare_wings_for_jump() -> bool:
-	var interceptor_aboard := interceptor.prepare_for_jump() if is_instance_valid(interceptor) else true
-	var scout_aboard := scout.prepare_for_jump() if is_instance_valid(scout) else true
-	var all_aboard := interceptor_aboard and scout_aboard
+	var all_aboard := true
+	for wing in _friendly_wings():
+		all_aboard = wing.prepare_for_jump() and all_aboard
 	if all_aboard or emergency_bay_seal:
 		carrier.request_bays_closed()
 	else:
@@ -1111,6 +1451,7 @@ func _spawn_extraction_beacon() -> void:
 	label.position = Vector3(0.0, 145.0, 0.0)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	extraction_beacon.add_child(label)
+	_refresh_tactical_objectives()
 
 func _process_objective(delta: float) -> void:
 	if battle_finished:
@@ -1179,6 +1520,26 @@ func _finish_battle(victory: bool, outcome: String = "victory") -> void:
 	audio.play_stinger(victory)
 	get_tree().paused = true
 
+func _finish_training_trial() -> void:
+	if battle_finished:
+		return
+	battle_finished = true
+	battle_result_victory = true
+	battle_outcome = "training"
+	hud.set_objective("COMBAT TRIAL COMPLETE  Target dummy disabled")
+	if is_instance_valid(training_controller) and training_controller.panel != null:
+		training_controller.panel.visible = false
+	hud.set_result(true, "Press Enter to return to title", "training")
+	audio.play_stinger(true)
+	get_tree().paused = true
+
+func _exit_training_trial(completed: bool) -> void:
+	if training_exit_emitted:
+		return
+	training_exit_emitted = true
+	get_tree().paused = false
+	training_trial_finished.emit(completed)
+
 func _toggle_pause() -> void:
 	if battle_finished:
 		return
@@ -1192,7 +1553,9 @@ func _apply_carrier_mouse_mode() -> void:
 
 func _restart_encounter() -> void:
 	get_tree().paused = false
-	if hosted_campaign:
+	if training_trial:
+		_exit_training_trial(battle_result_victory)
+	elif hosted_campaign:
 		return_to_campaign.emit(battle_result_victory, _create_battle_report())
 	else:
 		get_tree().reload_current_scene()
@@ -1211,8 +1574,22 @@ func _apply_campaign_fleet_snapshot() -> void:
 		carrier.damage_state.shields = carrier.damage_state.definition.max_shields * clampf(float(campaign_fleet_snapshot.get("carrier_shields", 1.0)), 0.0, 1.0)
 		carrier.damage_state.armor = carrier.damage_state.definition.max_armor * clampf(float(campaign_fleet_snapshot.get("carrier_armor", 1.0)), 0.0, 1.0)
 		carrier.damage_state.hull = carrier.damage_state.definition.max_hull * clampf(float(campaign_fleet_snapshot.get("carrier_hull", 1.0)), 0.01, 1.0)
-	_apply_squadron_ammunition(interceptor, int(campaign_fleet_snapshot.get("interceptor_ammunition", 112)))
-	_apply_squadron_ammunition(scout, int(campaign_fleet_snapshot.get("scout_ammunition", 54)))
+	_apply_fighter_group_ammunition(int(campaign_fleet_snapshot.get("interceptor_ammunition", SidebayRunState.BASE_INTERCEPTOR_AMMO)))
+	_apply_squadron_ammunition(scout, int(campaign_fleet_snapshot.get("scout_ammunition", SidebayRunState.BASE_SCOUT_AMMO)))
+
+func _apply_fighter_group_ammunition(total: int) -> void:
+	var fighter_crafts: Array[FighterCraft] = []
+	for fighter_squadron in fighter_squadrons:
+		for craft in fighter_squadron.crafts:
+			if is_instance_valid(craft):
+				fighter_crafts.append(craft)
+	if fighter_crafts.is_empty():
+		return
+	var quotient := total / fighter_crafts.size()
+	var remainder := total % fighter_crafts.size()
+	for index in fighter_crafts.size():
+		var craft := fighter_crafts[index]
+		craft.ammunition = mini(craft.maximum_ammunition(), quotient + (1 if index < remainder else 0))
 
 func _apply_squadron_ammunition(wing: SidebaySquadron, total: int) -> void:
 	if not is_instance_valid(wing) or wing.crafts.is_empty():
@@ -1222,15 +1599,22 @@ func _apply_squadron_ammunition(wing: SidebaySquadron, total: int) -> void:
 	for index in wing.crafts.size():
 		var craft := wing.crafts[index]
 		if is_instance_valid(craft):
-			craft.ammunition = quotient + (1 if index < remainder else 0)
+			craft.ammunition = mini(craft.maximum_ammunition(), quotient + (1 if index < remainder else 0))
 
 func _create_battle_report() -> Dictionary:
 	var carrier_layers := Vector3.ZERO
 	if is_instance_valid(carrier) and carrier.damage_state != null:
 		carrier_layers = carrier.layer_percentages()
-	var interceptor_living := interceptor.living_craft_count() if is_instance_valid(interceptor) else 0
+	var interceptor_living := 0
+	var interceptor_ammunition := 0
+	var interceptor_stragglers := 0
+	for fighter_squadron in fighter_squadrons:
+		if not is_instance_valid(fighter_squadron):
+			continue
+		interceptor_living += fighter_squadron.living_craft_count()
+		interceptor_ammunition += fighter_squadron.total_ammunition()
+		interceptor_stragglers += _count_wing_stragglers(fighter_squadron)
 	var scout_living := scout.living_craft_count() if is_instance_valid(scout) else 0
-	var interceptor_stragglers := _count_wing_stragglers(interceptor)
 	var scout_stragglers := _count_wing_stragglers(scout)
 	var escort_alive := is_instance_valid(escort) and not escort.is_destroyed
 	var escort_straggler := battle_outcome == "withdrawal" and escort_alive and escort.global_position.distance_to(extraction_position) > 1200.0
@@ -1245,8 +1629,9 @@ func _create_battle_report() -> Dictionary:
 		"carrier_shields": carrier_layers.x,
 		"carrier_armor": carrier_layers.y,
 		"carrier_hull": carrier_layers.z,
+		"carrier_operations": carrier.carrier_operations.battle_report() if is_instance_valid(carrier) and carrier.carrier_operations != null else {},
 		"interceptor_craft_count": maxi(0, interceptor_living - interceptor_stragglers),
-		"interceptor_ammunition": interceptor.total_ammunition() if is_instance_valid(interceptor) else 0,
+		"interceptor_ammunition": interceptor_ammunition,
 		"scout_craft_count": maxi(0, scout_living - scout_stragglers),
 		"scout_ammunition": scout.total_ammunition() if is_instance_valid(scout) else 0,
 		"escort_active": escort_alive and not escort_straggler,
@@ -1312,6 +1697,20 @@ func _objective_ship_definition(ship_name: String, stationary: bool) -> ShipDefi
 	definition.weapons = []
 	return definition
 
+func _training_target_definition() -> ShipDefinition:
+	var definition := ShipDefinition.new()
+	definition.ship_id = &"training_target_drone"
+	definition.display_name = "CT-01 Target Dummy"
+	definition.role = "target drone"
+	definition.dimensions_m = Vector3(22.0, 18.0, 40.0)
+	definition.acceleration_mps2 = 0.0
+	definition.maximum_speed_mps = 0.0
+	definition.rotation_speed_radians = 0.0
+	definition.signature = 1.5
+	definition.damage_layers = _damage_layers(50.0, 70.0, 90.0, 0.0, 0.05)
+	definition.weapons = []
+	return definition
+
 func _carrier_definition() -> ShipDefinition:
 	var carrier_id := StringName(campaign_fleet_snapshot.get("active_carrier_id", "cvn_sidebay"))
 	var frame := SidebayRunState.carrier_data(carrier_id)
@@ -1345,7 +1744,7 @@ func _carrier_definition() -> ShipDefinition:
 	definition.command_range_m *= 1.0 + command_skill * 0.03
 	definition.damage_layers = _damage_layers(600.0 * shield_multiplier * float(frame.shields), 700.0 * armor_multiplier * float(frame.armor), 950.0 * hull_multiplier * float(frame.hull), 12.0 * float(frame.shield_regen), 0.28 * float(frame.armor_mitigation))
 	definition.weapons = [
-		_weapon(&"carrier_flak", "Directed Flak Screen", "flak", 3200.0, 0.24, 12.0, 1900.0, false, false, true),
+		_weapon(&"carrier_flak", "Lock-Directed Flak Wall", "flak", 3200.0, 0.24, 12.0, 1900.0, false, false, true),
 		_weapon(&"carrier_missile", "Long-Range Strike Missile", "missile", 8500.0, 6.5, 62.0, 720.0, true, true, false),
 		_weapon(&"carrier_nuclear", "Armed Nuclear Torpedo", "nuclear", 10000.0, 999.0, 520.0, 520.0, true, true, false),
 	]
@@ -1439,15 +1838,18 @@ func _fighter_definition(ship_id: StringName, name_value: String, role_value: St
 	definition.weapons = [_weapon(&"fighter_cannon", "Pulse Cannon", "cannon", 780.0, 0.65, 10.0 * scale_value, 1400.0)]
 	return definition
 
-func _interceptor_squadron_definition() -> SquadronDefinition:
+func _interceptor_squadron_definition(squadron_index: int = 0, total_craft_override: int = -1) -> SquadronDefinition:
 	var complement := SidebayRunState.hangar_complement_data(StringName(campaign_fleet_snapshot.get("active_hangar_complement_id", "balanced_wings")))
 	if complement.is_empty():
 		complement = SidebayRunState.hangar_complement_data(&"balanced_wings")
+	var squadron_names := ["Raptor Alpha", "Raptor Bravo", "Raptor Charlie", "Raptor Delta", "Raptor Echo", "Raptor Foxtrot"]
+	var total_craft := total_craft_override if total_craft_override >= 0 else int(campaign_fleet_snapshot.get("interceptor_craft_count", SidebayRunState.MAX_INTERCEPTOR_CRAFT))
+	var craft_count := total_craft / 6 + (1 if squadron_index < total_craft % 6 else 0)
 	var definition := SquadronDefinition.new()
-	definition.squadron_id = &"raptor_interceptors"
-	definition.display_name = "Raptor Interceptors"
+	definition.squadron_id = StringName("raptor_squadron_%d" % (squadron_index + 1))
+	definition.display_name = squadron_names[clampi(squadron_index, 0, squadron_names.size() - 1)]
 	definition.role = "interceptor"
-	definition.craft_count = int(campaign_fleet_snapshot.get("interceptor_craft_count", 4))
+	definition.craft_count = craft_count
 	definition.endurance_seconds = 125.0 * float(complement.interceptor_endurance)
 	definition.ammunition_per_craft = int(complement.interceptor_ammo_per_craft)
 	var flight_skill := int((campaign_fleet_snapshot.get("personnel_bonuses", {}) as Dictionary).get("flight", 0))
@@ -1461,7 +1863,7 @@ func _scout_squadron_definition() -> SquadronDefinition:
 		complement = SidebayRunState.hangar_complement_data(&"balanced_wings")
 	var definition := SquadronDefinition.new()
 	definition.squadron_id = &"watcher_drones"
-	definition.display_name = "Watcher Scout Drones"
+	definition.display_name = "Watcher EW / Scout Wing"
 	definition.role = "scout"
 	definition.craft_count = int(campaign_fleet_snapshot.get("scout_craft_count", 3))
 	definition.endurance_seconds = 155.0 * float(complement.scout_endurance)

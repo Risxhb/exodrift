@@ -17,7 +17,14 @@ func _run() -> void:
 	var tactical: TacticalController = game.tactical
 	var sensors: SidebaySensorSystem = game.sensors
 	_assert_true(is_instance_valid(carrier), "main scene creates carrier")
-	_assert_true(interceptor.crafts.size() == 4 and scout.crafts.size() == 3, "friendly force has exact wing counts")
+	var total_fighter_craft := 0
+	for fighter_squadron in game.fighter_squadrons:
+		total_fighter_craft += fighter_squadron.crafts.size()
+	_assert_true(game.fighter_squadrons.size() == 6 and total_fighter_craft == 24 and interceptor.crafts.size() == 4 and scout.crafts.size() == 3, "friendly force has six four-craft fighter squadrons and one scout/EW wing")
+	_assert_true(interceptor.wing_health_percent() == 100 and scout.wing_health_label() == "NOMINAL", "air groups expose aggregate wing-health telemetry")
+	game.hud.open_fighter_deployment_menu()
+	_assert_true(game.hud.fighter_deployment_menu.item_count >= 11, "fighter deployment opens a six-squadron launch submenu with group actions")
+	game.hud.fighter_deployment_menu.hide()
 	var initial_chase_zoom := carrier.chase_target_distance_m
 	carrier.adjust_chase_zoom(1.0)
 	_assert_true(carrier.chase_target_distance_m < initial_chase_zoom, "combat camera wheel zoom moves the chase camera inward")
@@ -70,32 +77,36 @@ func _run() -> void:
 	for hostile in get_nodes_in_group("team_hostile"):
 		if hostile is CombatShip:
 			hostile.ai_enabled = false
-	_assert_true(carrier.are_bays_open() and carrier.bay_assemblies.size() == 2, "carrier begins combat with two extended flight-ready hangar assemblies")
+	_assert_true(carrier.are_bays_open() and carrier.bay_assemblies.size() == 6 and is_instance_valid(carrier.scout_bay_marker), "carrier begins combat with six extended fighter galleries and a dedicated scout/EW hive")
 	carrier.flak_cooldown = 0.0
+	var hostile_command_position: Vector3 = game.hostile_command.global_position
+	game.hostile_command.global_position = carrier.global_position + carrier.aim_direction * 1800.0
+	game.hostile_command.velocity = Vector3.ZERO
 	var flak_before := _source_projectile_count(carrier.stable_entity_id)
-	_assert_true(carrier.fire_flak(), "manual flak barrage fires when its cycle is ready")
+	_assert_true(carrier.fire_flak(game.hostile_command), "flak wall fires toward the locked hostile when its cycle is ready")
 	carrier._process_flak_salvo_queue(1.0)
-	_assert_true(_source_projectile_count(carrier.stable_entity_id) - flak_before == carrier.flak_burst_count, "manual flak creates the full seven-round defensive burst")
+	_assert_true(_source_projectile_count(carrier.stable_entity_id) - flak_before == carrier.flak_burst_count, "lock-directed flak creates the full seven-round defensive wall")
 	var flak_visuals: Array[SidebayProjectile] = []
 	for candidate in get_nodes_in_group("projectiles"):
 		if candidate is SidebayProjectile and candidate.source_entity_id == carrier.stable_entity_id:
 			flak_visuals.append(candidate)
 	_assert_true(flak_visuals.size() >= 2 and flak_visuals[0].get_child_count() > 0 and flak_visuals[1].get_child_count() > 0, "flak simulation nodes receive reusable shared-resource tracer visuals")
 	if not flak_visuals.is_empty():
-		_assert_true(flak_visuals[0].direction.dot(carrier.aim_direction) > 0.995, "manual flak follows the independent mouse director")
+		_assert_true(flak_visuals[0].direction.dot(carrier.global_position.direction_to(game.hostile_command.global_position)) > 0.995, "flak follows the locked target instead of the mouse director")
 	if flak_visuals.size() >= 2:
 		var first_core := flak_visuals[0].get_child(0).get_child(0) as MeshInstance3D
 		var second_core := flak_visuals[1].get_child(0).get_child(0) as MeshInstance3D
 		_assert_true(first_core.mesh == second_core.mesh and first_core.material_override == second_core.material_override, "flak shots share mesh and material resources instead of allocating per shot")
 	_clear_source_projectiles(carrier.stable_entity_id)
 	await process_frame
+	game.hostile_command.global_position = hostile_command_position
 	carrier.missile_cooldown = 0.0
 	var missile_before := _source_projectile_count(carrier.stable_entity_id)
 	_assert_true(carrier.fire_missile(game.hostile_command), "long-range carrier salvo accepts a tracked target beyond the former five-kilometer limit")
 	_assert_true(carrier.missile_weapon.range_m == 8500.0 and _source_projectile_count(carrier.stable_entity_id) - missile_before == carrier.missile_salvo_count, "carrier launches four independently tracked long-range missiles")
 	_clear_source_projectiles(carrier.stable_entity_id)
 	await process_frame
-	_assert_true(game.hud.weapon_label.text.contains("[1] FLAK") and game.hud.weapon_label.text.contains("[2] MISSILES") and game.hud.weapon_label.text.contains("[3] NUCLEAR") and game.hud.weapon_label.text.contains("RELOAD"), "combat HUD exposes flak fuse, salvo reload, strategic inventory, counts, and weapon ranges")
+	_assert_true(game.hud.weapon_label.text.contains("[1] FLAK") and game.hud.weapon_label.text.contains("[2] MISSILES") and game.hud.weapon_label.text.contains("[3] NUCLEAR") and game.hud.weapon_label.text.contains("RELOAD"), "combat HUD exposes the flak hazard, salvo reload, strategic inventory, counts, and weapon ranges")
 	# Tactical mode is live and preserves the carrier's current velocity.
 	carrier.velocity = Vector3(0.0, 0.0, -140.0)
 	var before := carrier.global_position
