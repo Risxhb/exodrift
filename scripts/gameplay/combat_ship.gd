@@ -2,6 +2,13 @@ class_name CombatShip
 extends CharacterBody3D
 
 const VERTICAL_BATTLESPACE_LIMIT_M := 1400.0
+const RESOLUTE_VLS_COMPARTMENT_COUNT := 6
+const RESOLUTE_SALVO_INTERVAL_SECONDS := 0.14
+const RESOLUTE_SALVO_DAMAGE_SCALE := 0.34
+const RESOLUTE_VERTICAL_CLEARANCE_M := 135.0
+const RESOLUTE_FLAK_RANGE_M := 1800.0
+const RESOLUTE_FLAK_BLAST_RADIUS_M := 115.0
+const RESOLUTE_FLAK_COOLDOWN_SECONDS := 0.72
 
 static var armor_panel_texture: Texture2D
 static var deck_marking_texture: Texture2D
@@ -62,6 +69,13 @@ var damage_effect_cooldown: float = 0.0
 var visual_profile: ShipVisualProfile
 var target_state_provider: Callable
 var _track_lost_order_id: StringName = &""
+var missile_launch_points: Array[Node3D] = []
+var flak_battery_mounts: Array[Node3D] = []
+var flak_battery_cooldowns: Array[float] = []
+var flak_battery_fire_counts: Array[int] = []
+var pending_missile_salvo: Array[Dictionary] = []
+var missile_salvo_timer: float = 0.0
+var resolute_flak_weapon: WeaponDefinition
 
 func _init() -> void:
 	fleet_command.order_status_changed.connect(_on_fleet_order_status_changed)
@@ -84,6 +98,8 @@ func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: 
 		registry.register_combat_entity(self)
 	visual_profile = ShipVisualProfile.for_ship(StringName(definition.role), team, definition.ship_id)
 	_build_visual()
+	if _is_resolute():
+		_configure_resolute_weapons()
 	_build_damage_indicators()
 
 func configure_target_state_provider(provider: Callable) -> void:
@@ -99,6 +115,25 @@ func _combat_registry() -> Node:
 
 func _combat_vfx() -> Node:
 	return get_node_or_null("/root/CombatVFX")
+
+func _is_resolute() -> bool:
+	return definition != null and definition.ship_id == &"iss_resolute"
+
+func _configure_resolute_weapons() -> void:
+	for weapon in definition.weapons:
+		if weapon.weapon_id == &"resolute_flak":
+			resolute_flak_weapon = weapon
+			return
+	resolute_flak_weapon = WeaponDefinition.new()
+	resolute_flak_weapon.weapon_id = &"resolute_flak"
+	resolute_flak_weapon.display_name = "Resolute Flak Battery"
+	resolute_flak_weapon.role = "flak"
+	resolute_flak_weapon.range_m = RESOLUTE_FLAK_RANGE_M
+	resolute_flak_weapon.cooldown_seconds = RESOLUTE_FLAK_COOLDOWN_SECONDS
+	resolute_flak_weapon.damage = 10.0
+	resolute_flak_weapon.projectile_speed_mps = 1900.0
+	resolute_flak_weapon.can_intercept_projectiles = true
+	definition.weapons.append(resolute_flak_weapon)
 
 func _build_visual() -> void:
 	var hull_dimensions := definition.dimensions_m
@@ -138,11 +173,12 @@ func _build_hull_details(hull_dimensions: Vector3, profile: ShipVisualProfile) -
 		_add_visual_block("ArmorRib%02d" % index, Vector3(0.0, hull_dimensions.y * 0.34, z_position), Vector3(hull_dimensions.x * 0.78, hull_dimensions.y * 0.08, hull_dimensions.z * 0.035), profile.accent_color.darkened(0.38), 0.0, profile.hull_texture_path)
 	_build_surface_language(hull_dimensions, profile)
 	_build_command_tower(hull_dimensions, profile)
-	for turret_index in profile.turret_count:
-		var turret_progress := (float(turret_index) + 1.0) / (float(profile.turret_count) + 1.0)
-		var turret_z := lerpf(-hull_dimensions.z * 0.4, hull_dimensions.z * 0.24, turret_progress)
-		var turret_side := -1.0 if turret_index % 2 == 0 else 1.0
-		_add_weapon_turret(turret_index, Vector3(turret_side * hull_dimensions.x * 0.24, hull_dimensions.y * 0.55, turret_z), hull_dimensions, profile)
+	if not _is_resolute():
+		for turret_index in profile.turret_count:
+			var turret_progress := (float(turret_index) + 1.0) / (float(profile.turret_count) + 1.0)
+			var turret_z := lerpf(-hull_dimensions.z * 0.4, hull_dimensions.z * 0.24, turret_progress)
+			var turret_side := -1.0 if turret_index % 2 == 0 else 1.0
+			_add_weapon_turret(turret_index, Vector3(turret_side * hull_dimensions.x * 0.24, hull_dimensions.y * 0.55, turret_z), hull_dimensions, profile)
 	if profile.faction_style == &"navy":
 		_build_navy_details(hull_dimensions, profile)
 	else:
@@ -229,11 +265,41 @@ func _build_navy_details(hull_dimensions: Vector3, profile: ShipVisualProfile) -
 			for side in [-1.0, 1.0]:
 				_add_visual_block("CitadelFormationBeacon", Vector3(side * hull_dimensions.x * 0.47, hull_dimensions.y * 0.47, -hull_dimensions.z * 0.24), Vector3(hull_dimensions.x * 0.035, hull_dimensions.y * 0.08, hull_dimensions.z * 0.16), profile.accent_color, 1.1)
 		&"iss_resolute":
+			_add_tapered_visual_block(
+				"ResoluteDorsalDeck",
+				Vector3(0.0, hull_dimensions.y * 0.55, -hull_dimensions.z * 0.1),
+				Vector3(hull_dimensions.x * 0.7, hull_dimensions.y * 0.11, hull_dimensions.z * 0.62),
+				0.64,
+				0.94,
+				visual_color.lightened(0.04),
+				profile.hull_texture_path
+			)
 			for side in [-1.0, 1.0]:
-				_add_visual_block("ResoluteMissileRack", Vector3(side * hull_dimensions.x * 0.22, hull_dimensions.y * 0.65, -hull_dimensions.z * 0.08), Vector3(hull_dimensions.x * 0.16, hull_dimensions.y * 0.12, hull_dimensions.z * 0.26), Color(0.18, 0.28, 0.34), 0.0, profile.hull_texture_path)
-				_add_visual_block("ResoluteCellLight", Vector3(side * hull_dimensions.x * 0.22, hull_dimensions.y * 0.72, -hull_dimensions.z * 0.2), Vector3(hull_dimensions.x * 0.09, hull_dimensions.y * 0.03, hull_dimensions.z * 0.025), Color(0.18, 0.78, 1.0), 1.4)
-				for cell in 3:
-					_add_visual_block("ResoluteLaunchCell%02d" % cell, Vector3(side * hull_dimensions.x * (0.16 + cell * 0.06), hull_dimensions.y * 0.73, -hull_dimensions.z * 0.07), Vector3(hull_dimensions.x * 0.045, hull_dimensions.y * 0.022, hull_dimensions.z * 0.11), Color(0.055, 0.11, 0.14), 0.0)
+				_add_visual_block("ResoluteBroadsideArmor", Vector3(side * hull_dimensions.x * 0.51, hull_dimensions.y * 0.08, -hull_dimensions.z * 0.08), Vector3(hull_dimensions.x * 0.075, hull_dimensions.y * 0.48, hull_dimensions.z * 0.56), visual_color.darkened(0.1), 0.0, profile.hull_texture_path)
+			for cell_index in RESOLUTE_VLS_COMPARTMENT_COUNT:
+				var column := cell_index % 2
+				var row := cell_index / 2
+				var side := -1.0 if column == 0 else 1.0
+				var cell_position := Vector3(
+					side * hull_dimensions.x * 0.19,
+					hull_dimensions.y * 0.66,
+					lerpf(-hull_dimensions.z * 0.34, -hull_dimensions.z * 0.06, float(row) / 2.0)
+				)
+				_add_visual_block(
+					"ResoluteMissileCompartment%02d" % cell_index,
+					cell_position,
+					Vector3(hull_dimensions.x * 0.24, hull_dimensions.y * 0.075, hull_dimensions.z * 0.105),
+					Color(0.045, 0.09, 0.115),
+					0.0
+				)
+				var launch_point := Node3D.new()
+				launch_point.name = "ResoluteMissileLaunch%02d" % cell_index
+				launch_point.position = cell_position + Vector3.UP * hull_dimensions.y * 0.085
+				add_child(launch_point)
+				missile_launch_points.append(launch_point)
+			_add_resolute_flak_battery(0, Vector3(-hull_dimensions.x * 0.31, hull_dimensions.y * 0.67, hull_dimensions.z * 0.09), true, hull_dimensions, profile)
+			_add_resolute_flak_battery(1, Vector3(hull_dimensions.x * 0.31, hull_dimensions.y * 0.67, hull_dimensions.z * 0.27), true, hull_dimensions, profile)
+			_add_resolute_flak_battery(2, Vector3(0.0, -hull_dimensions.y * 0.58, -hull_dimensions.z * 0.02), false, hull_dimensions, profile)
 			_add_visual_block("ResoluteRangefinder", Vector3(0.0, hull_dimensions.y * 0.91, -hull_dimensions.z * 0.17), Vector3(hull_dimensions.x * 0.16, hull_dimensions.y * 0.08, hull_dimensions.z * 0.15), profile.accent_color, 0.42)
 		&"iss_harrier":
 			for side in [-1.0, 1.0]:
@@ -295,6 +361,37 @@ func _add_weapon_turret(index: int, position_value: Vector3, hull_dimensions: Ve
 	add_child(turret)
 	var barrel := _add_visual_block("TurretBarrel%02d" % index, position_value + Vector3(0.0, hull_dimensions.y * 0.04, -hull_dimensions.z * 0.075), Vector3(hull_dimensions.x * 0.045, hull_dimensions.y * 0.045, hull_dimensions.z * 0.18), profile.accent_color.darkened(0.42), 0.0, profile.hull_texture_path)
 	barrel.rotation.x = -0.03
+
+func _add_resolute_flak_battery(index: int, position_value: Vector3, dorsal: bool, hull_dimensions: Vector3, profile: ShipVisualProfile) -> void:
+	var battery := MeshInstance3D.new()
+	battery.name = "ResoluteDorsalFlakBattery%02d" % index if dorsal else "ResoluteVentralFlakBattery"
+	var battery_mesh := CylinderMesh.new()
+	battery_mesh.top_radius = hull_dimensions.x * 0.075
+	battery_mesh.bottom_radius = hull_dimensions.x * 0.1
+	battery_mesh.height = hull_dimensions.y * 0.11
+	battery_mesh.radial_segments = 8
+	battery.mesh = battery_mesh
+	battery.position = position_value
+	battery.material_override = _make_material(visual_color.lightened(0.08), 0.0, profile.hull_texture_path)
+	add_child(battery)
+	var surface_direction := Vector3.UP if dorsal else Vector3.DOWN
+	var barrel := _add_visual_block(
+		"ResoluteFlakBarrel%02d" % index,
+		position_value + surface_direction * hull_dimensions.y * 0.055 + Vector3(0.0, 0.0, -hull_dimensions.z * 0.06),
+		Vector3(hull_dimensions.x * 0.045, hull_dimensions.y * 0.045, hull_dimensions.z * 0.15),
+		profile.accent_color.darkened(0.28),
+		0.28,
+		profile.hull_texture_path
+	)
+	if not dorsal:
+		barrel.rotation.z = PI
+	var muzzle := Node3D.new()
+	muzzle.name = "ResoluteFlakMuzzle%02d" % index
+	muzzle.position = position_value + surface_direction * hull_dimensions.y * 0.075 + Vector3(0.0, 0.0, -hull_dimensions.z * 0.14)
+	add_child(muzzle)
+	flak_battery_mounts.append(muzzle)
+	flak_battery_cooldowns.append(float(index) * RESOLUTE_FLAK_COOLDOWN_SECONDS / 3.0)
+	flak_battery_fire_counts.append(0)
 
 func _add_engine_nacelle(side: float, hull_dimensions: Vector3, profile: ShipVisualProfile) -> void:
 	var engine_position := Vector3(side * hull_dimensions.x * 0.3, 0.0, hull_dimensions.z * 0.44)
@@ -460,6 +557,9 @@ func _physics_process(delta: float) -> void:
 		if damage_vfx != null:
 			damage_vfx.spawn_burst("spark", global_position + Vector3(sin(float(Time.get_ticks_msec())) * collision_radius_m * 0.35, collision_radius_m * 0.18, cos(float(Time.get_ticks_msec()) * 0.7) * collision_radius_m * 0.32), 0.5)
 	weapon_cooldown = maxf(0.0, weapon_cooldown - delta)
+	if _is_resolute():
+		_process_pending_missile_salvo(delta)
+		_process_resolute_flak(delta)
 	if ai_enabled:
 		_process_ai(delta)
 	_enforce_battlespace_bounds()
@@ -758,11 +858,116 @@ func _try_fire_at(target_ship: CombatShip) -> void:
 	var weapon := definition.weapons[0]
 	if global_position.distance_to(target_ship.global_position) > weapon.range_m:
 		return
+	if _is_resolute() and weapon.role == "missile" and not missile_launch_points.is_empty():
+		_queue_resolute_missile_salvo(weapon, target_ship)
+		weapon_cooldown = weapon.cooldown_seconds
+		return
 	var fire_direction := intercept_direction(global_position, target_ship.global_position, target_ship.velocity, weapon.projectile_speed_mps)
 	spawn_projectile(weapon, global_position + fire_direction * collision_radius_m, fire_direction, target_ship if weapon.tracks_target else null)
 	weapon_cooldown = weapon.cooldown_seconds
 
+func _queue_resolute_missile_salvo(weapon: WeaponDefinition, target_ship: CombatShip) -> void:
+	pending_missile_salvo.clear()
+	for cell_index in mini(RESOLUTE_VLS_COMPARTMENT_COUNT, missile_launch_points.size()):
+		pending_missile_salvo.append({"cell_index": cell_index, "weapon": weapon, "target": target_ship})
+	missile_salvo_timer = 0.0
+	_launch_next_resolute_missile()
+
+func _process_pending_missile_salvo(delta: float) -> void:
+	if pending_missile_salvo.is_empty():
+		return
+	missile_salvo_timer -= delta
+	while missile_salvo_timer <= 0.0 and not pending_missile_salvo.is_empty():
+		_launch_next_resolute_missile()
+
+func _launch_next_resolute_missile() -> void:
+	if pending_missile_salvo.is_empty():
+		return
+	var launch_data: Dictionary = pending_missile_salvo.pop_front()
+	var target_ship := launch_data.get("target") as CombatShip
+	if not is_instance_valid(target_ship) or target_ship.is_destroyed:
+		pending_missile_salvo.clear()
+		return
+	var cell_index := int(launch_data.get("cell_index", 0))
+	if cell_index < 0 or cell_index >= missile_launch_points.size():
+		return
+	var launch_point := missile_launch_points[cell_index]
+	var local_direction := Vector3(-0.055 if launch_point.position.x < 0.0 else 0.055, 1.0, -0.02 + 0.02 * float(cell_index / 2)).normalized()
+	var launch_direction := (global_transform.basis * local_direction).normalized()
+	var weapon := launch_data.get("weapon") as WeaponDefinition
+	var missile := spawn_projectile(weapon, launch_point.global_position, launch_direction, target_ship if weapon.tracks_target else null)
+	missile.damage *= RESOLUTE_SALVO_DAMAGE_SCALE
+	missile.configure_vertical_launch(RESOLUTE_VERTICAL_CLEARANCE_M)
+	missile_salvo_timer += RESOLUTE_SALVO_INTERVAL_SECONDS
+
+func _process_resolute_flak(delta: float) -> void:
+	if resolute_flak_weapon == null or flak_battery_mounts.size() != 3:
+		return
+	for index in flak_battery_cooldowns.size():
+		flak_battery_cooldowns[index] = maxf(0.0, flak_battery_cooldowns[index] - delta)
+	var reserved_targets: Dictionary = {}
+	for battery_index in flak_battery_mounts.size():
+		if flak_battery_cooldowns[battery_index] > 0.0:
+			continue
+		var threat := _resolute_flak_target(battery_index, reserved_targets)
+		if threat == null:
+			continue
+		reserved_targets[threat.get_instance_id()] = true
+		_fire_resolute_flak_battery(battery_index, threat)
+
+func _resolute_flak_target(battery_index: int, reserved_targets: Dictionary = {}) -> SidebayProjectile:
+	var best: SidebayProjectile
+	var best_distance := RESOLUTE_FLAK_RANGE_M
+	var registry := _combat_registry()
+	var candidates: Array = registry.active_projectiles() if registry != null else get_tree().get_nodes_in_group("projectiles")
+	for candidate in candidates:
+		if not candidate is SidebayProjectile or candidate.expired or not candidate.can_be_intercepted or candidate.team == team:
+			continue
+		if reserved_targets.has(candidate.get_instance_id()) or not _resolute_flak_can_engage(battery_index, candidate.global_position):
+			continue
+		var distance := flak_battery_mounts[battery_index].global_position.distance_to(candidate.global_position)
+		if distance < best_distance:
+			best = candidate
+			best_distance = distance
+	return best
+
+func _resolute_flak_can_engage(battery_index: int, world_position: Vector3) -> bool:
+	if battery_index < 0 or battery_index >= flak_battery_mounts.size():
+		return false
+	var local_position := to_local(world_position)
+	var horizon_overlap := definition.dimensions_m.y * 0.08
+	if battery_index < 2:
+		if local_position.y < -horizon_overlap:
+			return false
+		var opposite_side_limit := definition.dimensions_m.x * 0.42
+		if battery_index == 0 and local_position.x > opposite_side_limit:
+			return false
+		if battery_index == 1 and local_position.x < -opposite_side_limit:
+			return false
+	else:
+		if local_position.y > horizon_overlap:
+			return false
+	return flak_battery_mounts[battery_index].global_position.distance_to(world_position) <= RESOLUTE_FLAK_RANGE_M
+
+func _fire_resolute_flak_battery(battery_index: int, threat: SidebayProjectile) -> void:
+	var muzzle := flak_battery_mounts[battery_index]
+	var threat_velocity := threat.direction * threat.speed_mps
+	var intercept_seconds := intercept_time_seconds(muzzle.global_position, threat.global_position, threat_velocity, resolute_flak_weapon.projectile_speed_mps)
+	var intercept_point := threat.global_position + threat_velocity * intercept_seconds
+	var fire_direction := muzzle.global_position.direction_to(intercept_point)
+	var airburst_distance := minf(RESOLUTE_FLAK_RANGE_M, resolute_flak_weapon.projectile_speed_mps * intercept_seconds)
+	var flak_round := spawn_projectile(resolute_flak_weapon, muzzle.global_position, fire_direction)
+	flak_round.collision_radius_m = 4.0
+	flak_round.configure_airburst(maxf(25.0, airburst_distance), RESOLUTE_FLAK_BLAST_RADIUS_M)
+	flak_battery_cooldowns[battery_index] = RESOLUTE_FLAK_COOLDOWN_SECONDS
+	flak_battery_fire_counts[battery_index] += 1
+
 static func intercept_direction(origin: Vector3, target_position: Vector3, target_velocity: Vector3, projectile_speed: float) -> Vector3:
+	var intercept_time := intercept_time_seconds(origin, target_position, target_velocity, projectile_speed)
+	var aim_point := target_position + target_velocity * clampf(intercept_time, 0.0, 12.0)
+	return origin.direction_to(aim_point)
+
+static func intercept_time_seconds(origin: Vector3, target_position: Vector3, target_velocity: Vector3, projectile_speed: float) -> float:
 	var offset := target_position - origin
 	var speed := maxf(1.0, projectile_speed)
 	var a := target_velocity.length_squared() - speed * speed
@@ -782,8 +987,7 @@ static func intercept_direction(origin: Vector3, target_position: Vector3, targe
 				intercept_time = minf(first, second)
 			else:
 				intercept_time = maxf(maxf(first, second), 0.0)
-	var aim_point := target_position + target_velocity * clampf(intercept_time, 0.0, 12.0)
-	return origin.direction_to(aim_point)
+	return intercept_time
 
 func spawn_projectile(weapon: WeaponDefinition, start: Vector3, fire_direction: Vector3, tracked_target: CombatShip = null) -> SidebayProjectile:
 	var projectile := SidebayProjectile.new()

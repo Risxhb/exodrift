@@ -74,7 +74,7 @@ var store_capacities: Dictionary = {}
 var damage_control_spares: int = BASE_DAMAGE_CONTROL_SPARES
 var damage_control_spares_capacity: int = BASE_DAMAGE_CONTROL_SPARES
 var wing_loadouts: Dictionary = {"interceptor": "raptor_multirole", "scout": "watcher_recon"}
-var air_group_craft_counts: Dictionary = {"interceptor": 4, "scout": 3}
+var air_group_craft_counts: Dictionary = {"interceptor": 24, "scout": 3}
 var service_priority: StringName = &"balanced"
 var officer_incidents: Array[Dictionary] = []
 var department_leads: Dictionary = DEFAULT_DEPARTMENT_LEADS.duplicate(true)
@@ -99,7 +99,7 @@ func _initialize_defaults() -> void:
 	for subsystem_id in SUBSYSTEMS:
 		subsystem_condition[String(subsystem_id)] = 1.0
 	wing_loadouts = {"interceptor": "raptor_multirole", "scout": "watcher_recon"}
-	air_group_craft_counts = {"interceptor": 4, "scout": 3}
+	air_group_craft_counts = {"interceptor": 24, "scout": 3}
 	store_capacities = _base_store_capacities()
 	stores = store_capacities.duplicate(true)
 	damage_control_spares_capacity = BASE_DAMAGE_CONTROL_SPARES
@@ -507,9 +507,9 @@ func load_dictionary(data: Dictionary) -> void:
 	for subsystem_id in SUBSYSTEMS:
 		var key := String(subsystem_id)
 		subsystem_condition[key] = clampf(float(saved_conditions.get(key, 1.0)), 0.0, 1.0)
-	var saved_craft_counts: Dictionary = data.get("air_group_craft_counts", {"interceptor": 4, "scout": 3})
+	var saved_craft_counts: Dictionary = data.get("air_group_craft_counts", {"interceptor": 24, "scout": 3})
 	air_group_craft_counts = {
-		"interceptor": maxi(0, int(saved_craft_counts.get("interceptor", 4))),
+		"interceptor": maxi(0, int(saved_craft_counts.get("interceptor", 24))),
 		"scout": maxi(0, int(saved_craft_counts.get("scout", 3))),
 	}
 	var saved_loadouts: Dictionary = data.get("wing_loadouts", {})
@@ -564,7 +564,7 @@ func _base_store_capacities() -> Dictionary:
 		"guided_missiles": 24,
 		"nuclear_torpedoes": 1,
 		"aviation_ordnance": _aviation_reload_capacity(),
-		"craft_refuel": 14
+		"craft_refuel": (int(air_group_craft_counts.get("interceptor", 0)) + int(air_group_craft_counts.get("scout", 0))) * 2
 	}
 
 

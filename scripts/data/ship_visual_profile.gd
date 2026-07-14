@@ -157,9 +157,19 @@ static func for_ship(role: StringName, faction: StringName, identity: StringName
 			profile.surface_roughness = 0.48
 			profile.armor_rib_count = 8
 		&"iss_resolute":
+			profile.core_scale = Vector3(0.88, 0.6, 0.88)
+			profile.dorsal_scale = Vector3(0.58, 0.24, 0.54)
+			profile.shoulder_scale = Vector3(0.18, 0.46, 0.7)
+			profile.keel_scale = Vector3(0.34, 0.22, 0.68)
+			profile.bow_scale = Vector3(0.76, 0.56, 0.38)
 			profile.accent_color = Color(0.2, 0.78, 0.96)
 			profile.marking_color = Color(0.9, 0.95, 0.96)
-			profile.turret_count = 3
+			profile.core_fore_taper = 0.6
+			profile.core_aft_taper = 0.98
+			profile.dorsal_fore_taper = 0.48
+			profile.dorsal_aft_taper = 0.92
+			profile.armor_rib_count = 5
+			profile.turret_count = 0
 		&"iss_harrier":
 			profile.core_scale = Vector3(0.66, 0.58, 0.9)
 			profile.accent_color = Color(0.98, 0.48, 0.16)

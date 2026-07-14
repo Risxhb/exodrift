@@ -76,7 +76,7 @@ Role AI executes maneuvers. The player does not steer individual allied craft.
 
 ### Carrier `[LOCKED]`
 
-The starting human carrier has a long industrial armored hull, obvious bridge and engine masses, flak emplacements, missile cells, and mirrored port/starboard flight galleries. Each gallery visibly retracts toward the hull while split armor doors seal the opening. Doors, approach lighting, traffic direction, launch rails, and recovery lanes clearly communicate deck state. Flight operations require fully extended bays; jump execution requires both bays fully retracted and sealed.
+The starting human carrier has a 220-meter industrial armored hull, offset command island and flag bridge, sensor mast and EW arrays, aircraft elevators, six main engines, flak emplacements, missile cells, three port and three starboard flight galleries, and a dedicated dorsal Watcher drone hive. Each fighter gallery visibly retracts toward the hull while split armor doors seal the opening. Doors, approach lighting, traffic direction, launch rails, and recovery lanes clearly communicate deck state. Flight operations require fully extended bays; jump execution requires all galleries retracted and sealed.
 
 Carrier builds use authored module slots for weapons, defenses, sensors, support systems, and hangar complements. The core hull and side-bay silhouette remain recognizable. Equipment is composed of authored sidegrades with fixed tactical identities; randomized affix loot is excluded.
 
@@ -130,9 +130,9 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 
 ### Friendly force `[LOCKED]`
 
-- One player carrier with mirrored side bays, placed sustained flak, lock-on missiles, one nuclear torpedo, automated point defense, layered durability, passive sensors, and active ping.
-- Port bay: one four-craft interceptor squadron.
-- Starboard bay: one three-craft scout-drone squadron.
+- One player fleet carrier with six retractable side galleries, a dorsal EW-drone hive, placed sustained flak, lock-on missiles, one nuclear torpedo, automated point defense, layered durability, passive sensors, and active ping.
+- Fighter group: six named four-craft Raptor squadrons distributed across six independent side galleries.
+- Scout group: one three-craft Watcher EW/scout wing operating from the dorsal drone hive.
 - One commandable missile frigate escort.
 
 ### Hostile force `[LOCKED]`
@@ -286,7 +286,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - Extend requisition into authored escort acquisition, replacement hull choices, hangar-complement changes, and limited suppliers while preserving fixed tactical identities.
 - Add salvage allocation and route-level logistics decisions without randomized affix loot or grind-based permanent power.
 - **Implemented slice (2026-07-12):** The starting ISS Resolute, fast ISS Harrier screen corvette, and armored ISS Bulwark line frigate form a fixed authored escort catalog. Requisition purchases unique hulls from sector-gated suppliers; acquired, selected, and permanently lost escort identities persist in version-7 saves. The active hull's dimensions, mobility, durability, weapon, interception capability, name, and stable ID reach tactical combat. Supplies service the carrier and air group but no longer recreate a destroyed escort.
-- **Implemented slice (2026-07-12):** CVN Sidebay, CVN Vanguard, and CVN Citadel form a fixed carrier-frame catalog with balanced, assault, and armored-command identities. Balanced, Raptor Strike, and Watcher Recon air groups provide authored 4/3, 5/2, and 3/4 interceptor/scout allocations with distinct ammunition, endurance, and service profiles. Requisition unlocks sector-gated frames and complements; supply-funded deck refits quote their exact repair/rearm cost. Selections persist in version-8 saves and drive tactical identity, movement, durability, weapon output, command/sensor reach, craft counts, stores, endurance, and servicing.
+- **Implemented slice (2026-07-14):** CVN Sidebay, CVN Vanguard, and CVN Citadel form a fixed carrier-frame catalog with balanced, assault, and armored-command identities. Balanced, Raptor Strike, and Watcher Recon air groups provide authored 24/3, 30/2, and 18/4 fighter/scout allocations distributed across six named fighter squadrons and one Watcher EW/scout wing, with distinct ammunition, endurance, and service profiles. Requisition unlocks sector-gated frames and complements; supply-funded deck refits quote their exact repair/rearm cost. Selections persist in version-8 saves and drive tactical identity, movement, durability, weapon output, command/sensor reach, craft counts, stores, endurance, and servicing.
 - **Implemented slice (2026-07-12):** Battle sweeps and salvage nodes recover persistent allocation stock. Fixed recipes convert stock into supplies, fuel, or requisition. Balanced Stores, Lean Burn, and Recovery Rig postures expose exact route fuel/supply and salvage-yield tradeoffs; affordability, node cards, route execution, after-action projections, and version-9 persistence all use the selected posture. No randomized affixes, grind currency, or permanent stat power are introduced.
 
 ### M14 — Combat graphics and performance foundation `[IMPLEMENTED]`
@@ -324,15 +324,15 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - `1` opens a temporary camera move toward a visible carrier-relative flak volume. Left click confirms, right click or `Esc` cancels, `Shift+1` ceases, and brackets adjust a 1.0–3.2 km range in 250 m steps, or to 4 km with the flak director. Confirmed screens retain their local bearing as the carrier moves and turns and sustain staggered seven-round fire into a 250 m interception/airburst radius.
 - `2` fires four guided missiles at an identified lock. `3` fires the battle's single 10 km nuclear torpedo, which arms after 1.2 km, can be intercepted, leaves a two-stage trail, and applies a 650 m falloff blast with friendly fire.
 - Missile, nuclear, fighter, and carrier engine trails plus layered hull hits, ship detonations, shock rings, cores, and debris use the existing quality-scaled 80-slot pool. Reduced-flash behavior and zero-drop stress acceptance remain intact.
-- Pressing `Z` or `X` during servicing queues the surviving wing to physically relaunch as soon as deck turnaround completes; the HUD exposes the queued state.
+- `Z` opens the fighter-squadron deployment submenu; selecting a servicing squadron queues it to relaunch as soon as deck turnaround completes. `X` retains direct control of the Watcher EW/scout wing.
 - The title battle instantiates the exact playable carrier plus current textured capital/fighter builders against the procedural sky, with 22 flak tracers, six arcing missile plumes, and four layered explosion rigs. The public fleet archive replaces seven CSS glyphs with 900×506 direct Godot renders of the actual Sidebay, Resolute, Raptor, Watcher, Acheron, Vesper, and Crucible models.
 - Fourteen automated suites pass. Normal combat measures 144.9 FPS (p95 7.19 ms/p99 7.28 ms), sustained maximum ordnance measures 144.9 FPS (p95 8.83 ms/p99 9.37 ms, zero dropped effects), and the runtime-model menu measures 165.0 effective FPS on the development RTX 3060.
 
 ### M18 — Tactical interface and deep-space polish `[IMPLEMENTED]`
 
-- Flak placement keeps the carrier centered and zooms aft to frame the hull and screen volume. The authored 125 m framing is signed zoom 0%; players can zoom in to +100% or out to -100% at 650 m.
+- Flak placement keeps the carrier centered and zooms aft to frame the hull and screen volume. The authored 230 m framing is signed zoom 0%; players can zoom in to +100% or out to -100% at 900 m.
 - `1` places flak in direct combat or the tactical overlay. Tactical LMB confirms and RMB cancels without leaving the command map.
-- Remappable `B` opens both hangar wings and deploys available air groups, or recalls both groups and retracts the galleries after recovery. `Z` and `X` remain granular wing controls.
+- Remappable `B` opens all hangars and deploys available air groups, or recalls all seven groups and retracts the galleries after recovery. `Z` opens granular fighter-squadron control and `X` controls the Watcher EW/scout wing.
 - Carrier Telemetry, Air Group, Fire Control, Target Solution, and Tactical Overview are collapsible. Target Solution no longer contains a placeholder ship silhouette.
 - The interactive overview lists contact name, range, closing speed, and identification state. Identified contacts can be manually locked and issued persistent Approach, Orbit, or Keep 2.5K carrier commands.
 - Projected target graphics now use scalable corner brackets, envelope color, range/relative-velocity annotation, a motion-lead pip, and the existing off-screen direction indicator.
@@ -382,7 +382,7 @@ M11 tests cover camera orbit independence, vertical bounds, authored roster cons
 
 M12 tests cover treatment quotes and recovery, promotion eligibility and costs, requisition recruitment, rare-candidate unlocks, mutual relationship bonds, authored event selection and outcomes, unaffordable-choice gating, pending-event persistence, event UI flow, and version-5 recruitment migration.
 
-M13 tests cover escort, carrier-yard, and flight-group supplier sector gates; exact requisition, refit, route, and salvage-conversion costs; authored acquisition and selection; unique permanent escort loss; version-9 persistence and older-save migration; dynamic 4/3, 5/2, and 3/4 hangar capacities; logistics and fleet-screen interaction; adjusted route affordability and salvage yields; and propagation of every selected tactical profile into combat.
+M13 tests cover escort, carrier-yard, and flight-group supplier sector gates; exact requisition, refit, route, and salvage-conversion costs; authored acquisition and selection; unique permanent escort loss; version-9 persistence and older-save migration; dynamic 24/3, 30/2, and 18/4 hangar capacities; logistics and fleet-screen interaction; adjusted route affordability and salvage yields; and propagation of every selected tactical profile into combat.
 
 M14 tests cover ship visual profiles, immediate quality switching, backdrop tier visibility, VFX budgets, original texture resources, shared projectile mesh/material identity, combat-registry population, radar animation, normal p95/p99 frame time, sustained legal maximum fire, all deployed wings, hostile missile pressure, node stability, effect drops, and clean ObjectDB shutdown.
 

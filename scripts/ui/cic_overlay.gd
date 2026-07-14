@@ -57,6 +57,8 @@ func _draw_fleet_groups(view_camera: Camera3D) -> void:
 	for candidate in prioritized:
 		if not is_instance_valid(candidate) or (candidate == carrier and not tactical.enabled):
 			continue
+		if candidate is SidebaySquadron and candidate.deployed_craft_count() == 0 and not tactical.enabled:
+			continue
 		var world_position := _node_position(candidate)
 		if view_camera.is_position_behind(world_position):
 			continue

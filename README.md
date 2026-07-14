@@ -14,7 +14,7 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 
 - Heavy carrier flight with persistent throttle and inertia, carrier-relative placed flak screens, four-missile guided salvos, one nuclear torpedo per battle, visible automated defense, and shields → armor → hull damage.
 - A unified command-interface style groups carrier telemetry, air-group state, fire control, target data, radar, notifications, and controls into compact scalable panels. The four primary command panels and tactical overview are collapsible.
-- A four-craft Raptor interceptor wing, three Watcher scout drones, and the commandable missile frigate `ISS Resolute`.
+- Six independently deployable Raptor fighter squadrons (four craft each), one three-craft Watcher EW/scout wing, and the commandable missile frigate `ISS Resolute`.
 - Visible launch, engagement, recall, side-bay recovery, servicing, relaunch, and armored bay-retraction cycles with a closed-bay jump interlock.
 - A seam-feathered galaxy-arm panorama blended into the shader-driven deep-space sky, retaining sector palettes, procedural stars, foreground parallax, and a pulsing tactical radar.
 - Refit capital ships with faction-specific hull atlases, layered plating, modeled hardpoints, recognition lighting and wear; low-node fighter geometry, pooled combat flashes, missile exhaust, shield/hull feedback, and saved Low/Medium/High graphics profiles remain shared by Windows and Web.
@@ -23,7 +23,7 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 - An 18-node, three-sector run map with fuel, supplies, intel, forecasts, combat transitions, and manual versioned saves.
 - Persistent carrier condition, 240-person crew, eight damageable subsystems, finite combat/aviation stores, damage-control spares, wing losses and packages, escort survival, exact fleet-service actions, and five authored module slots.
 - Three fixed escort identities with requisition acquisition, sector-gated suppliers, reserve selection, unique permanent losses, and distinct tactical profiles.
-- Three carrier-frame sidegrades and three refittable air-group complements with fixed 4/3, 5/2, and 3/4 interceptor/scout allocations.
+- Three carrier-frame sidegrades and three refittable air-group complements with fixed 24/3, 30/2, and 18/4 fighter/scout allocations across six fighter squadrons.
 - Persistent salvage stock with fixed supply, fuel, and requisition conversions plus three route logistics postures with explicit travel tradeoffs.
 - Six objective types: command strike, interception, extraction, defense, escort, and capture.
 - Withdrawal pursuit, jump-range stragglers, recoverable escape pods, and an after-action rescue/salvage/departure choice with persistent consequences.
@@ -60,7 +60,8 @@ All listed keyboard actions can be remapped from **Settings → Remap Controls**
 - `3`: fire the single 10 km nuclear torpedo. It arms after 1.2 km, has a 650 m falloff blast, can be intercepted, and damages friendlies.
 - `P`: active sensor ping
 - `C`: open the live, non-pausing Carrier Operations console for reactor allocation, subsystem triage, damage-control assignments, crew/stores, deck priorities, and wing packages
-- `Z`, `X`: launch/recall interceptor and scout wings; pressing during servicing queues an automatic physical redeploy when turnaround completes
+- `Z`: open the six-squadron fighter deployment submenu, including per-squadron health, craft strength, state, launch/recall, and group actions
+- `X`: launch/recall the Watcher EW/scout wing; pressing during servicing queues an automatic physical redeploy when turnaround completes
 - `B`: deploy/open both hangar wings, or recall both air groups and retract the galleries once recovery is complete
 - `Tab`: live tactical map
 - Tactical map: `F1–F4` groups, `Home` center/follow carrier, `Shift`+middle-drag pan, middle-drag orbit, `1` flak placement, left-click select/confirm, right-click command wheel/cancel, `I` intercept, `E` escort carrier, Shift queue, `Q` stance, `F` formation, `R` recall, `H` hold, `X` withdraw, wheel zoom

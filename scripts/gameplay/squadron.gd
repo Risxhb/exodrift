@@ -20,6 +20,7 @@ var team: StringName = &"friendly"
 var definition: SquadronDefinition
 var home_carrier: PlayerCarrier
 var bay_side: StringName = &"port"
+var bay_lane_index: int = 0
 var operation := BayOperation.new()
 var command_link := CommandLinkState.new()
 var fleet_command := FleetCommandState.new()
@@ -73,7 +74,8 @@ func configure(
 	faction: StringName,
 	carrier: PlayerCarrier,
 	side: StringName,
-	color: Color
+	color: Color,
+	lane_index: int = 0
 ) -> void:
 	definition = squadron_definition
 	stable_entity_id = entity_id
@@ -81,6 +83,7 @@ func configure(
 	team = faction
 	home_carrier = carrier
 	bay_side = side
+	bay_lane_index = maxi(0, lane_index)
 	stance = StringName(definition.default_stance)
 	add_to_group("commandables")
 	add_to_group("squadrons")
@@ -344,8 +347,8 @@ func _process_launch_cycle() -> void:
 		status_changed.emit(stable_entity_id, "%s launch complete" % display_name)
 		return
 	var craft := crafts[launch_index]
-	var marker := home_carrier.get_bay_marker(bay_side)
-	var outward := -home_carrier.global_transform.basis.x if bay_side == &"port" else home_carrier.global_transform.basis.x
+	var marker := home_carrier.get_bay_marker(bay_side, bay_lane_index)
+	var outward := home_carrier.get_bay_launch_vector(bay_side)
 	craft.deploy(marker.global_position + outward * 12.0, home_carrier.velocity + outward * 180.0)
 	craft.command_move(marker.global_position + outward * (350.0 + launch_index * 45.0) - home_carrier.global_transform.basis.z * 100.0)
 	launch_index += 1
@@ -468,8 +471,8 @@ func _formation_basis(anchor: Vector3, anchor_velocity: Vector3) -> Basis:
 	return Basis.looking_at(forward.normalized(), Vector3.UP).orthonormalized()
 
 func _process_approach() -> void:
-	var marker := home_carrier.get_bay_marker(bay_side)
-	var outward := -home_carrier.global_transform.basis.x if bay_side == &"port" else home_carrier.global_transform.basis.x
+	var marker := home_carrier.get_bay_marker(bay_side, bay_lane_index)
+	var outward := home_carrier.get_bay_launch_vector(bay_side)
 	var approach_point := marker.global_position + outward * 260.0 + home_carrier.global_transform.basis.z * 40.0
 	var all_in_approach := true
 	for index in crafts.size():
@@ -488,7 +491,7 @@ func _process_docking() -> void:
 	if cycle_timer < recovery_interval_seconds():
 		return
 	cycle_timer = 0.0
-	var marker := home_carrier.get_bay_marker(bay_side)
+	var marker := home_carrier.get_bay_marker(bay_side, bay_lane_index)
 	for craft in crafts:
 		if not is_instance_valid(craft) or not craft.deployed:
 			continue
@@ -855,6 +858,36 @@ func total_ammunition() -> int:
 		if is_instance_valid(craft):
 			total += craft.ammunition
 	return total
+
+func maximum_craft_count() -> int:
+	return definition.craft_count if definition != null else crafts.size()
+
+func wing_health_fraction() -> float:
+	var maximum_per_craft := 0.0
+	if definition != null and definition.craft_definition != null and definition.craft_definition.damage_layers != null:
+		var maximum_layers := definition.craft_definition.damage_layers
+		maximum_per_craft = maximum_layers.max_shields + maximum_layers.max_armor + maximum_layers.max_hull
+	var maximum_total := maximum_per_craft * maximum_craft_count()
+	var current_total := 0.0
+	for craft in crafts:
+		if not is_instance_valid(craft) or craft.damage_state == null or craft.damage_state.definition == null:
+			continue
+		if not craft.is_destroyed:
+			current_total += craft.damage_state.shields + craft.damage_state.armor + craft.damage_state.hull
+	return clampf(current_total / maxf(1.0, maximum_total), 0.0, 1.0)
+
+func wing_health_percent() -> int:
+	return roundi(wing_health_fraction() * 100.0)
+
+func wing_health_label() -> String:
+	var health := wing_health_fraction()
+	if living_craft_count() <= 0 or health < 0.25:
+		return "CRITICAL"
+	if health < 0.55:
+		return "DEGRADED"
+	if health < 0.85:
+		return "DAMAGED"
+	return "NOMINAL"
 
 func _cleanup_destroyed_crafts() -> void:
 	# Invalid references remain as empty launch slots so craft identities never shift or duplicate.

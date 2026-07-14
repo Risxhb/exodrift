@@ -12,6 +12,7 @@ signal training_trial_finished(completed: bool)
 var carrier: PlayerCarrier
 var escort: CombatShip
 var interceptor: SidebaySquadron
+var fighter_squadrons: Array[SidebaySquadron] = []
 var scout: SidebaySquadron
 var hostile_fighters: SidebaySquadron
 var hostile_command: CombatShip
@@ -53,6 +54,7 @@ var emergency_bay_seal: bool = false
 var manual_target_lock_id: StringName = &""
 var aggregate_bay_closure_pending: bool = false
 var aggregate_wing_launch_pending: bool = false
+var pending_squadron_launches: Array[SidebaySquadron] = []
 var onboarding: ExodriftOnboardingController
 var training_controller: ExodriftTrainingTrialController
 var encounter: ExodriftEncounterDirector
@@ -252,7 +254,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		hud.notify("ACTIVE PING — emissions reveal the carrier")
 		audio.play_tone(880.0, 0.45, -12.0)
 	elif event.is_action_pressed("interceptor_wing"):
-		_toggle_wing(interceptor)
+		if is_instance_valid(hud):
+			hud.open_fighter_deployment_menu()
 	elif event.is_action_pressed("scout_wing"):
 		_toggle_wing(scout)
 	elif event.is_action_pressed("toggle_all_wings"):
@@ -720,18 +723,34 @@ func _build_battlefield() -> void:
 		escort.configure(_friendly_escort_definition(escort_id), escort_id, &"friendly", _friendly_escort_color(escort_id))
 		escort.global_position = Vector3(-520.0, 40.0, 2820.0)
 		escort.ai_enabled = true
-	interceptor = SidebaySquadron.new()
-	add_child(interceptor)
-	interceptor.configure(_interceptor_squadron_definition(), &"interceptor_wing", &"friendly", carrier, &"port", Color(0.25, 0.7, 1.0))
+	fighter_squadrons.clear()
+	var total_fighter_craft := int(campaign_fleet_snapshot.get("interceptor_craft_count", SidebayRunState.MAX_INTERCEPTOR_CRAFT))
+	for squadron_index in 6:
+		var fighter_squadron := SidebaySquadron.new()
+		add_child(fighter_squadron)
+		var side := &"port" if squadron_index < 3 else &"starboard"
+		var color_shift := float(squadron_index) * 0.035
+		fighter_squadron.configure(
+			_interceptor_squadron_definition(squadron_index, total_fighter_craft),
+			StringName("fighter_squadron_%d" % (squadron_index + 1)),
+			&"friendly", carrier, side,
+			Color(0.25 + color_shift, 0.7, 1.0 - color_shift),
+			squadron_index % 3
+		)
+		fighter_squadrons.append(fighter_squadron)
+	interceptor = fighter_squadrons[0]
 	scout = SidebaySquadron.new()
 	add_child(scout)
-	scout.configure(_scout_squadron_definition(), &"scout_wing", &"friendly", carrier, &"starboard", Color(0.35, 1.0, 0.82))
+	scout.configure(_scout_squadron_definition(), &"scout_wing", &"friendly", carrier, &"scout", Color(0.35, 1.0, 0.82))
 	var persisted_loadouts: Dictionary = carrier.carrier_operations.wing_loadouts
-	interceptor.set_loadout(WingLoadoutDefinition.definition(StringName(persisted_loadouts.get("interceptor", "raptor_multirole"))))
+	for fighter_squadron in fighter_squadrons:
+		fighter_squadron.set_loadout(WingLoadoutDefinition.definition(StringName(persisted_loadouts.get("interceptor", "raptor_multirole"))))
 	scout.set_loadout(WingLoadoutDefinition.definition(StringName(persisted_loadouts.get("scout", "watcher_recon"))))
-	interceptor.loadout_changed.connect(func(_wing_id: StringName, loadout_id: StringName) -> void: carrier.carrier_operations.set_wing_loadout(&"interceptor", loadout_id))
+	for fighter_squadron in fighter_squadrons:
+		fighter_squadron.loadout_changed.connect(func(_wing_id: StringName, loadout_id: StringName) -> void: carrier.carrier_operations.set_wing_loadout(&"interceptor", loadout_id))
 	scout.loadout_changed.connect(func(_wing_id: StringName, loadout_id: StringName) -> void: carrier.carrier_operations.set_wing_loadout(&"scout", loadout_id))
-	interceptor.configure_deck_logistics(Callable(self, "_consume_aviation_store"), carrier.flight_operations_multiplier(&"port"), Callable(carrier, "is_flight_deck_operational"))
+	for fighter_squadron in fighter_squadrons:
+		fighter_squadron.configure_deck_logistics(Callable(self, "_consume_aviation_store"), carrier.flight_operations_multiplier(fighter_squadron.bay_side), Callable(carrier, "is_flight_deck_operational"))
 	scout.configure_deck_logistics(Callable(self, "_consume_aviation_store"), carrier.flight_operations_multiplier(&"starboard"), Callable(carrier, "is_flight_deck_operational"))
 	hostile_command = CombatShip.new()
 	add_child(hostile_command)
@@ -758,15 +777,20 @@ func _build_battlefield() -> void:
 	var target_provider := Callable(self, "_friendly_target_state")
 	if is_instance_valid(escort):
 		escort.configure_target_state_provider(target_provider)
-	interceptor.configure_target_state_provider(target_provider)
+	for fighter_squadron in fighter_squadrons:
+		fighter_squadron.configure_target_state_provider(target_provider)
 	scout.configure_target_state_provider(target_provider)
 	tactical = TacticalController.new()
 	add_child(tactical)
 	var commandables: Array[Node] = [carrier, escort, interceptor, scout]
+	for fighter_index in range(1, fighter_squadrons.size()):
+		commandables.append(fighter_squadrons[fighter_index])
 	tactical.configure(carrier, sensors, commandables)
 	hud = SidebayHUD.new()
 	add_child(hud)
-	hud.configure(carrier, interceptor, scout, sensors, tactical)
+	hud.configure(carrier, interceptor, scout, sensors, tactical, fighter_squadrons)
+	hud.fighter_squadron_toggle_requested.connect(_on_fighter_squadron_toggle_requested)
+	hud.fighter_group_action_requested.connect(_on_fighter_group_action_requested)
 	hud.bind_carrier_operations(carrier.carrier_operations)
 	carrier_operations_console = ExodriftCarrierOperationsConsole.new()
 	add_child(carrier_operations_console)
@@ -776,7 +800,8 @@ func _build_battlefield() -> void:
 	hud.carrier_operations_requested.connect(_toggle_carrier_operations_console)
 	carrier_operations_console.deck_priority_requested.connect(_on_deck_priority_requested)
 	carrier_operations_console.wing_loadout_requested.connect(_on_wing_loadout_requested)
-	interceptor.set_service_priority(carrier.carrier_operations.service_priority)
+	for fighter_squadron in fighter_squadrons:
+		fighter_squadron.set_service_priority(carrier.carrier_operations.service_priority)
 	scout.set_service_priority(carrier.carrier_operations.service_priority)
 
 func _friendly_target_state(entity_id: StringName) -> Dictionary:
@@ -802,8 +827,9 @@ func _consume_aviation_store(store_id: StringName, requested_amount: int) -> int
 func _update_flight_operations_effects() -> void:
 	if not is_instance_valid(carrier):
 		return
-	if is_instance_valid(interceptor):
-		interceptor.set_deck_task_speed_multiplier(carrier.flight_operations_multiplier(&"port"))
+	for fighter_squadron in fighter_squadrons:
+		if is_instance_valid(fighter_squadron):
+			fighter_squadron.set_deck_task_speed_multiplier(carrier.flight_operations_multiplier(fighter_squadron.bay_side))
 	if is_instance_valid(scout):
 		scout.set_deck_task_speed_multiplier(carrier.flight_operations_multiplier(&"starboard"))
 
@@ -815,16 +841,27 @@ func _toggle_carrier_operations_console() -> void:
 		onboarding.notify_operations_console_opened()
 
 func _on_deck_priority_requested(deck: StringName, priority: StringName) -> void:
-	var wing := interceptor if deck == &"port" else scout
-	if is_instance_valid(wing) and wing.set_service_priority(priority):
+	var accepted := false
+	for fighter_squadron in fighter_squadrons:
+		if is_instance_valid(fighter_squadron) and fighter_squadron.bay_side == deck:
+			accepted = fighter_squadron.set_service_priority(priority) or accepted
+	if deck == &"starboard" and is_instance_valid(scout):
+		accepted = scout.set_service_priority(priority) or accepted
+	if accepted:
 		carrier.carrier_operations.set_service_priority(priority)
 		hud.notify("%s DECK PRIORITY — %s" % [String(deck).to_upper(), String(priority).replace("_", " ").to_upper()])
 
 func _on_wing_loadout_requested(wing_name: StringName, loadout_id: StringName) -> void:
 	var role := &"interceptor" if wing_name in [&"raptor", &"interceptor"] else &"scout"
-	var wing := interceptor if role == &"interceptor" else scout
 	var definition_value := WingLoadoutDefinition.definition(loadout_id)
-	if definition_value != null and is_instance_valid(wing) and wing.set_loadout(definition_value):
+	var accepted := false
+	if definition_value != null and role == &"interceptor":
+		for fighter_squadron in fighter_squadrons:
+			if is_instance_valid(fighter_squadron):
+				accepted = fighter_squadron.set_loadout(definition_value) or accepted
+	elif definition_value != null and is_instance_valid(scout):
+		accepted = scout.set_loadout(definition_value)
+	if accepted:
 		carrier.carrier_operations.set_wing_loadout(role, loadout_id)
 		hud.notify("%s PACKAGE SELECTED — %s" % [String(role).to_upper(), definition_value.display_name.to_upper()])
 
@@ -885,14 +922,17 @@ func _connect_feedback() -> void:
 			ship.order_acknowledged.connect(_on_order_feedback)
 			ship.order_status_changed.connect(_on_order_status_changed)
 			ship.doctrine_changed.connect(_on_doctrine_changed)
-	for wing in [interceptor, scout, hostile_fighters]:
+	var feedback_wings: Array[SidebaySquadron] = _friendly_wings()
+	if is_instance_valid(hostile_fighters):
+		feedback_wings.append(hostile_fighters)
+	for wing in feedback_wings:
 		if is_instance_valid(wing):
 			wing.status_changed.connect(_on_wing_feedback)
 			wing.order_status_changed.connect(_on_order_status_changed)
 			wing.doctrine_changed.connect(_on_doctrine_changed)
 	if is_instance_valid(hostile_fighters):
 		hostile_fighters.squadron_destroyed.connect(_on_hostile_squadron_destroyed)
-	for wing in [interceptor, scout]:
+	for wing in _friendly_wings():
 		for craft in wing.crafts:
 			if is_instance_valid(craft):
 				craft.ship_destroyed.connect(_on_friendly_craft_destroyed.bind(craft))
@@ -990,12 +1030,19 @@ func _toggle_wing(wing: SidebaySquadron) -> void:
 		hud.notify("FLIGHT OPS LOCKED — jump preparation is active")
 		return
 	if wing.operation.state == BayOperation.State.READY:
+		if not carrier.are_bays_open():
+			if not pending_squadron_launches.has(wing):
+				pending_squadron_launches.append(wing)
+			carrier.request_bays_open()
+			hud.notify("%s QUEUED — opening assigned gallery" % wing.display_name.to_upper())
+			return
 		if wing.request_launch():
 			var recorder := _playtest_recorder()
 			if recorder != null:
 				recorder.increment(&"wing_launches")
 			audio.play_tone(340.0, 0.16)
-	elif wing.operation.state in [BayOperation.State.DEPLOYED, BayOperation.State.LAUNCHING]:
+	elif wing.operation.state in [BayOperation.State.QUEUED, BayOperation.State.DEPLOYED, BayOperation.State.LAUNCHING]:
+		pending_squadron_launches.erase(wing)
 		wing.request_recall()
 		var recorder := _playtest_recorder()
 		if recorder != null:
@@ -1006,11 +1053,37 @@ func _toggle_wing(wing: SidebaySquadron) -> void:
 	else:
 		hud.notify("%s is %s" % [wing.display_name, wing.operation.label()])
 
+func _friendly_wings() -> Array[SidebaySquadron]:
+	var wings: Array[SidebaySquadron] = []
+	for fighter_squadron in fighter_squadrons:
+		if is_instance_valid(fighter_squadron):
+			wings.append(fighter_squadron)
+	if is_instance_valid(scout):
+		wings.append(scout)
+	return wings
+
+func _on_fighter_squadron_toggle_requested(squadron_index: int) -> void:
+	if squadron_index < 0 or squadron_index >= fighter_squadrons.size():
+		return
+	_toggle_wing(fighter_squadrons[squadron_index])
+
+func _on_fighter_group_action_requested(action: StringName) -> void:
+	match action:
+		&"deploy_all":
+			for fighter_squadron in fighter_squadrons:
+				if is_instance_valid(fighter_squadron) and (fighter_squadron.operation.state == BayOperation.State.READY or fighter_squadron.operation.is_service_state()):
+					_toggle_wing(fighter_squadron)
+		&"recall_all":
+			pending_squadron_launches.clear()
+			for fighter_squadron in fighter_squadrons:
+				if is_instance_valid(fighter_squadron) and fighter_squadron.operation.state in [BayOperation.State.QUEUED, BayOperation.State.LAUNCHING, BayOperation.State.DEPLOYED]:
+					fighter_squadron.request_recall()
+
 func _toggle_all_wings_and_hangars() -> void:
 	if extraction_requested:
 		hud.notify("FLIGHT OPS LOCKED — jump preparation is active")
 		return
-	var wings: Array[SidebaySquadron] = [interceptor, scout]
+	var wings: Array[SidebaySquadron] = _friendly_wings()
 	if aggregate_bay_closure_pending or carrier.bay_target_closure > 0.5 or carrier.are_bays_closed():
 		aggregate_bay_closure_pending = false
 		aggregate_wing_launch_pending = true
@@ -1038,7 +1111,7 @@ func _toggle_all_wings_and_hangars() -> void:
 func _launch_all_available_wings() -> bool:
 	var waiting_for_recovery := false
 	var action_taken := false
-	for wing in [interceptor, scout]:
+	for wing in _friendly_wings():
 		if not is_instance_valid(wing):
 			continue
 		if wing.operation.state == BayOperation.State.READY:
@@ -1055,14 +1128,23 @@ func _launch_all_available_wings() -> bool:
 
 func _process_aggregate_flight_ops() -> void:
 	if aggregate_bay_closure_pending:
-		var interceptor_aboard := not is_instance_valid(interceptor) or interceptor.all_craft_aboard()
-		var scout_aboard := not is_instance_valid(scout) or scout.all_craft_aboard()
-		if interceptor_aboard and scout_aboard:
+		var all_wings_aboard := true
+		for wing in _friendly_wings():
+			if not wing.all_craft_aboard():
+				all_wings_aboard = false
+				break
+		if all_wings_aboard:
 			aggregate_bay_closure_pending = false
 			carrier.request_bays_closed()
 			hud.notify("ALL WINGS SECURED — hangars retracting")
 	if aggregate_wing_launch_pending and carrier.are_bays_open():
 		aggregate_wing_launch_pending = not _launch_all_available_wings()
+	if carrier.are_bays_open() and not pending_squadron_launches.is_empty():
+		var queued_launches: Array[SidebaySquadron] = pending_squadron_launches.duplicate()
+		pending_squadron_launches.clear()
+		for wing in queued_launches:
+			if is_instance_valid(wing) and wing.operation.state == BayOperation.State.READY:
+				_toggle_wing(wing)
 
 func _on_order_feedback(_entity_id: StringName, message: String) -> void:
 	if hud != null:
@@ -1117,7 +1199,10 @@ func _on_doctrine_changed(entity_id: StringName, next_stance: StringName, next_f
 
 
 func _commandable_by_id(entity_id: StringName) -> Node:
-	for candidate in [carrier, escort, interceptor, scout, hostile_command, hostile_corvette, hostile_fighters]:
+	var candidates: Array[Node] = [carrier, escort, scout, hostile_command, hostile_corvette, hostile_fighters]
+	for fighter_squadron in fighter_squadrons:
+		candidates.append(fighter_squadron)
+	for candidate in candidates:
 		if is_instance_valid(candidate) and candidate.stable_entity_id == entity_id:
 			return candidate
 	return null
@@ -1363,9 +1448,9 @@ func request_withdrawal() -> void:
 	audio.play_tone(510.0, 0.5, -10.0)
 
 func _prepare_wings_for_jump() -> bool:
-	var interceptor_aboard := interceptor.prepare_for_jump() if is_instance_valid(interceptor) else true
-	var scout_aboard := scout.prepare_for_jump() if is_instance_valid(scout) else true
-	var all_aboard := interceptor_aboard and scout_aboard
+	var all_aboard := true
+	for wing in _friendly_wings():
+		all_aboard = wing.prepare_for_jump() and all_aboard
 	if all_aboard or emergency_bay_seal:
 		carrier.request_bays_closed()
 	else:
@@ -1520,8 +1605,22 @@ func _apply_campaign_fleet_snapshot() -> void:
 		carrier.damage_state.shields = carrier.damage_state.definition.max_shields * clampf(float(campaign_fleet_snapshot.get("carrier_shields", 1.0)), 0.0, 1.0)
 		carrier.damage_state.armor = carrier.damage_state.definition.max_armor * clampf(float(campaign_fleet_snapshot.get("carrier_armor", 1.0)), 0.0, 1.0)
 		carrier.damage_state.hull = carrier.damage_state.definition.max_hull * clampf(float(campaign_fleet_snapshot.get("carrier_hull", 1.0)), 0.01, 1.0)
-	_apply_squadron_ammunition(interceptor, int(campaign_fleet_snapshot.get("interceptor_ammunition", 112)))
+	_apply_fighter_group_ammunition(int(campaign_fleet_snapshot.get("interceptor_ammunition", SidebayRunState.BASE_INTERCEPTOR_AMMO)))
 	_apply_squadron_ammunition(scout, int(campaign_fleet_snapshot.get("scout_ammunition", SidebayRunState.BASE_SCOUT_AMMO)))
+
+func _apply_fighter_group_ammunition(total: int) -> void:
+	var fighter_crafts: Array[FighterCraft] = []
+	for fighter_squadron in fighter_squadrons:
+		for craft in fighter_squadron.crafts:
+			if is_instance_valid(craft):
+				fighter_crafts.append(craft)
+	if fighter_crafts.is_empty():
+		return
+	var quotient := total / fighter_crafts.size()
+	var remainder := total % fighter_crafts.size()
+	for index in fighter_crafts.size():
+		var craft := fighter_crafts[index]
+		craft.ammunition = mini(craft.maximum_ammunition(), quotient + (1 if index < remainder else 0))
 
 func _apply_squadron_ammunition(wing: SidebaySquadron, total: int) -> void:
 	if not is_instance_valid(wing) or wing.crafts.is_empty():
@@ -1537,9 +1636,16 @@ func _create_battle_report() -> Dictionary:
 	var carrier_layers := Vector3.ZERO
 	if is_instance_valid(carrier) and carrier.damage_state != null:
 		carrier_layers = carrier.layer_percentages()
-	var interceptor_living := interceptor.living_craft_count() if is_instance_valid(interceptor) else 0
+	var interceptor_living := 0
+	var interceptor_ammunition := 0
+	var interceptor_stragglers := 0
+	for fighter_squadron in fighter_squadrons:
+		if not is_instance_valid(fighter_squadron):
+			continue
+		interceptor_living += fighter_squadron.living_craft_count()
+		interceptor_ammunition += fighter_squadron.total_ammunition()
+		interceptor_stragglers += _count_wing_stragglers(fighter_squadron)
 	var scout_living := scout.living_craft_count() if is_instance_valid(scout) else 0
-	var interceptor_stragglers := _count_wing_stragglers(interceptor)
 	var scout_stragglers := _count_wing_stragglers(scout)
 	var escort_alive := is_instance_valid(escort) and not escort.is_destroyed
 	var escort_straggler := battle_outcome == "withdrawal" and escort_alive and escort.global_position.distance_to(extraction_position) > 1200.0
@@ -1556,7 +1662,7 @@ func _create_battle_report() -> Dictionary:
 		"carrier_hull": carrier_layers.z,
 		"carrier_operations": carrier.carrier_operations.battle_report() if is_instance_valid(carrier) and carrier.carrier_operations != null else {},
 		"interceptor_craft_count": maxi(0, interceptor_living - interceptor_stragglers),
-		"interceptor_ammunition": interceptor.total_ammunition() if is_instance_valid(interceptor) else 0,
+		"interceptor_ammunition": interceptor_ammunition,
 		"scout_craft_count": maxi(0, scout_living - scout_stragglers),
 		"scout_ammunition": scout.total_ammunition() if is_instance_valid(scout) else 0,
 		"escort_active": escort_alive and not escort_straggler,
@@ -1763,15 +1869,18 @@ func _fighter_definition(ship_id: StringName, name_value: String, role_value: St
 	definition.weapons = [_weapon(&"fighter_cannon", "Pulse Cannon", "cannon", 780.0, 0.65, 10.0 * scale_value, 1400.0)]
 	return definition
 
-func _interceptor_squadron_definition() -> SquadronDefinition:
+func _interceptor_squadron_definition(squadron_index: int = 0, total_craft_override: int = -1) -> SquadronDefinition:
 	var complement := SidebayRunState.hangar_complement_data(StringName(campaign_fleet_snapshot.get("active_hangar_complement_id", "balanced_wings")))
 	if complement.is_empty():
 		complement = SidebayRunState.hangar_complement_data(&"balanced_wings")
+	var squadron_names := ["Raptor Alpha", "Raptor Bravo", "Raptor Charlie", "Raptor Delta", "Raptor Echo", "Raptor Foxtrot"]
+	var total_craft := total_craft_override if total_craft_override >= 0 else int(campaign_fleet_snapshot.get("interceptor_craft_count", SidebayRunState.MAX_INTERCEPTOR_CRAFT))
+	var craft_count := total_craft / 6 + (1 if squadron_index < total_craft % 6 else 0)
 	var definition := SquadronDefinition.new()
-	definition.squadron_id = &"raptor_interceptors"
-	definition.display_name = "Raptor Interceptors"
+	definition.squadron_id = StringName("raptor_squadron_%d" % (squadron_index + 1))
+	definition.display_name = squadron_names[clampi(squadron_index, 0, squadron_names.size() - 1)]
 	definition.role = "interceptor"
-	definition.craft_count = int(campaign_fleet_snapshot.get("interceptor_craft_count", 4))
+	definition.craft_count = craft_count
 	definition.endurance_seconds = 125.0 * float(complement.interceptor_endurance)
 	definition.ammunition_per_craft = int(complement.interceptor_ammo_per_craft)
 	var flight_skill := int((campaign_fleet_snapshot.get("personnel_bonuses", {}) as Dictionary).get("flight", 0))
@@ -1785,7 +1894,7 @@ func _scout_squadron_definition() -> SquadronDefinition:
 		complement = SidebayRunState.hangar_complement_data(&"balanced_wings")
 	var definition := SquadronDefinition.new()
 	definition.squadron_id = &"watcher_drones"
-	definition.display_name = "Watcher Scout Drones"
+	definition.display_name = "Watcher EW / Scout Wing"
 	definition.role = "scout"
 	definition.craft_count = int(campaign_fleet_snapshot.get("scout_craft_count", 3))
 	definition.endurance_seconds = 155.0 * float(complement.scout_endurance)

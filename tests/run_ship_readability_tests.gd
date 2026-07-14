@@ -11,7 +11,8 @@ func _run() -> void:
 	for _frame in 8:
 		await process_frame
 	_assert_true(game.get_node_or_null("FleetFillLight") != null, "combat environment provides a texture-readable fill light")
-	_assert_true(game.escort.find_child("ResoluteMissileRack", true, false) != null, "ISS Resolute exposes unique missile-rack geometry")
+	_assert_true(game.escort.find_child("ResoluteDorsalDeck", true, false) != null and game.escort.find_child("ResoluteMissileCompartment05", true, false) != null, "ISS Resolute exposes a low naval deck and complete six-cell VLS bank")
+	_assert_true(game.escort.find_child("ResoluteDorsalFlakBattery01", true, false) != null and game.escort.find_child("ResoluteVentralFlakBattery", true, false) != null, "ISS Resolute's upper and lower flak coverage reads in the combat model")
 	var harrier := CombatShip.new()
 	game.add_child(harrier)
 	harrier.configure(game._friendly_escort_definition(&"iss_harrier"), &"test_harrier", &"friendly", game._friendly_escort_color(&"iss_harrier"))

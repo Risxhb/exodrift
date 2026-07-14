@@ -2,9 +2,9 @@ class_name SidebayRunState
 extends RefCounted
 
 const SAVE_VERSION := 10
-const MAX_INTERCEPTOR_CRAFT := 4
+const MAX_INTERCEPTOR_CRAFT := 24
 const MAX_SCOUT_CRAFT := 3
-const BASE_INTERCEPTOR_AMMO := 112
+const BASE_INTERCEPTOR_AMMO := 672
 const BASE_SCOUT_AMMO := 36
 
 var run_id: String = ""
@@ -95,7 +95,7 @@ static func carrier_catalog() -> Array[Dictionary]:
 			"id": &"cvn_sidebay", "name": "CVN Sidebay", "class_name": "Command Carrier",
 			"summary": "Balanced command hull with standard mobility, protection, and strike power.",
 			"requisition_cost": 0, "required_sector": 0,
-			"width": 42.0, "height": 20.0, "length": 120.0,
+			"width": 76.0, "height": 32.0, "length": 220.0,
 			"acceleration": 1.0, "speed": 1.0, "rotation": 1.0, "signature": 1.0,
 			"shields": 1.0, "armor": 1.0, "hull": 1.0, "shield_regen": 1.0, "armor_mitigation": 1.0,
 			"sensors": 1.0, "command": 1.0, "weapon_damage": 1.0
@@ -104,7 +104,7 @@ static func carrier_catalog() -> Array[Dictionary]:
 			"id": &"cvn_vanguard", "name": "CVN Vanguard", "class_name": "Assault Carrier",
 			"summary": "Fast attack frame with stronger weapons but lighter protection and command reach.",
 			"requisition_cost": 3, "required_sector": 1,
-			"width": 40.0, "height": 18.0, "length": 112.0,
+			"width": 72.0, "height": 28.0, "length": 204.0,
 			"acceleration": 1.18, "speed": 1.15, "rotation": 1.12, "signature": 1.10,
 			"shields": 0.85, "armor": 0.95, "hull": 0.90, "shield_regen": 0.90, "armor_mitigation": 0.95,
 			"sensors": 0.90, "command": 0.90, "weapon_damage": 1.18
@@ -113,7 +113,7 @@ static func carrier_catalog() -> Array[Dictionary]:
 			"id": &"cvn_citadel", "name": "CVN Citadel", "class_name": "Fleet Carrier",
 			"summary": "Slow armored command frame with exceptional durability and fleet-control reach.",
 			"requisition_cost": 4, "required_sector": 2,
-			"width": 48.0, "height": 24.0, "length": 132.0,
+			"width": 88.0, "height": 38.0, "length": 246.0,
 			"acceleration": 0.78, "speed": 0.80, "rotation": 0.82, "signature": 1.15,
 			"shields": 1.25, "armor": 1.30, "hull": 1.35, "shield_regen": 1.20, "armor_mitigation": 1.12,
 			"sensors": 1.05, "command": 1.20, "weapon_damage": 0.90
@@ -130,25 +130,25 @@ static func hangar_complement_catalog() -> Array[Dictionary]:
 	return [
 		{
 			"id": &"balanced_wings", "name": "Balanced Air Group",
-			"summary": "Four Raptor interceptors and three Watcher scouts.",
+			"summary": "Six four-craft Raptor squadrons and one three-craft Watcher EW/scout wing.",
 			"requisition_cost": 0, "required_sector": 0,
-			"interceptor_craft": 4, "scout_craft": 3,
+			"interceptor_craft": 24, "scout_craft": 3,
 			"interceptor_ammo_per_craft": 28, "scout_ammo_per_craft": 18,
 			"interceptor_endurance": 1.0, "scout_endurance": 1.0, "service_time": 1.0
 		},
 		{
 			"id": &"strike_group", "name": "Raptor Strike Group",
-			"summary": "Five heavy interceptors and two scouts; ammunition-heavy offensive posture.",
+			"summary": "Six five-craft heavy squadrons and a two-craft Watcher EW section.",
 			"requisition_cost": 2, "required_sector": 0,
-			"interceptor_craft": 5, "scout_craft": 2,
+			"interceptor_craft": 30, "scout_craft": 2,
 			"interceptor_ammo_per_craft": 32, "scout_ammo_per_craft": 18,
 			"interceptor_endurance": 0.90, "scout_endurance": 0.90, "service_time": 1.10
 		},
 		{
 			"id": &"recon_group", "name": "Watcher Recon Group",
-			"summary": "Three interceptors and four long-endurance scouts for contact control.",
+			"summary": "Six three-craft fighter squadrons and four long-endurance Watchers for contact control.",
 			"requisition_cost": 2, "required_sector": 1,
-			"interceptor_craft": 3, "scout_craft": 4,
+			"interceptor_craft": 18, "scout_craft": 4,
 			"interceptor_ammo_per_craft": 28, "scout_ammo_per_craft": 22,
 			"interceptor_endurance": 1.0, "scout_endurance": 1.20, "service_time": 0.95
 		}

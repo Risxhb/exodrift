@@ -36,7 +36,10 @@ func _profile_resolution(resolution: Vector2i) -> Dictionary:
 	operations.create_hazard(&"command_cic", &"fire", 0.9)
 	operations.create_hazard(&"propulsion", &"breach", 0.7)
 	scene.carrier_operations_console.open_console()
-	await scene.interceptor.start_deployed(scene.carrier.global_position + Vector3(-260.0, 40.0, -320.0))
+	for fighter_index in scene.fighter_squadrons.size():
+		var side: float = -1.0 if fighter_index < 3 else 1.0
+		var rank: int = fighter_index % 3
+		await scene.fighter_squadrons[fighter_index].start_deployed(scene.carrier.global_position + Vector3(side * (260.0 + rank * 90.0), 40.0 + rank * 35.0, -320.0 - rank * 110.0))
 	await scene.scout.start_deployed(scene.carrier.global_position + Vector3(260.0, -40.0, -360.0))
 	scene.sensors.emit_active_ping()
 	var frame_times_ms: Array[float] = []

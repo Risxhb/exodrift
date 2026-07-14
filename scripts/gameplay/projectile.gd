@@ -21,6 +21,7 @@ var arming_distance_m: float = 0.0
 var radial_warhead: bool = false
 var friendly_fire: bool = false
 var detonate_on_expiry: bool = false
+var vertical_launch_clearance_m: float = 0.0
 
 func configure(
 	projectile_team: StringName,
@@ -54,7 +55,7 @@ func configure(
 	if registry != null:
 		registry.register_projectile(self)
 	_build_visual(interceptable)
-	look_at(global_position + direction, Vector3.UP)
+	_face_direction()
 
 func _exit_tree() -> void:
 	var registry := _combat_registry()
@@ -75,12 +76,13 @@ func _build_visual(is_missile: bool) -> void:
 func _physics_process(delta: float) -> void:
 	if expired:
 		return
-	if is_instance_valid(target) and not target.is_destroyed and tracking_strength > 0.0:
+	var cleared_launcher := vertical_launch_clearance_m <= 0.0 or distance_travelled_m >= vertical_launch_clearance_m
+	if cleared_launcher and is_instance_valid(target) and not target.is_destroyed and tracking_strength > 0.0:
 		var desired := global_position.direction_to(target.global_position)
 		direction = direction.slerp(desired, clampf(tracking_strength * delta, 0.0, 1.0)).normalized()
 	var travel := speed_mps * delta
 	global_position += direction * travel
-	look_at(global_position + direction, Vector3.UP)
+	_face_direction()
 	distance_travelled_m += travel
 	var contact_hit := _check_target_hit() or _check_proximity_hit()
 	var reached_airburst := airburst_distance_m > 0.0 and distance_travelled_m >= airburst_distance_m
@@ -90,6 +92,16 @@ func _physics_process(delta: float) -> void:
 			detonate()
 		else:
 			expire("missile" if radial_warhead and not is_armed() else "")
+
+func configure_vertical_launch(clearance_distance_m: float) -> void:
+	vertical_launch_clearance_m = maxf(0.0, clearance_distance_m)
+
+func is_clearing_launcher() -> bool:
+	return vertical_launch_clearance_m > 0.0 and distance_travelled_m < vertical_launch_clearance_m
+
+func _face_direction() -> void:
+	var up_axis := Vector3.FORWARD if absf(direction.dot(Vector3.UP)) > 0.96 else Vector3.UP
+	look_at(global_position + direction, up_axis)
 
 func _check_target_hit() -> bool:
 	if not is_instance_valid(target) or target.is_destroyed:

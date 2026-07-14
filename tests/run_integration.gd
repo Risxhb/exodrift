@@ -17,7 +17,14 @@ func _run() -> void:
 	var tactical: TacticalController = game.tactical
 	var sensors: SidebaySensorSystem = game.sensors
 	_assert_true(is_instance_valid(carrier), "main scene creates carrier")
-	_assert_true(interceptor.crafts.size() == 4 and scout.crafts.size() == 3, "friendly force has exact wing counts")
+	var total_fighter_craft := 0
+	for fighter_squadron in game.fighter_squadrons:
+		total_fighter_craft += fighter_squadron.crafts.size()
+	_assert_true(game.fighter_squadrons.size() == 6 and total_fighter_craft == 24 and interceptor.crafts.size() == 4 and scout.crafts.size() == 3, "friendly force has six four-craft fighter squadrons and one scout/EW wing")
+	_assert_true(interceptor.wing_health_percent() == 100 and scout.wing_health_label() == "NOMINAL", "air groups expose aggregate wing-health telemetry")
+	game.hud.open_fighter_deployment_menu()
+	_assert_true(game.hud.fighter_deployment_menu.item_count >= 11, "fighter deployment opens a six-squadron launch submenu with group actions")
+	game.hud.fighter_deployment_menu.hide()
 	var initial_chase_zoom := carrier.chase_target_distance_m
 	carrier.adjust_chase_zoom(1.0)
 	_assert_true(carrier.chase_target_distance_m < initial_chase_zoom, "combat camera wheel zoom moves the chase camera inward")
@@ -70,7 +77,7 @@ func _run() -> void:
 	for hostile in get_nodes_in_group("team_hostile"):
 		if hostile is CombatShip:
 			hostile.ai_enabled = false
-	_assert_true(carrier.are_bays_open() and carrier.bay_assemblies.size() == 2, "carrier begins combat with two extended flight-ready hangar assemblies")
+	_assert_true(carrier.are_bays_open() and carrier.bay_assemblies.size() == 6 and is_instance_valid(carrier.scout_bay_marker), "carrier begins combat with six extended fighter galleries and a dedicated scout/EW hive")
 	carrier.flak_cooldown = 0.0
 	var flak_before := _source_projectile_count(carrier.stable_entity_id)
 	_assert_true(carrier.fire_flak(), "manual flak barrage fires when its cycle is ready")

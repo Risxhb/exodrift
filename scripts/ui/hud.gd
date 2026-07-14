@@ -10,6 +10,8 @@ signal target_lock_requested(entity_id: StringName)
 signal target_command_requested(command: StringName, entity_id: StringName)
 signal target_navigation_requested(command: StringName, entity_id: StringName, distance_m: float)
 signal carrier_operations_requested
+signal fighter_squadron_toggle_requested(squadron_index: int)
+signal fighter_group_action_requested(action: StringName)
 
 const HUD_SCALE := 0.75
 const CONTEXT_LOCK := 1
@@ -26,6 +28,7 @@ const CONTEXT_CLEAR := 30
 
 var carrier: PlayerCarrier
 var interceptor: SidebaySquadron
+var fighter_squadrons: Array[SidebaySquadron] = []
 var scout: SidebaySquadron
 var sensors: SidebaySensorSystem
 var tactical: TacticalController
@@ -82,17 +85,23 @@ var carrier_operations_panel: Panel
 var carrier_operations_label: Label
 var carrier_operations_button: Button
 var cic_overlay: ExodriftCICOverlay
+var fighter_deployment_menu: PopupMenu
+var fighter_menu_button: Button
 
 func configure(
 	player_carrier: PlayerCarrier,
 	interceptor_wing: SidebaySquadron,
 	scout_wing: SidebaySquadron,
 	sensor_system: SidebaySensorSystem,
-	tactical_controller: TacticalController
+	tactical_controller: TacticalController,
+	fighter_wings: Array[SidebaySquadron] = []
 ) -> void:
 	layer = 10
 	carrier = player_carrier
 	interceptor = interceptor_wing
+	fighter_squadrons = fighter_wings.duplicate()
+	if fighter_squadrons.is_empty() and is_instance_valid(interceptor_wing):
+		fighter_squadrons.append(interceptor_wing)
 	scout = scout_wing
 	sensors = sensor_system
 	tactical = tactical_controller
@@ -120,10 +129,15 @@ func _build_ui() -> void:
 	armor_bar = _bar(telemetry_panel, Vector2(126, 80), Vector2(104, 7), Color(0.95, 0.65, 0.12))
 	hull_bar = _bar(telemetry_panel, Vector2(238, 80), Vector2(104, 7), Color(0.9, 0.15, 0.12))
 	_register_collapsible(telemetry_panel)
-	wing_panel = _panel(root, Vector2(18, 164), Vector2(438, 68), Color(0.006, 0.024, 0.038, 0.68))
+	wing_panel = _panel(root, Vector2(18, 164), Vector2(438, 94), Color(0.006, 0.024, 0.038, 0.68))
 	_collapsible_heading(wing_panel, "AIR GROUP", UIStyle.CYAN)
-	wing_label = _label(wing_panel, Vector2(14, 23), Vector2(410, 40), 11)
+	wing_label = _label(wing_panel, Vector2(14, 23), Vector2(410, 66), 10)
+	fighter_menu_button = _overview_button(wing_panel, Vector2(288, 2), Vector2(138, 19), 9)
+	fighter_menu_button.text = "[Z] SQUADRON OPS"
+	fighter_menu_button.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	fighter_menu_button.pressed.connect(open_fighter_deployment_menu)
 	_register_collapsible(wing_panel)
+	_build_fighter_deployment_menu(root)
 	weapon_panel = _panel(root, Vector2(18, 240), Vector2(470, 88), Color(0.006, 0.024, 0.038, 0.68))
 	_collapsible_heading(weapon_panel, "FIRE CONTROL", UIStyle.AMBER)
 	weapon_label = _label(weapon_panel, Vector2(14, 23), Vector2(442, 60), 11)
@@ -219,7 +233,7 @@ func _build_ui() -> void:
 	pause_title.text = "PAUSED / SETTINGS"
 	pause_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var pause_copy := _label(pause_panel, Vector2(40, 90), Vector2(420, 160), 18)
-	pause_copy.text = "Esc - resume\n\n1: place / relocate flak screen  /  Shift+1: cease\n2: guided missile salvo  /  3: one nuclear torpedo\n%s: live carrier operations console\nB: deploy or retract hangar wings  /  Z/X: individual air groups\n[ / ]: flak fuse range  /  W/S: throttle\nDouble-click empty space: full-cruise heading\nMiddle-drag: camera orbit  /  Wheel: signed zoom\n\nEnter - restart encounter" % _operations_key_label()
+	pause_copy.text = "Esc - resume\n\n1: place / relocate flak screen  /  Shift+1: cease\n2: guided missile salvo  /  3: one nuclear torpedo\n%s: live carrier operations console\nB: deploy or retract all wings  /  Z: fighter squadron menu\nX: Watcher EW/scout wing  /  [ / ]: flak fuse range\nW/S: throttle  /  Double-click: full-cruise heading\nMiddle-drag: camera orbit  /  Wheel: signed zoom\n\nEnter - restart encounter" % _operations_key_label()
 	pause_copy.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pause_panel.visible = false
 	pause_veil.visible = false
@@ -247,6 +261,62 @@ func _build_target_context_menu(root: Control) -> void:
 	target_context_menu.id_pressed.connect(_on_target_context_id_pressed)
 	root.add_child(target_context_menu)
 
+func _build_fighter_deployment_menu(root: Control) -> void:
+	fighter_deployment_menu = PopupMenu.new()
+	fighter_deployment_menu.name = "FighterSquadronDeploymentMenu"
+	fighter_deployment_menu.add_theme_font_size_override("font_size", 13)
+	fighter_deployment_menu.add_theme_color_override("font_color", UIStyle.TEXT_PRIMARY)
+	fighter_deployment_menu.add_theme_color_override("font_hover_color", Color.WHITE)
+	fighter_deployment_menu.add_theme_color_override("font_disabled_color", UIStyle.TEXT_MUTED)
+	fighter_deployment_menu.add_theme_stylebox_override("panel", UIStyle.panel_style(Color(0.006, 0.024, 0.038, 0.98), UIStyle.CYAN, 2, 4))
+	fighter_deployment_menu.add_theme_stylebox_override("hover", UIStyle.panel_style(Color(0.02, 0.12, 0.17, 0.98), UIStyle.CYAN, 1, 2))
+	fighter_deployment_menu.id_pressed.connect(_on_fighter_deployment_id_pressed)
+	root.add_child(fighter_deployment_menu)
+
+func open_fighter_deployment_menu() -> void:
+	if fighter_deployment_menu == null:
+		return
+	_refresh_fighter_deployment_menu()
+	var menu_position := wing_panel.global_position + Vector2(wing_panel.size.x * HUD_SCALE + 10.0, 0.0)
+	fighter_deployment_menu.position = Vector2i(menu_position)
+	fighter_deployment_menu.popup()
+
+func _refresh_fighter_deployment_menu() -> void:
+	fighter_deployment_menu.clear()
+	fighter_deployment_menu.add_item("FIGHTER CONTROL // 6 SQUADRONS", 90)
+	fighter_deployment_menu.set_item_disabled(0, true)
+	fighter_deployment_menu.add_separator()
+	for squadron_index in fighter_squadrons.size():
+		var wing := fighter_squadrons[squadron_index]
+		if not is_instance_valid(wing):
+			continue
+		var action := "STATUS"
+		if wing.operation.state == BayOperation.State.READY:
+			action = "LAUNCH"
+		elif wing.operation.state in [BayOperation.State.QUEUED, BayOperation.State.LAUNCHING, BayOperation.State.DEPLOYED]:
+			action = "RECALL"
+		elif wing.operation.is_service_state():
+			action = "QUEUE REDEPLOY"
+		var item_text := "%d  %-16s  %3d%% %-8s  %d/%d  // %s" % [
+			squadron_index + 1, wing.display_name.to_upper(), wing.wing_health_percent(), wing.wing_health_label(),
+			wing.living_craft_count(), wing.maximum_craft_count(), action
+		]
+		fighter_deployment_menu.add_item(item_text, squadron_index)
+	fighter_deployment_menu.add_separator()
+	fighter_deployment_menu.add_item("LAUNCH ALL READY FIGHTER SQUADRONS", 100)
+	fighter_deployment_menu.add_item("RECALL ALL FIGHTER SQUADRONS", 101)
+	fighter_deployment_menu.add_separator()
+	fighter_deployment_menu.add_item("WATCHER EW / SCOUT WING REMAINS ON [X]", 102)
+	fighter_deployment_menu.set_item_disabled(fighter_deployment_menu.item_count - 1, true)
+
+func _on_fighter_deployment_id_pressed(id: int) -> void:
+	if id >= 0 and id < fighter_squadrons.size():
+		fighter_squadron_toggle_requested.emit(id)
+	elif id == 100:
+		fighter_group_action_requested.emit(&"deploy_all")
+	elif id == 101:
+		fighter_group_action_requested.emit(&"recall_all")
+
 func _layout_scaled_hud() -> void:
 	if hud_root == null:
 		return
@@ -257,8 +327,8 @@ func _layout_scaled_hud() -> void:
 	objective_panel.position = Vector2(18.0, 14.0)
 	telemetry_panel.position = Vector2(18.0, 49.0)
 	wing_panel.position = Vector2(18.0, 131.0)
-	weapon_panel.position = Vector2(18.0, 190.0)
-	carrier_operations_panel.position = Vector2(18.0, 262.0)
+	weapon_panel.position = Vector2(18.0, 215.0)
+	carrier_operations_panel.position = Vector2(18.0, 287.0)
 	map_info_panel.position = Vector2(18.0, 49.0)
 	target_panel.position = Vector2(viewport_size.x - 18.0 - target_panel.size.x * HUD_SCALE, 14.0)
 	overview_panel.position = Vector2(viewport_size.x - 18.0 - overview_panel.size.x * HUD_SCALE, 141.0)
@@ -275,9 +345,12 @@ func _process(delta: float) -> void:
 	armor_bar.value = layers.y * 100.0
 	hull_bar.value = layers.z * 100.0
 	status_label.text = "%s  //  SPD %4.0f m/s\nBAYS %s  //  CONTACTS %d\nSHD %3.0f%%    ARM %3.0f%%    HULL %3.0f%%" % [carrier.display_name.to_upper(), carrier.velocity.length(), carrier.bay_status(), sensors.contacts.size(), layers.x * 100.0, layers.y * 100.0, layers.z * 100.0]
-	wing_label.text = "[Z] %s  //  %s  •  %s  •  %dC/%dA/%.0fs\n[X] %s  //  %s  •  %s  •  %dC/%dA/%.0fs" % [
-		interceptor.display_name, _wing_state(interceptor), _group_order_label(interceptor), interceptor.living_craft_count(), interceptor.total_ammunition(), interceptor.average_endurance(),
-		scout.display_name, _wing_state(scout), _group_order_label(scout), scout.living_craft_count(), scout.total_ammunition(), scout.average_endurance()
+	var fighter_health := _fighter_group_health_percent()
+	var fighter_craft := _fighter_group_living_craft()
+	var fighter_deployed := _fighter_group_deployed_count()
+	wing_label.text = "[Z] FIGHTER SQUADRONS  %d/6 OUT  //  HEALTH %3d%%  //  %d CRAFT\n    DEPLOYED %d  //  READY %d  //  SELECT SQUADRON TO LAUNCH\n[X] %s  //  %s  //  HEALTH %3d%% %s  //  EW + SCOUT" % [
+		_fighter_squadrons_out(), fighter_health, fighter_craft, fighter_deployed, _fighter_squadrons_ready(),
+		scout.display_name, _wing_state(scout), scout.wing_health_percent(), scout.wing_health_label()
 	]
 	var flak_status := "READY" if carrier.flak_cooldown <= 0.0 else "CYCLING %.1fs" % carrier.flak_cooldown
 	var missile_status := "READY" if carrier.missile_cooldown <= 0.0 else "RELOAD %.1fs" % carrier.missile_cooldown
@@ -320,7 +393,7 @@ func _process(delta: float) -> void:
 		objective_panel.visible = true
 		map_info_panel.visible = false
 		mode_panel.visible = true
-		controls_label.text = "1 FLAK   2 MISSILES   3 NUCLEAR   %s OPS   [ / ] RANGE   %s   DOUBLE-CLICK HELM   MMB ORBIT   B HANGAR   Z/X AIR GROUPS   TAB MAP" % [_operations_key_label(), "LMB CONFIRM / RMB CANCEL" if carrier.flak_placement_active else "SHIFT+1 CEASE"]
+		controls_label.text = "1 FLAK   2 MISSILES   3 NUCLEAR   %s OPS   [ / ] RANGE   %s   B ALL WINGS   Z SQUADRON MENU   X WATCHER EW/SCOUT   TAB MAP" % [_operations_key_label(), "LMB CONFIRM / RMB CANCEL" if carrier.flak_placement_active else "SHIFT+1 CEASE"]
 	if notification_time > 0.0:
 		notification_time -= delta
 		if notification_time <= 0.0:
@@ -499,6 +572,45 @@ func _issue_overview_command(command: StringName) -> void:
 
 func _wing_state(wing: SidebaySquadron) -> String:
 	return "%s → REDEPLOY" % wing.operation.label() if wing.redeploy_requested else wing.operation.label()
+
+func _fighter_group_health_percent() -> int:
+	var weighted_health := 0.0
+	var maximum_craft := 0
+	for wing in fighter_squadrons:
+		if not is_instance_valid(wing):
+			continue
+		var wing_capacity := wing.maximum_craft_count()
+		weighted_health += wing.wing_health_fraction() * wing_capacity
+		maximum_craft += wing_capacity
+	return roundi(weighted_health / maxf(1.0, float(maximum_craft)) * 100.0)
+
+func _fighter_group_living_craft() -> int:
+	var total := 0
+	for wing in fighter_squadrons:
+		if is_instance_valid(wing):
+			total += wing.living_craft_count()
+	return total
+
+func _fighter_group_deployed_count() -> int:
+	var total := 0
+	for wing in fighter_squadrons:
+		if is_instance_valid(wing):
+			total += wing.deployed_craft_count()
+	return total
+
+func _fighter_squadrons_out() -> int:
+	var total := 0
+	for wing in fighter_squadrons:
+		if is_instance_valid(wing) and wing.operation.state in [BayOperation.State.QUEUED, BayOperation.State.LAUNCHING, BayOperation.State.DEPLOYED, BayOperation.State.RETURNING, BayOperation.State.APPROACH, BayOperation.State.DOCKING]:
+			total += 1
+	return total
+
+func _fighter_squadrons_ready() -> int:
+	var total := 0
+	for wing in fighter_squadrons:
+		if is_instance_valid(wing) and wing.operation.state == BayOperation.State.READY:
+			total += 1
+	return total
 
 func _group_order_label(group: Node) -> String:
 	if not is_instance_valid(group) or not group.has_method("command_snapshot"):

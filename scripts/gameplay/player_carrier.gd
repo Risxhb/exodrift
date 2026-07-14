@@ -14,9 +14,9 @@ enum TargetNavigationMode {
 	KEEP_DISTANCE,
 }
 
-const CHASE_DEFAULT_DISTANCE_M := 125.0
-const CHASE_MIN_DISTANCE_M := 70.0
-const CHASE_MAX_DISTANCE_M := 650.0
+const CHASE_DEFAULT_DISTANCE_M := 230.0
+const CHASE_MIN_DISTANCE_M := 120.0
+const CHASE_MAX_DISTANCE_M := 900.0
 
 var control_enabled: bool = true
 var mouse_sensitivity: float = 0.0022
@@ -34,6 +34,9 @@ var autopilot_active: bool = false
 var chase_camera: Camera3D
 var port_bay_marker: Marker3D
 var starboard_bay_marker: Marker3D
+var port_bay_markers: Array[Marker3D] = []
+var starboard_bay_markers: Array[Marker3D] = []
+var scout_bay_marker: Marker3D
 var web_cursor_steer: Vector2 = Vector2.ZERO
 var chase_distance_m: float = CHASE_DEFAULT_DISTANCE_M
 var chase_target_distance_m: float = CHASE_DEFAULT_DISTANCE_M
@@ -121,36 +124,43 @@ func _on_store_rejected(_store_id: StringName, message: String) -> void:
 
 func _build_visual() -> void:
 	var dimensions := definition.dimensions_m
-	_add_tapered_visual_block("ArmoredCore", Vector3(0.0, 0.0, 6.0), Vector3(dimensions.x * 0.62, dimensions.y * 0.72, dimensions.z * 0.72), 0.62, 0.96, visual_color.darkened(0.12), visual_profile.hull_texture_path)
-	_add_tapered_visual_block("RecessedWaist", Vector3(0.0, -dimensions.y * 0.03, 13.0), Vector3(dimensions.x * 0.42, dimensions.y * 0.48, dimensions.z * 0.48), 0.7, 0.92, visual_color.darkened(0.3), visual_profile.hull_texture_path)
-	_add_tapered_visual_block("DorsalSpine", Vector3(0.0, dimensions.y * 0.42, 4.0), Vector3(dimensions.x * 0.34, dimensions.y * 0.22, dimensions.z * 0.64), 0.48, 0.9, visual_color.lightened(0.02), visual_profile.hull_texture_path)
-	_add_tapered_visual_block("KeelArmor", Vector3(0.0, -dimensions.y * 0.46, 12.0), Vector3(dimensions.x * 0.32, dimensions.y * 0.18, dimensions.z * 0.5), 0.58, 0.9, visual_color.darkened(0.3), visual_profile.hull_texture_path)
-	_add_hull_block(Vector3(0.0, dimensions.y * 0.68, 13.0), Vector3(15.0, 9.0, 30.0), visual_color.lightened(0.06), "CommandIsland")
-	_add_hull_block(Vector3(0.0, 0.0, dimensions.z * 0.47), Vector3(31.0, 15.0, 20.0), visual_color.darkened(0.24), "EngineCitadel")
-	for rib_index in 7:
-		var progress := float(rib_index) / 6.0
+	_add_tapered_visual_block("ArmoredCore", Vector3(0.0, 0.0, dimensions.z * 0.03), Vector3(dimensions.x * 0.6, dimensions.y * 0.72, dimensions.z * 0.75), 0.58, 0.98, visual_color.darkened(0.12), visual_profile.hull_texture_path)
+	_add_tapered_visual_block("RecessedWaist", Vector3(0.0, -dimensions.y * 0.05, dimensions.z * 0.08), Vector3(dimensions.x * 0.4, dimensions.y * 0.48, dimensions.z * 0.58), 0.66, 0.94, visual_color.darkened(0.3), visual_profile.hull_texture_path)
+	_add_tapered_visual_block("DorsalSpine", Vector3(0.0, dimensions.y * 0.4, dimensions.z * 0.03), Vector3(dimensions.x * 0.32, dimensions.y * 0.22, dimensions.z * 0.72), 0.44, 0.92, visual_color.lightened(0.02), visual_profile.hull_texture_path)
+	_add_tapered_visual_block("KeelArmor", Vector3(0.0, -dimensions.y * 0.46, dimensions.z * 0.08), Vector3(dimensions.x * 0.3, dimensions.y * 0.18, dimensions.z * 0.58), 0.54, 0.92, visual_color.darkened(0.3), visual_profile.hull_texture_path)
+	_add_hull_block(Vector3(0.0, 0.0, dimensions.z * 0.47), Vector3(dimensions.x * 0.48, dimensions.y * 0.72, dimensions.z * 0.16), visual_color.darkened(0.24), "EngineCitadel")
+	for rib_index in 11:
+		var progress := float(rib_index) / 10.0
 		var rib_z := lerpf(-dimensions.z * 0.3, dimensions.z * 0.32, progress)
 		var rib_width := lerpf(dimensions.x * 0.46, dimensions.x * 0.56, progress)
-		_add_hull_block(Vector3(0.0, dimensions.y * 0.485, rib_z), Vector3(rib_width, 1.25, 5.5), visual_color.lightened(0.015), "OverlappingArmorRib%02d" % rib_index)
+		_add_hull_block(Vector3(0.0, dimensions.y * 0.485, rib_z), Vector3(rib_width, maxf(1.25, dimensions.y * 0.045), dimensions.z * 0.035), visual_color.lightened(0.015), "OverlappingArmorRib%02d" % rib_index)
 	_add_armored_bow(dimensions)
+	_add_command_island(dimensions)
+	_add_flight_deck_details(dimensions)
+	_add_scout_drone_hive(dimensions)
 	_add_engine_banks(dimensions)
-	_add_missile_cells()
-	_add_bay(-1.0, "PortBay")
-	_add_bay(1.0, "StarboardBay")
+	_add_missile_cells(dimensions)
+	var lane_spacing := dimensions.z * 0.265
+	for lane_index in 3:
+		var lane_z := (float(lane_index) - 1.0) * lane_spacing
+		_add_bay(-1.0, "PortBay%d" % (lane_index + 1), lane_z, lane_index, dimensions)
+		_add_bay(1.0, "StarboardBay%d" % (lane_index + 1), lane_z, lane_index, dimensions)
 	for side in [-1.0, 1.0]:
-		for z in [-30.0, 0.0, 30.0]:
+		for hardpoint_index in 5:
+			var z := lerpf(-dimensions.z * 0.34, dimensions.z * 0.35, float(hardpoint_index) / 4.0)
 			var turret := MeshInstance3D.new()
+			turret.name = "PointDefenseMount_%s_%02d" % ["P" if side < 0.0 else "S", hardpoint_index + 1]
 			var turret_mesh := CylinderMesh.new()
-			turret_mesh.top_radius = 2.0
-			turret_mesh.bottom_radius = 3.2
-			turret_mesh.height = 3.5
+			turret_mesh.top_radius = dimensions.x * 0.025
+			turret_mesh.bottom_radius = dimensions.x * 0.04
+			turret_mesh.height = dimensions.y * 0.15
 			turret.mesh = turret_mesh
-			turret.position = Vector3(side * 23.0, 11.0, z)
+			turret.position = Vector3(side * dimensions.x * 0.38, dimensions.y * 0.52, z)
 			turret.material_override = _make_material(Color(0.24, 0.3, 0.35))
 			add_child(turret)
 			flak_mounts.append(turret)
-			var barrel := _mesh_block(Vector3(2.0, 1.2, 8.0), Color(0.12, 0.18, 0.23))
-			barrel.position = Vector3(0.0, 2.0, -4.0)
+			var barrel := _mesh_block(Vector3(dimensions.x * 0.025, dimensions.y * 0.045, dimensions.z * 0.055), Color(0.12, 0.18, 0.23))
+			barrel.position = Vector3(0.0, dimensions.y * 0.09, -dimensions.z * 0.025)
 			turret.add_child(barrel)
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
@@ -159,7 +169,7 @@ func _build_visual() -> void:
 	add_child(collision)
 	chase_camera = Camera3D.new()
 	chase_camera.name = "ChaseCamera"
-	chase_camera.position = Vector3(0.0, 48.0, 125.0)
+	chase_camera.position = Vector3(0.0, dimensions.y * 2.15, dimensions.z * 1.02)
 	chase_camera.fov = 72.0
 	chase_camera.near = 1.0
 	chase_camera.far = 30000.0
@@ -185,6 +195,64 @@ func _mesh_block(size_value: Vector3, color: Color, emission_energy: float = 0.0
 	block.material_override = _make_material(color, emission_energy)
 	return block
 
+func _add_command_island(dimensions: Vector3) -> void:
+	var island_x := dimensions.x * 0.13
+	var island_z := dimensions.z * 0.08
+	_add_hull_block(Vector3(island_x, dimensions.y * 0.64, island_z), Vector3(dimensions.x * 0.2, dimensions.y * 0.28, dimensions.z * 0.2), visual_color.lightened(0.06), "CommandIsland")
+	_add_hull_block(Vector3(island_x, dimensions.y * 0.83, island_z - dimensions.z * 0.025), Vector3(dimensions.x * 0.14, dimensions.y * 0.14, dimensions.z * 0.13), visual_color.lightened(0.1), "FlagBridge")
+	var bridge_glass := _add_hull_block(Vector3(island_x, dimensions.y * 0.89, island_z - dimensions.z * 0.072), Vector3(dimensions.x * 0.145, dimensions.y * 0.055, dimensions.z * 0.018), Color(0.06, 0.45, 0.68), "BridgeViewports")
+	bridge_glass.material_override = _make_material(Color(0.08, 0.72, 1.0), 2.8)
+	var mast := _add_hull_block(Vector3(island_x, dimensions.y * 1.05, island_z), Vector3(dimensions.x * 0.035, dimensions.y * 0.38, dimensions.z * 0.025), Color(0.13, 0.2, 0.25), "SensorMast")
+	var radar := MeshInstance3D.new()
+	radar.name = "LongRangeRadarDish"
+	var radar_mesh := CylinderMesh.new()
+	radar_mesh.top_radius = dimensions.x * 0.105
+	radar_mesh.bottom_radius = dimensions.x * 0.105
+	radar_mesh.height = dimensions.y * 0.035
+	radar_mesh.radial_segments = 20
+	radar.mesh = radar_mesh
+	radar.rotation_degrees.z = 90.0
+	radar.position = Vector3(0.0, dimensions.y * 0.22, 0.0)
+	radar.material_override = _make_material(Color(0.16, 0.28, 0.34))
+	mast.add_child(radar)
+	for array_index in 3:
+		var antenna := _mesh_block(Vector3(dimensions.x * 0.15, dimensions.y * 0.025, dimensions.z * 0.018), Color(0.1, 0.56, 0.68), 1.4)
+		antenna.name = "EWArray%02d" % (array_index + 1)
+		antenna.position = Vector3(0.0, dimensions.y * (0.08 + array_index * 0.08), 0.0)
+		antenna.rotation_degrees.y = array_index * 60.0
+		mast.add_child(antenna)
+
+func _add_flight_deck_details(dimensions: Vector3) -> void:
+	var deck := _add_hull_block(Vector3(0.0, dimensions.y * 0.535, dimensions.z * 0.045), Vector3(dimensions.x * 0.46, dimensions.y * 0.035, dimensions.z * 0.7), Color(0.12, 0.18, 0.22), "DorsalFlightDeck")
+	if deck_marking_texture == null:
+		deck_marking_texture = load("res://assets/textures/deck_markings.svg") as Texture2D
+	var deck_material := _make_material(Color(0.16, 0.23, 0.27), 0.12)
+	deck_material.albedo_texture = deck_marking_texture
+	deck_material.uv1_scale = Vector3(2.0, 8.0, 1.0)
+	deck.material_override = deck_material
+	for elevator_index in 4:
+		var elevator_z := lerpf(-dimensions.z * 0.24, dimensions.z * 0.28, float(elevator_index) / 3.0)
+		var side := -1.0 if elevator_index % 2 == 0 else 1.0
+		var elevator := _add_hull_block(Vector3(side * dimensions.x * 0.14, dimensions.y * 0.56, elevator_z), Vector3(dimensions.x * 0.15, dimensions.y * 0.025, dimensions.z * 0.09), Color(0.18, 0.24, 0.27), "AircraftElevator%02d" % (elevator_index + 1))
+		elevator.material_override = _make_material(Color(0.16, 0.28, 0.31), 0.16)
+	for light_index in 12:
+		var guide := _mesh_block(Vector3(dimensions.x * 0.012, dimensions.y * 0.016, dimensions.z * 0.02), Color(0.16, 0.88, 1.0), 4.0)
+		guide.name = "DeckCenterline%02d" % (light_index + 1)
+		guide.position = Vector3(0.0, dimensions.y * 0.565, lerpf(-dimensions.z * 0.29, dimensions.z * 0.36, float(light_index) / 11.0))
+		add_child(guide)
+
+func _add_scout_drone_hive(dimensions: Vector3) -> void:
+	var hive := _add_hull_block(Vector3(-dimensions.x * 0.12, dimensions.y * 0.68, -dimensions.z * 0.19), Vector3(dimensions.x * 0.17, dimensions.y * 0.16, dimensions.z * 0.13), visual_color.darkened(0.08), "ScoutEWHive")
+	for tube_index in 4:
+		var tube := _mesh_block(Vector3(dimensions.x * 0.028, dimensions.y * 0.035, dimensions.z * 0.08), Color(0.08, 0.32, 0.38), 0.8)
+		tube.name = "ScoutLaunchTube%02d" % (tube_index + 1)
+		tube.position = Vector3((float(tube_index) - 1.5) * dimensions.x * 0.037, dimensions.y * 0.09, -dimensions.z * 0.055)
+		hive.add_child(tube)
+	scout_bay_marker = Marker3D.new()
+	scout_bay_marker.name = "ScoutEWBay"
+	scout_bay_marker.position = Vector3(0.0, dimensions.y * 0.16, -dimensions.z * 0.09)
+	hive.add_child(scout_bay_marker)
+
 func _add_armored_bow(dimensions: Vector3) -> void:
 	var bow := _add_tapered_visual_block("TaperedArmoredBow", Vector3(0.0, -0.2, -dimensions.z * 0.42), Vector3(dimensions.x * 0.58, dimensions.y * 0.7, dimensions.z * 0.34), 0.34, 0.94, visual_color.lightened(0.015), visual_profile.hull_texture_path)
 	bow.rotation_degrees.x = -1.5
@@ -197,35 +265,36 @@ func _add_armored_bow(dimensions: Vector3) -> void:
 
 func _add_engine_banks(dimensions: Vector3) -> void:
 	for side in [-1.0, 1.0]:
-		for height in [-5.0, 5.0]:
+		for height_factor in [-0.28, 0.0, 0.28]:
+			var height: float = height_factor * dimensions.y
 			var housing := MeshInstance3D.new()
 			housing.name = "EngineHousing"
 			var housing_mesh := CylinderMesh.new()
-			housing_mesh.top_radius = 4.2
-			housing_mesh.bottom_radius = 5.0
-			housing_mesh.height = 9.5
+			housing_mesh.top_radius = dimensions.x * 0.055
+			housing_mesh.bottom_radius = dimensions.x * 0.065
+			housing_mesh.height = dimensions.z * 0.075
 			housing_mesh.radial_segments = 16
 			housing.mesh = housing_mesh
 			housing.rotation_degrees.x = 90.0
-			housing.position = Vector3(side * 13.0, height, dimensions.z * 0.55)
+			housing.position = Vector3(side * dimensions.x * 0.2, height, dimensions.z * 0.515)
 			housing.material_override = _make_material(Color(0.055, 0.085, 0.11))
 			add_child(housing)
 			var engine := MeshInstance3D.new()
 			engine.name = "EngineGlow"
 			var mesh := CylinderMesh.new()
-			mesh.top_radius = 2.1
-			mesh.bottom_radius = 2.8
-			mesh.height = 8.2
+			mesh.top_radius = dimensions.x * 0.028
+			mesh.bottom_radius = dimensions.x * 0.038
+			mesh.height = dimensions.z * 0.065
 			mesh.radial_segments = 16
 			engine.mesh = mesh
 			engine.rotation_degrees.x = 90.0
-			engine.position = Vector3(side * 13.0, height, dimensions.z * 0.575)
+			engine.position = Vector3(side * dimensions.x * 0.2, height, dimensions.z * 0.545)
 			engine.material_override = _make_material(Color(0.035, 0.34, 0.68), 2.15)
 			add_child(engine)
-			var origin := Vector3(side * 13.0, height, dimensions.z * 0.68)
-			var outer := _engine_plume_layer("CarrierEngineOuterPlume", origin + Vector3(0.0, 0.0, 10.0), Vector3(4.8, 4.8, 34.0), Color(0.08, 0.3, 1.0, 0.16), 2.1)
-			var inner := _engine_plume_layer("CarrierEngineInnerPlume", origin + Vector3(0.0, 0.0, 7.0), Vector3(2.7, 2.7, 25.0), Color(0.08, 0.76, 1.0, 0.36), 3.8)
-			var core := _engine_plume_layer("CarrierEngineCorePlume", origin + Vector3(0.0, 0.0, 4.8), Vector3(1.15, 1.15, 17.0), Color(0.82, 0.97, 1.0, 0.82), 5.6)
+			var origin := Vector3(side * dimensions.x * 0.2, height, dimensions.z * 0.58)
+			var outer := _engine_plume_layer("CarrierEngineOuterPlume", origin + Vector3(0.0, 0.0, dimensions.z * 0.08), Vector3(dimensions.x * 0.065, dimensions.x * 0.065, dimensions.z * 0.28), Color(0.08, 0.3, 1.0, 0.16), 2.1)
+			var inner := _engine_plume_layer("CarrierEngineInnerPlume", origin + Vector3(0.0, 0.0, dimensions.z * 0.055), Vector3(dimensions.x * 0.038, dimensions.x * 0.038, dimensions.z * 0.2), Color(0.08, 0.76, 1.0, 0.36), 3.8)
+			var core := _engine_plume_layer("CarrierEngineCorePlume", origin + Vector3(0.0, 0.0, dimensions.z * 0.04), Vector3(dimensions.x * 0.016, dimensions.x * 0.016, dimensions.z * 0.13), Color(0.82, 0.97, 1.0, 0.82), 5.6)
 			engine_trails.append({"outer": outer, "inner": inner, "core": core, "phase": float(engine_trails.size()) * 1.73})
 
 func _engine_plume_layer(node_name: String, position_value: Vector3, size_value: Vector3, color: Color, emission: float) -> MeshInstance3D:
@@ -284,67 +353,76 @@ func _indicator_material(color: Color) -> StandardMaterial3D:
 	material.emission_energy_multiplier = 2.2
 	return material
 
-func _add_missile_cells() -> void:
+func _add_missile_cells(dimensions: Vector3) -> void:
 	for side in [-1.0, 1.0]:
-		for rack in 2:
-			var cell := _mesh_block(Vector3(7.0, 2.0, 12.0), Color(0.14, 0.19, 0.23))
+		for rack in 4:
+			var cell := _mesh_block(Vector3(dimensions.x * 0.09, dimensions.y * 0.06, dimensions.z * 0.065), Color(0.14, 0.19, 0.23))
 			cell.name = "MissileCell"
-			cell.position = Vector3(side * (12.0 + rack * 6.0), 12.5, -20.0 + rack * 15.0)
+			cell.position = Vector3(side * dimensions.x * (0.18 + float(rack % 2) * 0.1), dimensions.y * 0.58, -dimensions.z * 0.3 + float(rack) * dimensions.z * 0.07)
 			add_child(cell)
 
-func _add_bay(side: float, bay_name: String) -> void:
+func _add_bay(side: float, bay_name: String, z_position: float, lane_index: int, dimensions: Vector3) -> void:
+	var gallery_length := dimensions.z * 0.205
+	var open_x := side * dimensions.x * 0.43
+	var closed_x := side * dimensions.x * 0.31
 	var assembly := Node3D.new()
 	assembly.name = "%sAssembly" % bay_name
-	assembly.position = Vector3(side * 29.0, -1.0, 4.0)
+	assembly.position = Vector3(open_x, -dimensions.y * 0.04, z_position)
 	add_child(assembly)
 	var bay := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
-	mesh.size = Vector3(17.0, 9.0, 72.0)
+	mesh.size = Vector3(dimensions.x * 0.22, dimensions.y * 0.38, gallery_length)
 	bay.mesh = mesh
 	bay.material_override = _make_material(visual_color.darkened(0.2))
 	assembly.add_child(bay)
 	var mouth := MeshInstance3D.new()
 	var mouth_mesh := BoxMesh.new()
-	mouth_mesh.size = Vector3(2.0, 6.0, 58.0)
+	mouth_mesh.size = Vector3(dimensions.x * 0.025, dimensions.y * 0.26, gallery_length * 0.78)
 	mouth.mesh = mouth_mesh
-	mouth.position = Vector3(side * 9.0, 0.0, -4.0)
+	mouth.position = Vector3(side * dimensions.x * 0.125, 0.0, 0.0)
 	var mouth_material := _make_material(Color(0.12, 0.82, 1.0), 3.6)
 	if deck_marking_texture == null:
 		deck_marking_texture = load("res://assets/textures/deck_markings.svg") as Texture2D
 	mouth_material.albedo_texture = deck_marking_texture
 	mouth_material.emission_texture = deck_marking_texture
-	mouth_material.uv1_scale = Vector3(1.0, 5.0, 1.0)
+	mouth_material.uv1_scale = Vector3(1.0, 3.0, 1.0)
 	mouth.material_override = mouth_material
 	assembly.add_child(mouth)
-	var gallery_roof := _mesh_block(Vector3(15.0, 2.0, 68.0), visual_color.lightened(0.06))
+	var gallery_roof := _mesh_block(Vector3(dimensions.x * 0.2, dimensions.y * 0.07, gallery_length * 0.94), visual_color.lightened(0.06))
 	gallery_roof.name = "GalleryArmor"
-	gallery_roof.position.y = 5.5
+	gallery_roof.position.y = dimensions.y * 0.22
 	assembly.add_child(gallery_roof)
 	var rail_lights: Array[MeshInstance3D] = []
-	for rail_index in 8:
-		var rail := _mesh_block(Vector3(1.2, 0.65, 4.5), Color(0.12, 0.9, 1.0), 4.0)
+	for rail_index in 5:
+		var rail := _mesh_block(Vector3(dimensions.x * 0.014, dimensions.y * 0.025, gallery_length * 0.08), Color(0.12, 0.9, 1.0), 4.0)
 		rail.name = "ApproachLight"
-		rail.position = Vector3(side * 8.8, -2.3, -28.0 + rail_index * 8.0)
+		rail.position = Vector3(side * dimensions.x * 0.12, -dimensions.y * 0.1, lerpf(-gallery_length * 0.34, gallery_length * 0.34, float(rail_index) / 4.0))
 		assembly.add_child(rail)
 		rail_lights.append(rail)
-	var door_a := _add_bay_door(assembly, side, -31.0)
-	var door_b := _add_bay_door(assembly, side, 31.0)
+	var door_open_z := gallery_length * 0.41
+	var door_closed_z := gallery_length * 0.19
+	var door_a := _add_bay_door(assembly, side, -door_open_z, dimensions, gallery_length)
+	var door_b := _add_bay_door(assembly, side, door_open_z, dimensions, gallery_length)
 	var marker := Marker3D.new()
 	marker.name = bay_name
-	marker.position = Vector3(side * 14.0, 0.0, -4.0)
+	marker.position = Vector3(side * dimensions.x * 0.18, 0.0, 0.0)
 	assembly.add_child(marker)
-	bay_assemblies.append({"node": assembly, "side": side, "mouth": mouth, "door_a": door_a, "door_b": door_b, "lights": rail_lights})
+	bay_assemblies.append({"node": assembly, "side": side, "mouth": mouth, "door_a": door_a, "door_b": door_b, "lights": rail_lights, "open_x": open_x, "closed_x": closed_x, "door_open_z": door_open_z, "door_closed_z": door_closed_z})
 	if side < 0.0:
-		port_bay_marker = marker
+		port_bay_markers.append(marker)
+		if lane_index == 0:
+			port_bay_marker = marker
 	else:
-		starboard_bay_marker = marker
+		starboard_bay_markers.append(marker)
+		if lane_index == 0:
+			starboard_bay_marker = marker
 
-func _add_bay_door(parent: Node3D, side: float, z_position: float) -> MeshInstance3D:
+func _add_bay_door(parent: Node3D, side: float, z_position: float, dimensions: Vector3, gallery_length: float) -> MeshInstance3D:
 	var door := MeshInstance3D.new()
 	var door_mesh := BoxMesh.new()
-	door_mesh.size = Vector3(2.4, 7.5, 28.0)
+	door_mesh.size = Vector3(dimensions.x * 0.035, dimensions.y * 0.32, gallery_length * 0.43)
 	door.mesh = door_mesh
-	door.position = Vector3(side * 9.6, 0.0, z_position)
+	door.position = Vector3(side * dimensions.x * 0.135, 0.0, z_position)
 	door.material_override = _make_material(visual_color.lightened(0.05), 0.04)
 	parent.add_child(door)
 	return door
@@ -925,8 +1003,18 @@ func clear_target_navigation() -> void:
 	target_navigation_mode = TargetNavigationMode.NONE
 	target_navigation_target = null
 
-func get_bay_marker(side: StringName) -> Marker3D:
+func get_bay_marker(side: StringName, lane_index: int = 0) -> Marker3D:
+	if side == &"scout" and is_instance_valid(scout_bay_marker):
+		return scout_bay_marker
+	var markers := port_bay_markers if side == &"port" else starboard_bay_markers
+	if not markers.is_empty():
+		return markers[clampi(lane_index, 0, markers.size() - 1)]
 	return port_bay_marker if side == &"port" else starboard_bay_marker
+
+func get_bay_launch_vector(side: StringName) -> Vector3:
+	if side == &"scout":
+		return global_transform.basis.y.normalized()
+	return -global_transform.basis.x.normalized() if side == &"port" else global_transform.basis.x.normalized()
 
 func request_bays_closed() -> void:
 	if is_equal_approx(bay_target_closure, 1.0):
@@ -960,12 +1048,11 @@ func _update_bay_retraction(delta: float) -> void:
 		return
 	for bay_data in bay_assemblies:
 		var assembly: Node3D = bay_data.node
-		var side := float(bay_data.side)
-		assembly.position.x = lerpf(side * 29.0, side * 20.0, bay_closure)
+		assembly.position.x = lerpf(float(bay_data.open_x), float(bay_data.closed_x), bay_closure)
 		var door_a: MeshInstance3D = bay_data.door_a
 		var door_b: MeshInstance3D = bay_data.door_b
-		door_a.position.z = lerpf(-31.0, -15.0, bay_closure)
-		door_b.position.z = lerpf(31.0, 15.0, bay_closure)
+		door_a.position.z = lerpf(-float(bay_data.door_open_z), -float(bay_data.door_closed_z), bay_closure)
+		door_b.position.z = lerpf(float(bay_data.door_open_z), float(bay_data.door_closed_z), bay_closure)
 		var mouth: MeshInstance3D = bay_data.mouth
 		mouth.visible = bay_closure < 0.94
 		var lights: Array = bay_data.lights

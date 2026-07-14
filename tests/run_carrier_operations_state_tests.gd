@@ -75,7 +75,7 @@ func _test_stores_modules_and_loadouts() -> void:
 	_assert_true(state.consume_store_partial(&"craft_refuel", 5) == 2 and int(state.stores.craft_refuel) == 0, "partial deck service consumes the available refuel stores")
 	state.configure_modules({"weapon": "siege_missile_cell", "hangar": "expanded_magazines", "support": "fleet_repair_drones"}, true)
 	_assert_true(state.store_capacity(&"guided_missiles") == 32 and state.store_capacity(&"flak_rounds") == 2625, "modules expand guided-missile and flak capacities")
-	_assert_true(state.store_capacity(&"aviation_ordnance") == 185 and state.damage_control_spares_capacity == 80, "expanded magazines and repair drones expand their persistent stores")
+	_assert_true(state.store_capacity(&"aviation_ordnance") == 885 and state.damage_control_spares_capacity == 80, "expanded magazines and repair drones expand their persistent stores")
 	_assert_true(state.set_wing_loadout(&"interceptor", &"raptor_strike") and not state.set_wing_loadout(&"scout", &"raptor_cap"), "wing packages validate their compatible role")
 	var strike := state.wing_loadout(&"interceptor")
 	_assert_true(strike != null and strike.ammunition_per_craft == 12, "selected loadout resolves through the data-driven catalog")
@@ -85,11 +85,11 @@ func _test_stores_modules_and_loadouts() -> void:
 	var capacity_state := CarrierOperationsState.new()
 	capacity_state.set_wing_loadout(&"interceptor", &"raptor_cap")
 	capacity_state.set_wing_loadout(&"scout", &"watcher_screen")
-	_assert_true(capacity_state.store_capacity(&"aviation_ordnance") == 216, "aviation stores hold one complete reload for the selected four-plus-three packages")
-	capacity_state.configure_air_group(5, 2)
-	_assert_true(capacity_state.store_capacity(&"aviation_ordnance") == 228, "aviation capacity follows a refitted air-group complement")
+	_assert_true(capacity_state.store_capacity(&"aviation_ordnance") == 936, "aviation stores hold one complete reload for six fighter squadrons plus the scout/EW wing")
+	capacity_state.configure_air_group(30, 2)
+	_assert_true(capacity_state.store_capacity(&"aviation_ordnance") == 1128, "aviation capacity follows a six-squadron strike complement")
 	capacity_state.configure_modules({"hangar": "expanded_magazines"}, true)
-	_assert_true(capacity_state.store_capacity(&"aviation_ordnance") == 285, "Expanded Magazines adds twenty-five percent to the selected air-group reload")
+	_assert_true(capacity_state.store_capacity(&"aviation_ordnance") == 1410, "Expanded Magazines adds twenty-five percent to the selected air-group reload")
 	state.set_service_priority(&"rapid_turn")
 	_assert_close(state.deck_armor_recovery_fraction(), 0.0, "Rapid Turn skips armor repair")
 	state.set_service_priority(&"repair_first")
@@ -173,7 +173,7 @@ func _test_run_state_version_ten_and_service() -> void:
 		"interceptor_ammunition": 120,
 		"carrier_operations": restored.carrier_operations.battle_report(),
 	})
-	_assert_true(restored.maximum_interceptor_ammunition() == 144 and restored.interceptor_ammunition == 120, "battle report applies a changed package before clamping persisted wing ammunition")
+	_assert_true(restored.maximum_interceptor_ammunition() == 864 and restored.interceptor_ammunition == 120, "battle report applies a changed six-squadron package before clamping persisted fighter ammunition")
 
 	restored.supplies = 999
 	var crew_before := restored.carrier_operations.crew_current

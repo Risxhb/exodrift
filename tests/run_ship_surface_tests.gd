@@ -15,7 +15,13 @@ func _run() -> void:
 	var crucible := _spawn_ship(&"crucible_war_regent", "cruiser", &"hostile", Vector3(42.0, 22.0, 108.0), Color(0.34, 0.2, 0.46))
 
 	_assert_true(sidebay.find_child("SidebayFlightDeck", true, false) != null and sidebay.find_child("SidebayHangarMouth", true, false) != null, "CVN Sidebay has a readable flight deck and sidebay apertures")
-	_assert_true(resolute.find_child("ResoluteLaunchCell00", true, false) != null and resolute.find_child("ResoluteRangefinder", true, false) != null, "ISS Resolute has modeled launch cells and a missile rangefinder")
+	var resolute_compartment_count := 0
+	for compartment_index in CombatShip.RESOLUTE_VLS_COMPARTMENT_COUNT:
+		if resolute.find_child("ResoluteMissileCompartment%02d" % compartment_index, true, false) != null:
+			resolute_compartment_count += 1
+	_assert_true(resolute_compartment_count == 6 and resolute.missile_launch_points.size() == 6, "ISS Resolute has six modeled and functional dorsal missile compartments")
+	_assert_true(resolute.find_child("ResoluteDorsalFlakBattery00", true, false) != null and resolute.find_child("ResoluteDorsalFlakBattery01", true, false) != null and resolute.find_child("ResoluteVentralFlakBattery", true, false) != null, "ISS Resolute has two dorsal and one ventral flak batteries")
+	_assert_true(resolute.find_child("ResoluteRangefinder", true, false) != null, "ISS Resolute has a dedicated missile rangefinder")
 	_assert_true(harrier.find_child("HarrierScreenCannon", true, false) != null and harrier.find_child("HarrierCockpit", true, false) != null, "ISS Harrier has screen cannons and a forward cockpit")
 	_assert_true(bulwark.find_child("BulwarkArmorCourse", true, false) != null and bulwark.find_child("BulwarkCommandBastion", true, false) != null, "ISS Bulwark has layered armor courses and a command bastion")
 	_assert_true(acheron.find_child("AcheronJawPlate", true, false) != null, "Acheron hulls use welded jaw armor")
