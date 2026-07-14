@@ -2,6 +2,7 @@ class_name ExodriftTutorialScreen
 extends CanvasLayer
 
 signal closed
+signal trial_requested
 
 const UIStyle := preload("res://scripts/ui/ui_style.gd")
 const PORTRAIT_ATLAS := preload("res://assets/tutorial/mara_voss_atlas.png")
@@ -177,7 +178,7 @@ func _show_lesson(index: int) -> void:
 	dialogue_label.visible_characters = 0
 	progress_label.text = "ORIENTATION  %02d / %02d" % [lesson_index + 1, LESSON_TITLES.size()]
 	back_button.disabled = lesson_index == 0
-	next_button.text = "RETURN TO MENU" if lesson_index == LESSON_TITLES.size() - 1 else "NEXT"
+	next_button.text = "START TRIAL" if lesson_index == LESSON_TITLES.size() - 1 else "NEXT"
 	_update_portrait(true)
 
 func _lesson_text(index: int) -> String:
@@ -193,7 +194,7 @@ func _lesson_text(index: int) -> String:
 		4:
 			return "%s controls both hangar wings. %s operates the interceptor group and %s operates the scouts. Re-issuing a wing command during servicing queues redeployment; recall every craft before jump preparation with %s." % [_key("toggle_all_wings"), _key("interceptor_wing"), _key("scout_wing"), _key("jump_prep")]
 		5:
-			return "Open the live tactical map with %s. Select the carrier, then right-click an identified track for Approach, Orbit, or Keep-at-Distance orders from 500 meters to 25 kilometers. Wings and escorts retain attack and intercept context orders; Shift queues fleet orders." % _key("toggle_tactical")
+			return "Open the live tactical map with %s. The full battlespace grid is anchored to the carrier; [HOME] recenters and resumes following it after [SHIFT]+middle-mouse panning. F1-F4 select Carrier, Escort, Interceptors, and Scouts. Hold right mouse for the command wheel; Shift queues numbered legs, while Doctrine sets stance, formation, and spacing." % _key("toggle_tactical")
 		6:
 			return "Press %s for the live Carrier Operations console; the battle continues behind it. Use Balanced, Strike, Evasive, or Recovery power, and assign either damage-control team to fires, breaches, or disabled systems. Set each deck to Rapid Turn, Balanced, or Repair First, watch finite weapon and aviation stores, and act before a trapped officer's rescue countdown expires." % _key("carrier_operations")
 		7:
@@ -224,7 +225,8 @@ func _advance() -> void:
 		_update_portrait()
 		return
 	if lesson_index >= LESSON_TITLES.size() - 1:
-		close()
+		trial_requested.emit()
+		queue_free()
 	else:
 		_show_lesson(lesson_index + 1)
 

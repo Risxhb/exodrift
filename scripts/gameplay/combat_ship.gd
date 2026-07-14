@@ -10,6 +10,9 @@ static var hull_texture_cache: Dictionary = {}
 signal ship_destroyed(entity_id: StringName)
 signal damage_received(entity_id: StringName, source_entity_id: StringName, amount: float)
 signal order_acknowledged(entity_id: StringName, message: String)
+signal order_status_changed(entity_id: StringName, order_id: StringName, status: FleetOrder.Status, reason: String)
+signal doctrine_changed(entity_id: StringName, stance: StringName, formation: StringName, spacing: StringName)
+signal damage_resolved(entity_id: StringName, source_entity_id: StringName, layers: Dictionary, impact_context: Dictionary)
 
 var stable_entity_id: StringName = &"unconfigured"
 var display_name: String = "Ship"
@@ -21,11 +24,33 @@ var is_destroyed: bool = false
 var is_command_ship: bool = false
 var ai_enabled: bool = false
 var current_target: CombatShip
-var current_order: FleetOrder
-var order_queue: Array[FleetOrder] = []
 var command_link := CommandLinkState.new()
-var stance: StringName = &"balanced"
-var formation_name: StringName = &"wedge"
+var fleet_command := FleetCommandState.new()
+var current_order: FleetOrder:
+	get:
+		return fleet_command.current_order
+	set(value):
+		fleet_command.current_order = value
+var order_queue: Array[FleetOrder]:
+	get:
+		return fleet_command.order_queue
+	set(value):
+		fleet_command.order_queue = value
+var stance: StringName:
+	get:
+		return fleet_command.stance
+	set(value):
+		fleet_command.stance = value
+var formation_name: StringName:
+	get:
+		return fleet_command.formation_name
+	set(value):
+		fleet_command.formation_name = value
+var formation_spacing: StringName:
+	get:
+		return fleet_command.formation_spacing
+	set(value):
+		fleet_command.formation_spacing = value
 var weapon_cooldown: float = 0.0
 var hold_position: Vector3 = Vector3.ZERO
 var visual_color: Color = Color(0.35, 0.55, 0.7)
@@ -35,10 +60,17 @@ var damage_visual_stage: int = 0
 var damage_indicator_nodes: Array[MeshInstance3D] = []
 var damage_effect_cooldown: float = 0.0
 var visual_profile: ShipVisualProfile
+var target_state_provider: Callable
+var _track_lost_order_id: StringName = &""
+
+func _init() -> void:
+	fleet_command.order_status_changed.connect(_on_fleet_order_status_changed)
+	fleet_command.doctrine_changed.connect(_on_fleet_doctrine_changed)
 
 func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: StringName, color: Color) -> void:
 	definition = ship_definition
 	stable_entity_id = entity_id
+	fleet_command.formation_leader_id = entity_id
 	display_name = definition.display_name
 	team = faction
 	visual_color = color
@@ -53,6 +85,9 @@ func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: 
 	visual_profile = ShipVisualProfile.for_ship(StringName(definition.role), team, definition.ship_id)
 	_build_visual()
 	_build_damage_indicators()
+
+func configure_target_state_provider(provider: Callable) -> void:
+	target_state_provider = provider
 
 func _exit_tree() -> void:
 	var registry := _combat_registry()
@@ -416,6 +451,7 @@ func _hull_texture(texture_path: String) -> Texture2D:
 func _physics_process(delta: float) -> void:
 	if is_destroyed or definition == null:
 		return
+	fleet_command.tick(_now_seconds())
 	damage_state.tick(delta)
 	damage_effect_cooldown = maxf(0.0, damage_effect_cooldown - delta)
 	if damage_visual_stage >= 3 and damage_effect_cooldown <= 0.0:
@@ -440,75 +476,281 @@ func _process_ai(delta: float) -> void:
 		return
 	match current_order.order_type:
 		FleetOrder.OrderType.MOVE, FleetOrder.OrderType.WITHDRAW:
-			_move_toward_position(current_order.target_position, delta)
-			if global_position.distance_to(current_order.target_position) < collision_radius_m * 2.0:
+			_move_toward_position(current_order.target_position, delta, collision_radius_m * 1.5)
+			if global_position.distance_to(current_order.target_position) < collision_radius_m * 1.6 and velocity.length() < definition.maximum_speed_mps * 0.18:
 				_complete_order()
 		FleetOrder.OrderType.HOLD:
-			velocity = velocity.move_toward(Vector3.ZERO, definition.acceleration_mps2 * delta)
-			move_and_slide()
-		FleetOrder.OrderType.ATTACK, FleetOrder.OrderType.INTERCEPT:
-			current_target = resolve_entity(current_order.target_entity_id)
-			if not is_instance_valid(current_target) or current_target.is_destroyed:
-				_complete_order()
-				return
-			var preferred_range := _preferred_weapon_range() * 0.72
-			if global_position.distance_to(current_target.global_position) > preferred_range:
-				_move_toward_position(current_target.global_position, delta)
-			else:
-				velocity = velocity.move_toward(Vector3.ZERO, definition.acceleration_mps2 * delta)
-				move_and_slide()
-			_try_fire_at(current_target)
+			_hold_at(current_order.target_position, delta, current_order.target_facing)
+		FleetOrder.OrderType.ATTACK:
+			_process_attack_order(delta, false)
+		FleetOrder.OrderType.INTERCEPT:
+			_process_attack_order(delta, true)
 		FleetOrder.OrderType.ESCORT:
-			var escort_target := resolve_entity(current_order.target_entity_id)
-			if is_instance_valid(escort_target):
-				var offset := Vector3(collision_radius_m * 3.0, 0.0, collision_radius_m * 2.0)
-				_move_toward_position(escort_target.global_position + offset, delta)
+			_process_escort_order(delta)
+		FleetOrder.OrderType.INTERACT:
+			var interaction_radius := maxf(current_order.interaction_radius_m, collision_radius_m * 1.5)
+			if global_position.distance_to(current_order.target_position) > interaction_radius * 0.72:
+				_move_toward_position(current_order.target_position, delta, interaction_radius * 0.55)
+			else:
+				_hold_at(current_order.target_position, delta)
+		FleetOrder.OrderType.RECALL:
+			_complete_order()
 
-func _move_toward_position(destination: Vector3, delta: float) -> void:
-	var offset := destination - global_position
-	if offset.length_squared() < 1.0:
+func _process_attack_order(delta: float, intercept: bool) -> void:
+	var target_state := _resolve_order_target_state(current_order)
+	if bool(target_state.get("destroyed", false)):
+		order_acknowledged.emit(stable_entity_id, "%s: designated target destroyed" % display_name)
+		_complete_order()
 		return
-	var desired_velocity := offset.normalized() * definition.maximum_speed_mps
-	velocity = velocity.move_toward(desired_velocity, definition.acceleration_mps2 * delta)
-	if velocity.length_squared() > 1.0:
-		var desired_yaw := atan2(-velocity.x, -velocity.z)
+	var target_visible := bool(target_state.get("visible", false))
+	var target_position: Vector3 = target_state.get("position", current_order.target_position)
+	var target_velocity: Vector3 = target_state.get("velocity", current_order.target_velocity)
+	var target_node := target_state.get("node") as CombatShip
+	if target_visible and is_instance_valid(target_node) and not target_node.is_destroyed:
+		current_target = target_node
+		current_order.target_position = target_position
+		current_order.target_velocity = target_velocity
+		_track_lost_order_id = &""
+	else:
+		current_target = null
+		if _track_lost_order_id != current_order.order_id:
+			_track_lost_order_id = current_order.order_id
+			order_acknowledged.emit(stable_entity_id, "%s: TRACK LOST — proceeding to last confirmed position" % display_name)
+		if global_position.distance_to(target_position) <= collision_radius_m * 2.0:
+			_hold_at(target_position, delta)
+		else:
+			_move_toward_position(target_position, delta, collision_radius_m * 1.5)
+		return
+	var leash := maxf(2400.0, _preferred_weapon_range() * 4.0) * _stance_pursuit_multiplier()
+	if current_order.origin_position != Vector3.ZERO and current_order.origin_position.distance_to(target_position) > leash:
+		order_acknowledged.emit(stable_entity_id, "%s: pursuit leash reached" % display_name)
+		_complete_order()
+		return
+	var distance_to_target := global_position.distance_to(target_position)
+	var desired_range := _preferred_weapon_range() * _stance_range_ratio()
+	if intercept:
+		var intercept_seconds := distance_to_target / maxf(1.0, definition.maximum_speed_mps + target_velocity.length())
+		var intercept_point := target_position + target_velocity * clampf(intercept_seconds, 0.0, 8.0)
+		if distance_to_target > desired_range * 0.72:
+			_move_toward_position(intercept_point, delta, collision_radius_m * 1.2, target_velocity)
+		else:
+			_match_velocity(target_velocity, delta)
+	else:
+		if distance_to_target > desired_range * 1.08:
+			var lead_seconds := distance_to_target / maxf(1.0, definition.maximum_speed_mps)
+			_move_toward_position(target_position + target_velocity * clampf(lead_seconds, 0.0, 5.0), delta, collision_radius_m * 1.5, target_velocity)
+		elif distance_to_target < desired_range * 0.58:
+			var retreat_point := global_position + target_position.direction_to(global_position) * desired_range * 0.45
+			_move_toward_position(retreat_point, delta, collision_radius_m, target_velocity)
+		else:
+			_match_velocity(target_velocity * 0.65, delta)
+	_try_fire_at(target_node)
+
+func _process_escort_order(delta: float) -> void:
+	var escort_target := resolve_entity(current_order.target_entity_id)
+	if not is_instance_valid(escort_target) or escort_target.is_destroyed:
+		_complete_order()
+		return
+	var spacing := fleet_command.spacing_multiplier()
+	var clearance := (collision_radius_m + escort_target.collision_radius_m) * 2.1 * spacing
+	var side := -1.0 if stable_entity_id.hash() % 2 == 0 else 1.0
+	var relative_offset := escort_target.global_transform.basis.x.normalized() * side * clearance
+	relative_offset += escort_target.global_transform.basis.z.normalized() * clearance * 0.38
+	var slot := escort_target.global_position + relative_offset
+	_move_toward_position(slot, delta, collision_radius_m * 1.4, escort_target.velocity)
+	if stance == &"evade_return":
+		return
+	var threat := _nearest_hostile_to(escort_target.global_position, _preferred_weapon_range() * (1.35 if stance == &"defensive" else 1.0))
+	if is_instance_valid(threat):
+		_try_fire_at(threat)
+
+func _hold_at(destination: Vector3, delta: float, facing: Vector3 = Vector3.ZERO) -> void:
+	if global_position.distance_to(destination) > collision_radius_m * 1.15:
+		_move_toward_position(destination, delta, collision_radius_m)
+		return
+	velocity = velocity.move_toward(Vector3.ZERO, definition.acceleration_mps2 * delta)
+	if facing.length_squared() > 0.5:
+		var desired_yaw := atan2(-facing.x, -facing.z)
 		rotation.y = lerp_angle(rotation.y, desired_yaw, clampf(definition.rotation_speed_radians * delta, 0.0, 1.0))
 	move_and_slide()
 
+func _match_velocity(target_velocity: Vector3, delta: float) -> void:
+	velocity = velocity.move_toward(target_velocity.limit_length(definition.maximum_speed_mps), definition.acceleration_mps2 * delta)
+	_face_velocity(delta)
+	move_and_slide()
+
+func _move_toward_position(destination: Vector3, delta: float, arrival_radius: float = 0.0, target_velocity: Vector3 = Vector3.ZERO) -> void:
+	var offset := destination - global_position
+	if offset.length_squared() < 1.0:
+		return
+	var slow_radius := maxf(maxf(collision_radius_m * 8.0, arrival_radius * 4.0), 280.0)
+	var speed_ratio := clampf((offset.length() - arrival_radius) / slow_radius, 0.0, 1.0)
+	var desired_velocity := offset.normalized() * definition.maximum_speed_mps * speed_ratio
+	desired_velocity += target_velocity.limit_length(definition.maximum_speed_mps) * (1.0 - speed_ratio) * 0.75
+	desired_velocity += _separation_velocity() * definition.maximum_speed_mps * 0.55
+	desired_velocity = desired_velocity.limit_length(definition.maximum_speed_mps)
+	velocity = velocity.move_toward(desired_velocity, definition.acceleration_mps2 * delta)
+	_face_velocity(delta)
+	move_and_slide()
+
+func _face_velocity(delta: float) -> void:
+	if velocity.length_squared() <= 1.0:
+		return
+	var desired_yaw := atan2(-velocity.x, -velocity.z)
+	rotation.y = lerp_angle(rotation.y, desired_yaw, clampf(definition.rotation_speed_radians * delta, 0.0, 1.0))
+
+func _separation_velocity() -> Vector3:
+	var separation := Vector3.ZERO
+	var registry := _combat_registry()
+	var candidates: Array = registry.active_combat_entities() if registry != null else get_tree().get_nodes_in_group("combat_entities")
+	for candidate in candidates:
+		if candidate == self or not candidate is CombatShip or candidate.is_destroyed:
+			continue
+		var safe_distance: float = (collision_radius_m + candidate.collision_radius_m) * 2.2
+		var distance := global_position.distance_to(candidate.global_position)
+		if distance <= 0.01 or distance >= safe_distance:
+			continue
+		separation += candidate.global_position.direction_to(global_position) * (1.0 - distance / safe_distance)
+	return separation.limit_length(1.0)
+
 func issue_order(order: FleetOrder) -> bool:
-	if order.requires_command_link and not command_link.can_accept_order():
-		order_acknowledged.emit(stable_entity_id, "%s: command link lost" % display_name)
+	if order == null:
 		return false
+	order.origin_position = global_position
+	if order.order_type == FleetOrder.OrderType.HOLD and order.target_facing.length_squared() < 0.5:
+		order.target_facing = -global_transform.basis.z.normalized()
+	if not order.target_entity_id.is_empty():
+		var target := resolve_entity(order.target_entity_id)
+		if is_instance_valid(target):
+			order.target_position = target.global_position
+			order.target_velocity = target.velocity
 	order.stance = stance
-	command_link.last_confirmed_order = order
-	if order.queued and current_order != null:
-		order_queue.append(order)
-	else:
-		current_order = order
-		order_queue.clear()
-	order_acknowledged.emit(stable_entity_id, "%s acknowledges %s" % [display_name, FleetOrder.OrderType.keys()[order.order_type]])
-	return true
+	return fleet_command.submit(order, command_link, _now_seconds())
 
 func _complete_order() -> void:
-	if not order_queue.is_empty():
-		current_order = order_queue.pop_front()
-	else:
-		current_order = FleetOrder.at_position(FleetOrder.OrderType.HOLD, global_position, Time.get_ticks_msec() / 1000.0)
+	fleet_command.complete_current(_now_seconds())
+	if current_order == null:
+		var hold := FleetOrder.at_position(FleetOrder.OrderType.HOLD, global_position, _now_seconds())
+		hold.requires_command_link = false
+		hold.target_facing = -global_transform.basis.z.normalized()
+		fleet_command.submit(hold, command_link, _now_seconds())
+
+func cancel_orders(reason: String = "CANCELLED") -> void:
+	fleet_command.cancel_all(reason)
 
 func set_stance(next_stance: StringName) -> void:
-	stance = next_stance
-	order_acknowledged.emit(stable_entity_id, "%s stance: %s" % [display_name, String(stance).capitalize()])
+	if fleet_command.set_stance(next_stance):
+		order_acknowledged.emit(stable_entity_id, "%s stance: %s" % [display_name, String(stance).replace("_", " ").capitalize()])
 
 func cycle_formation() -> void:
-	var formations: Array[StringName] = [&"wedge", &"line", &"screen", &"column"]
-	var index := formations.find(formation_name)
-	formation_name = formations[(index + 1) % formations.size()]
-	order_acknowledged.emit(stable_entity_id, "%s formation: %s" % [display_name, String(formation_name).capitalize()])
+	var index := FleetCommandState.VALID_FORMATIONS.find(formation_name)
+	set_formation(FleetCommandState.VALID_FORMATIONS[(index + 1) % FleetCommandState.VALID_FORMATIONS.size()], formation_spacing)
+
+func set_formation(next_formation: StringName, spacing: StringName = &"") -> void:
+	if fleet_command.set_formation(next_formation, spacing):
+		order_acknowledged.emit(stable_entity_id, "%s formation: %s / %s" % [display_name, String(formation_name).capitalize(), String(formation_spacing).capitalize()])
+
+func set_formation_spacing(next_spacing: StringName) -> void:
+	if fleet_command.set_spacing(next_spacing):
+		order_acknowledged.emit(stable_entity_id, "%s spacing: %s" % [display_name, String(formation_spacing).capitalize()])
+
+func command_snapshot() -> Dictionary:
+	var snapshot := fleet_command.snapshot(_now_seconds())
+	var layers := layer_percentages()
+	snapshot.merge({
+		"entity_id": String(stable_entity_id),
+		"display_name": display_name,
+		"link": command_link.label(),
+		"link_latency_seconds": command_link.latency_seconds,
+		"health": {"shields": layers.x, "armor": layers.y, "hull": layers.z},
+		"ammunition": -1,
+		"endurance_seconds": -1.0,
+		"leader_id": String(fleet_command.formation_leader_id)
+	}, true)
+	return snapshot
 
 func _preferred_weapon_range() -> float:
 	if definition.weapons.is_empty():
 		return 1200.0
 	return definition.weapons[0].range_m
+
+func _stance_range_ratio() -> float:
+	match stance:
+		&"aggressive":
+			return 0.70
+		&"defensive":
+			return 0.95
+		&"evade_return":
+			return 1.1
+		_:
+			return 0.82
+
+func _stance_pursuit_multiplier() -> float:
+	match stance:
+		&"aggressive":
+			return 1.5
+		&"defensive":
+			return 0.6
+		&"evade_return":
+			return 0.0
+		_:
+			return 1.0
+
+func _resolve_order_target_state(order: FleetOrder) -> Dictionary:
+	if target_state_provider.is_valid():
+		var provided: Variant = target_state_provider.call(order.target_entity_id)
+		if provided is Dictionary:
+			var state: Dictionary = provided
+			if bool(state.get("visible", false)):
+				return state
+			return {
+				"visible": false,
+				"destroyed": bool(state.get("destroyed", false)),
+				"position": state.get("position", order.target_position),
+				"velocity": state.get("velocity", order.target_velocity),
+				"node": state.get("node")
+			}
+	var target := resolve_entity(order.target_entity_id)
+	if is_instance_valid(target) and not target.is_destroyed:
+		return {"visible": true, "position": target.global_position, "velocity": target.velocity, "node": target}
+	return {"visible": false, "destroyed": is_instance_valid(target) and target.is_destroyed, "position": order.target_position, "velocity": order.target_velocity, "node": target}
+
+func _nearest_hostile_to(center: Vector3, range_m: float) -> CombatShip:
+	var best: CombatShip
+	var best_distance := range_m
+	var registry := _combat_registry()
+	var candidates: Array = registry.active_combat_entities() if registry != null else get_tree().get_nodes_in_group("combat_entities")
+	for candidate in candidates:
+		if not candidate is CombatShip or candidate.team == team or candidate.is_destroyed:
+			continue
+		var distance := center.distance_to(candidate.global_position)
+		if distance < best_distance:
+			best = candidate
+			best_distance = distance
+	return best
+
+func _on_fleet_order_status_changed(order: FleetOrder) -> void:
+	if order.status == FleetOrder.Status.ACTIVE:
+		command_link.last_confirmed_order = order
+		if order.origin_position == Vector3.ZERO:
+			order.origin_position = global_position
+		if order.order_type == FleetOrder.OrderType.HOLD:
+			hold_position = order.target_position
+		order_acknowledged.emit(stable_entity_id, "%s acknowledges %s" % [display_name, order.type_label().to_upper()])
+	elif order.status == FleetOrder.Status.TRANSMITTING:
+		var remaining := maxf(0.0, order.activation_time_seconds - _now_seconds())
+		order_acknowledged.emit(stable_entity_id, "%s transmitting %s — %.1fs" % [display_name, order.type_label().to_upper(), remaining])
+	elif order.status == FleetOrder.Status.QUEUED:
+		order_acknowledged.emit(stable_entity_id, "%s queues %s" % [display_name, order.type_label().to_upper()])
+	elif order.status == FleetOrder.Status.REJECTED:
+		order_acknowledged.emit(stable_entity_id, "%s rejects %s — %s" % [display_name, order.type_label().to_upper(), order.rejection_reason])
+	order_status_changed.emit(stable_entity_id, order.order_id, order.status, order.rejection_reason)
+
+func _on_fleet_doctrine_changed(next_stance: StringName, next_formation: StringName, next_spacing: StringName) -> void:
+	doctrine_changed.emit(stable_entity_id, next_stance, next_formation, next_spacing)
+
+func _now_seconds() -> float:
+	return float(Time.get_ticks_msec()) / 1000.0
 
 func _try_fire_at(target_ship: CombatShip) -> void:
 	if weapon_cooldown > 0.0 or definition.weapons.is_empty() or not is_instance_valid(target_ship):
@@ -516,8 +758,32 @@ func _try_fire_at(target_ship: CombatShip) -> void:
 	var weapon := definition.weapons[0]
 	if global_position.distance_to(target_ship.global_position) > weapon.range_m:
 		return
-	spawn_projectile(weapon, global_position + global_position.direction_to(target_ship.global_position) * collision_radius_m, global_position.direction_to(target_ship.global_position), target_ship)
+	var fire_direction := intercept_direction(global_position, target_ship.global_position, target_ship.velocity, weapon.projectile_speed_mps)
+	spawn_projectile(weapon, global_position + fire_direction * collision_radius_m, fire_direction, target_ship if weapon.tracks_target else null)
 	weapon_cooldown = weapon.cooldown_seconds
+
+static func intercept_direction(origin: Vector3, target_position: Vector3, target_velocity: Vector3, projectile_speed: float) -> Vector3:
+	var offset := target_position - origin
+	var speed := maxf(1.0, projectile_speed)
+	var a := target_velocity.length_squared() - speed * speed
+	var b := 2.0 * offset.dot(target_velocity)
+	var c := offset.length_squared()
+	var intercept_time := 0.0
+	if absf(a) < 0.0001:
+		if absf(b) > 0.0001:
+			intercept_time = maxf(0.0, -c / b)
+	else:
+		var discriminant := b * b - 4.0 * a * c
+		if discriminant >= 0.0:
+			var root := sqrt(discriminant)
+			var first := (-b - root) / (2.0 * a)
+			var second := (-b + root) / (2.0 * a)
+			if first > 0.0 and second > 0.0:
+				intercept_time = minf(first, second)
+			else:
+				intercept_time = maxf(maxf(first, second), 0.0)
+	var aim_point := target_position + target_velocity * clampf(intercept_time, 0.0, 12.0)
+	return origin.direction_to(aim_point)
 
 func spawn_projectile(weapon: WeaponDefinition, start: Vector3, fire_direction: Vector3, tracked_target: CombatShip = null) -> SidebayProjectile:
 	var projectile := SidebayProjectile.new()
@@ -560,6 +826,7 @@ func receive_damage(amount: float, source_entity_id: StringName = &"", impact_co
 		var effect_position: Vector3 = impact_context.get("position", global_position)
 		vfx.spawn_damage_effect(effect_position, shielded, clampf(resolved_amount / 24.0, 0.55, 1.8))
 	damage_received.emit(stable_entity_id, source_entity_id, resolved_amount)
+	damage_resolved.emit(stable_entity_id, source_entity_id, layer_damage.duplicate(true), impact_context.duplicate(true))
 	return layer_damage
 
 func resolve_entity(entity_id: StringName) -> CombatShip:

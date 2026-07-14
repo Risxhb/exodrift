@@ -81,8 +81,16 @@ func _capture() -> void:
 		await physics_frame
 	var sealed_image := await _capture_best_frame(6)
 	sealed_image.save_png(ProjectSettings.globalize_path("res://build/carrier-bays-sealed-preview-1080.png"))
+	root.size = Vector2i(1280, 720)
+	for _frame in 6:
+		await process_frame
 	scene.tactical.set_enabled(true)
 	for _frame in 12:
+		await process_frame
+	var tactical_720 := await _capture_best_frame(6)
+	tactical_720.save_png(ProjectSettings.globalize_path("res://build/tactical-preview-1280.png"))
+	root.size = Vector2i(1920, 1080)
+	for _frame in 8:
 		await process_frame
 	var tactical_image := await _capture_best_frame(6)
 	tactical_image.save_png(ProjectSettings.globalize_path("res://build/tactical-preview-1080.png"))
@@ -92,7 +100,8 @@ func _capture() -> void:
 	var tactical_1440 := await _capture_best_frame(6)
 	tactical_1440.save_png(ProjectSettings.globalize_path("res://build/tactical-preview-1440.png"))
 	scene.tactical.select_commandable(scene.carrier)
-	scene.hud.open_target_context_menu(Vector2(1780.0, 330.0), &"hostile_command")
+	var wheel_position: Vector2 = scene.tactical.camera.unproject_position(command_contact.estimated_position)
+	scene.tactical._open_context_wheel(wheel_position, false)
 	for _frame in 3:
 		await process_frame
 	var context_1440 := await _capture_best_frame(4)

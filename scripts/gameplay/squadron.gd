@@ -5,6 +5,8 @@ signal status_changed(squadron_id: StringName, message: String)
 signal squadron_destroyed(squadron_id: StringName)
 signal service_task_changed(squadron_id: StringName, task: StringName)
 signal loadout_changed(squadron_id: StringName, loadout_id: StringName)
+signal order_status_changed(entity_id: StringName, order_id: StringName, status: FleetOrder.Status, reason: String)
+signal doctrine_changed(entity_id: StringName, stance: StringName, formation: StringName, spacing: StringName)
 
 enum ServicePriority { RAPID_TURN, BALANCED, REPAIR_FIRST }
 
@@ -20,10 +22,32 @@ var home_carrier: PlayerCarrier
 var bay_side: StringName = &"port"
 var operation := BayOperation.new()
 var command_link := CommandLinkState.new()
-var current_order: FleetOrder
-var order_queue: Array[FleetOrder] = []
-var stance: StringName = &"balanced"
-var formation_name: StringName = &"wedge"
+var fleet_command := FleetCommandState.new()
+var current_order: FleetOrder:
+	get:
+		return fleet_command.current_order
+	set(value):
+		fleet_command.current_order = value
+var order_queue: Array[FleetOrder]:
+	get:
+		return fleet_command.order_queue
+	set(value):
+		fleet_command.order_queue = value
+var stance: StringName:
+	get:
+		return fleet_command.stance
+	set(value):
+		fleet_command.stance = value
+var formation_name: StringName:
+	get:
+		return fleet_command.formation_name
+	set(value):
+		fleet_command.formation_name = value
+var formation_spacing: StringName:
+	get:
+		return fleet_command.formation_spacing
+	set(value):
+		fleet_command.formation_spacing = value
 var crafts: Array[FighterCraft] = []
 var launch_index: int = 0
 var docking_count: int = 0
@@ -36,6 +60,12 @@ var current_loadout_profile: Dictionary = {}
 var store_consumer: Callable
 var deck_operational_provider: Callable
 var deck_task_speed_multiplier: float = 1.0
+var target_state_provider: Callable
+var _track_lost_order_id: StringName = &""
+
+func _init() -> void:
+	fleet_command.order_status_changed.connect(_on_fleet_order_status_changed)
+	fleet_command.doctrine_changed.connect(_on_fleet_doctrine_changed)
 
 func configure(
 	squadron_definition: SquadronDefinition,
@@ -72,6 +102,9 @@ func configure(
 		if not current_loadout_profile.is_empty():
 			craft.call_deferred("apply_loadout_profile", current_loadout_profile, false)
 		crafts.append(craft)
+
+func configure_target_state_provider(provider: Callable) -> void:
+	target_state_provider = provider
 
 func configure_deck_logistics(
 	consume_store_callback: Callable = Callable(),
@@ -259,6 +292,7 @@ func all_craft_aboard() -> bool:
 	return deployed_craft_count() == 0 and (operation.state == BayOperation.State.READY or operation.is_service_state())
 
 func _process(delta: float) -> void:
+	fleet_command.tick(_now_seconds())
 	operation.tick(delta)
 	cycle_timer += delta
 	_cleanup_destroyed_crafts()
@@ -296,6 +330,8 @@ func _process(delta: float) -> void:
 			if redeploy_requested and is_deck_operational():
 				redeploy_requested = false
 				request_launch()
+	if current_order != null and current_order.order_type == FleetOrder.OrderType.RECALL and deployed_craft_count() == 0:
+		_complete_order()
 
 func _process_launch_cycle() -> void:
 	if cycle_timer < launch_interval_seconds():
@@ -315,33 +351,121 @@ func _process_launch_cycle() -> void:
 	launch_index += 1
 
 func _process_deployed(_delta: float) -> void:
+	_update_formation_leader()
+	if current_order != null and current_order.order_type in [FleetOrder.OrderType.ATTACK, FleetOrder.OrderType.INTERCEPT]:
+		var designated_state := _resolve_order_target_state(current_order)
+		if bool(designated_state.get("destroyed", false)):
+			status_changed.emit(stable_entity_id, "%s: designated target destroyed" % display_name)
+			_complete_order()
+			return
 	var emergency := false
-	for index in crafts.size():
-		var craft := crafts[index]
+	var slot_index := 0
+	for craft in crafts:
 		if not is_instance_valid(craft) or not craft.deployed:
 			continue
-		if craft.endurance_seconds <= 10.0 or craft.ammunition <= 0 or craft.layer_percentages().z <= 0.25:
+		if _craft_should_return(craft):
 			emergency = true
-		_apply_order_to_craft(craft, index)
+		_apply_order_to_craft(craft, slot_index)
+		slot_index += 1
 	if emergency and home_carrier != null:
 		request_recall()
+	_check_order_completion()
 
 func _apply_order_to_craft(craft: FighterCraft, index: int) -> void:
 	if current_order == null:
 		return
 	match current_order.order_type:
-		FleetOrder.OrderType.MOVE, FleetOrder.OrderType.HOLD, FleetOrder.OrderType.WITHDRAW:
-			craft.command_move(current_order.target_position + _formation_offset(index))
+		FleetOrder.OrderType.MOVE, FleetOrder.OrderType.WITHDRAW:
+			var move_basis := _formation_basis(current_order.target_position, current_order.target_velocity)
+			craft.command_move(current_order.target_position + move_basis * _formation_offset(index))
+		FleetOrder.OrderType.HOLD:
+			var hold_basis := _formation_basis(current_order.target_position, Vector3.ZERO)
+			craft.command_hold(current_order.target_position + hold_basis * _formation_offset(index), -hold_basis.z.normalized())
 		FleetOrder.OrderType.ATTACK, FleetOrder.OrderType.INTERCEPT:
-			var target_node := resolve_command_target(current_order.target_entity_id)
-			if is_instance_valid(target_node):
-				craft.command_attack(target_node)
+			var target_state := _resolve_order_target_state(current_order)
+			if bool(target_state.get("visible", false)):
+				var target_node := target_state.get("node") as CombatShip
+				if is_instance_valid(target_node):
+					current_order.target_position = target_node.global_position
+					current_order.target_velocity = target_node.velocity
+					_track_lost_order_id = &""
+					craft.command_attack(target_node, current_order.order_type == FleetOrder.OrderType.INTERCEPT)
+			else:
+				if _track_lost_order_id != current_order.order_id:
+					_track_lost_order_id = current_order.order_id
+					status_changed.emit(stable_entity_id, "%s: TRACK LOST — searching last confirmed position" % display_name)
+				var search_basis := _formation_basis(current_order.target_position, current_order.target_velocity)
+				craft.command_move(current_order.target_position + search_basis * _formation_offset(index))
 		FleetOrder.OrderType.ESCORT:
 			var escort := resolve_command_target(current_order.target_entity_id)
 			if is_instance_valid(escort):
-				craft.command_move(escort.global_position + _formation_offset(index) + Vector3(0.0, 40.0, 120.0))
+				var escort_basis := escort.global_transform.basis.orthonormalized()
+				var screen_offset := escort_basis.y * 40.0 + escort_basis.z * 120.0
+				craft.command_escort(escort.global_position + escort_basis * _formation_offset(index) + screen_offset, escort.velocity)
 		FleetOrder.OrderType.RECALL:
 			request_recall()
+		FleetOrder.OrderType.INTERACT:
+			var interact_basis := _formation_basis(current_order.target_position, Vector3.ZERO)
+			var interact_position := current_order.target_position + interact_basis * _formation_offset(index)
+			if craft.global_position.distance_to(interact_position) <= maxf(30.0, current_order.interaction_radius_m * 0.65):
+				craft.command_hold(interact_position)
+			else:
+				craft.command_move(interact_position)
+
+func _check_order_completion() -> void:
+	if current_order == null:
+		return
+	if current_order.order_type not in [FleetOrder.OrderType.MOVE, FleetOrder.OrderType.WITHDRAW]:
+		return
+	var arrived := true
+	for index in crafts.size():
+		var craft := crafts[index]
+		if not is_instance_valid(craft) or not craft.deployed:
+			continue
+		var basis := _formation_basis(current_order.target_position, current_order.target_velocity)
+		var destination := current_order.target_position + basis * _formation_offset(index)
+		if craft.global_position.distance_to(destination) > maxf(55.0, formation_spacing_m * fleet_command.spacing_multiplier()):
+			arrived = false
+			break
+	if arrived:
+		_complete_order()
+
+func _craft_should_return(craft: FighterCraft) -> bool:
+	var hull := craft.layer_percentages().z
+	var capacity := maxf(1.0, float(craft.maximum_ammunition()))
+	var ammo_ratio := float(craft.ammunition) / capacity
+	match stance:
+		&"aggressive":
+			return craft.endurance_seconds <= 10.0 or craft.ammunition <= 0 or hull <= 0.20
+		&"defensive":
+			return craft.endurance_seconds <= 25.0 or ammo_ratio <= 0.20 or hull <= 0.40
+		&"evade_return":
+			return true
+		_:
+			return craft.endurance_seconds <= 10.0 or craft.ammunition <= 0 or hull <= 0.25
+
+func _update_formation_leader() -> void:
+	var leader: FighterCraft
+	for craft in crafts:
+		if is_instance_valid(craft) and craft.deployed and not craft.is_destroyed:
+			leader = craft
+			break
+	fleet_command.formation_leader_id = leader.stable_entity_id if is_instance_valid(leader) else &""
+
+func _formation_basis(anchor: Vector3, anchor_velocity: Vector3) -> Basis:
+	var forward := anchor_velocity
+	for craft in crafts:
+		if is_instance_valid(craft) and craft.deployed and not craft.is_destroyed:
+			if forward.length_squared() < 1.0 and craft.velocity.length_squared() > 1.0:
+				forward = craft.velocity
+			if forward.length_squared() < 1.0:
+				return craft.global_transform.basis.orthonormalized()
+			break
+	if forward.length_squared() < 1.0:
+		forward = anchor - representative_position()
+	if forward.length_squared() < 1.0:
+		return Basis.IDENTITY
+	return Basis.looking_at(forward.normalized(), Vector3.UP).orthonormalized()
 
 func _process_approach() -> void:
 	var marker := home_carrier.get_bay_marker(bay_side)
@@ -550,41 +674,127 @@ func _consume_store(store_id: StringName, requested_amount: int) -> int:
 	return clampi(int(result), 0, requested_amount)
 
 func issue_order(order: FleetOrder) -> bool:
-	if order.requires_command_link and not command_link.can_accept_order():
-		status_changed.emit(stable_entity_id, "%s: command link lost" % display_name)
+	if order == null:
 		return false
+	order.origin_position = representative_position()
+	if not order.target_entity_id.is_empty():
+		var target := resolve_command_target(order.target_entity_id)
+		if is_instance_valid(target):
+			order.target_position = target.global_position
+			order.target_velocity = target.velocity
 	order.stance = stance
-	command_link.last_confirmed_order = order
-	if order.queued and current_order != null:
-		order_queue.append(order)
-	else:
-		current_order = order
-		order_queue.clear()
-	status_changed.emit(stable_entity_id, "%s acknowledges %s" % [display_name, FleetOrder.OrderType.keys()[order.order_type]])
-	return true
+	return fleet_command.submit(order, command_link, _now_seconds())
+
+func _complete_order() -> void:
+	fleet_command.complete_current(_now_seconds())
+	if current_order == null and operation.state == BayOperation.State.DEPLOYED:
+		var hold := FleetOrder.at_position(FleetOrder.OrderType.HOLD, representative_position(), _now_seconds())
+		hold.requires_command_link = false
+		var leader := _first_surviving_deployed_craft()
+		if is_instance_valid(leader):
+			hold.target_facing = -leader.global_transform.basis.z.normalized()
+		fleet_command.submit(hold, command_link, _now_seconds())
+
+
+func _first_surviving_deployed_craft() -> FighterCraft:
+	for craft in crafts:
+		if is_instance_valid(craft) and craft.deployed and not craft.is_destroyed:
+			return craft
+	return null
+
+func cancel_orders(reason: String = "CANCELLED") -> void:
+	fleet_command.cancel_all(reason)
 
 func set_stance(next_stance: StringName) -> void:
-	stance = next_stance
-	status_changed.emit(stable_entity_id, "%s stance: %s" % [display_name, String(stance).capitalize()])
+	if fleet_command.set_stance(next_stance):
+		status_changed.emit(stable_entity_id, "%s stance: %s" % [display_name, String(stance).replace("_", " ").capitalize()])
 
 func cycle_formation() -> void:
-	var formations: Array[StringName] = [&"wedge", &"line", &"screen", &"column"]
-	formation_name = formations[(formations.find(formation_name) + 1) % formations.size()]
-	status_changed.emit(stable_entity_id, "%s formation: %s" % [display_name, String(formation_name).capitalize()])
+	var index := FleetCommandState.VALID_FORMATIONS.find(formation_name)
+	set_formation(FleetCommandState.VALID_FORMATIONS[(index + 1) % FleetCommandState.VALID_FORMATIONS.size()], formation_spacing)
+
+func set_formation(next_formation: StringName, spacing: StringName = &"") -> void:
+	if fleet_command.set_formation(next_formation, spacing):
+		status_changed.emit(stable_entity_id, "%s formation: %s / %s" % [display_name, String(formation_name).capitalize(), String(formation_spacing).capitalize()])
+
+func set_formation_spacing(next_spacing: StringName) -> void:
+	if fleet_command.set_spacing(next_spacing):
+		status_changed.emit(stable_entity_id, "%s spacing: %s" % [display_name, String(formation_spacing).capitalize()])
 
 func _formation_offset(index: int) -> Vector3:
+	var spacing := formation_spacing_m * fleet_command.spacing_multiplier()
 	match formation_name:
 		&"line":
-			return Vector3((index - (definition.craft_count - 1) * 0.5) * formation_spacing_m, 0.0, 0.0)
+			return Vector3((index - (definition.craft_count - 1) * 0.5) * spacing, 0.0, 0.0)
 		&"screen":
 			var angle := TAU * float(index) / maxf(1.0, float(definition.craft_count))
-			return Vector3(cos(angle), sin(angle) * 0.35, sin(angle)) * formation_spacing_m
+			return Vector3(cos(angle), sin(angle) * 0.35, sin(angle)) * spacing
 		&"column":
-			return Vector3(0.0, 0.0, index * formation_spacing_m)
+			return Vector3(0.0, 0.0, index * spacing)
 		_:
 			var side := -1.0 if index % 2 == 0 else 1.0
 			var rank := (index + 1) / 2
-			return Vector3(side * rank * formation_spacing_m, 0.0, rank * formation_spacing_m)
+			return Vector3(side * rank * spacing, 0.0, rank * spacing)
+
+func command_snapshot() -> Dictionary:
+	var snapshot := fleet_command.snapshot(_now_seconds())
+	var layer_total := Vector3.ZERO
+	var living := 0
+	for craft in crafts:
+		if is_instance_valid(craft) and not craft.is_destroyed:
+			layer_total += craft.layer_percentages()
+			living += 1
+	var layers := layer_total / float(maxi(1, living))
+	snapshot.merge({
+		"entity_id": String(stable_entity_id),
+		"display_name": display_name,
+		"link": command_link.label(),
+		"link_latency_seconds": command_link.latency_seconds,
+		"health": {"shields": layers.x, "armor": layers.y, "hull": layers.z},
+		"ammunition": total_ammunition(),
+		"endurance_seconds": average_endurance(),
+		"craft": living,
+		"operation": operation.label(),
+		"leader_id": String(fleet_command.formation_leader_id)
+	}, true)
+	return snapshot
+
+func _resolve_order_target_state(order: FleetOrder) -> Dictionary:
+	if target_state_provider.is_valid():
+		var provided: Variant = target_state_provider.call(order.target_entity_id)
+		if provided is Dictionary:
+			var state: Dictionary = provided
+			if bool(state.get("visible", false)):
+				return state
+			return {
+				"visible": false,
+				"destroyed": bool(state.get("destroyed", false)),
+				"position": state.get("position", order.target_position),
+				"velocity": state.get("velocity", order.target_velocity),
+				"node": state.get("node")
+			}
+	var target := resolve_command_target(order.target_entity_id)
+	if is_instance_valid(target) and not target.is_destroyed:
+		return {"visible": true, "position": target.global_position, "velocity": target.velocity, "node": target}
+	return {"visible": false, "destroyed": is_instance_valid(target) and target.is_destroyed, "position": order.target_position, "velocity": order.target_velocity, "node": target}
+
+func _on_fleet_order_status_changed(order: FleetOrder) -> void:
+	if order.status == FleetOrder.Status.ACTIVE:
+		command_link.last_confirmed_order = order
+		status_changed.emit(stable_entity_id, "%s acknowledges %s" % [display_name, order.type_label().to_upper()])
+	elif order.status == FleetOrder.Status.TRANSMITTING:
+		status_changed.emit(stable_entity_id, "%s transmitting %s — %.1fs" % [display_name, order.type_label().to_upper(), maxf(0.0, order.activation_time_seconds - _now_seconds())])
+	elif order.status == FleetOrder.Status.QUEUED:
+		status_changed.emit(stable_entity_id, "%s queues %s" % [display_name, order.type_label().to_upper()])
+	elif order.status == FleetOrder.Status.REJECTED:
+		status_changed.emit(stable_entity_id, "%s rejects %s — %s" % [display_name, order.type_label().to_upper(), order.rejection_reason])
+	order_status_changed.emit(stable_entity_id, order.order_id, order.status, order.rejection_reason)
+
+func _on_fleet_doctrine_changed(next_stance: StringName, next_formation: StringName, next_spacing: StringName) -> void:
+	doctrine_changed.emit(stable_entity_id, next_stance, next_formation, next_spacing)
+
+func _now_seconds() -> float:
+	return float(Time.get_ticks_msec()) / 1000.0
 
 func representative_position() -> Vector3:
 	var total := Vector3.ZERO

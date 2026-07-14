@@ -1,5 +1,7 @@
 extends SceneTree
 
+const TargetDirectionArrow := preload("res://scripts/ui/target_direction_arrow.gd")
+
 var failures: Array[String] = []
 
 func _initialize() -> void:
@@ -32,6 +34,7 @@ func _run() -> void:
 	_assert_true(is_equal_approx(hud.telemetry_panel.scale.x, 0.75) and hud.target_context_menu.item_count >= 13, "combat HUD uses the compact 75% layout and shared distance-bearing target menu")
 	_assert_true(int(ProjectSettings.get_setting("display/window/size/window_width_override")) == 2560 and int(ProjectSettings.get_setting("display/window/size/window_height_override")) == 1440, "desktop window defaults to 2560×1440")
 	_assert_true(hud.target_reticle is ExodriftTargetLockReticle and hud.target_panel.find_children("*", "Panel", true, false).is_empty(), "target solution uses projected lock graphics and no placeholder ship portrait panel")
+	_assert_true(hud.target_indicator.get_script() == TargetDirectionArrow and not hud.target_indicator is Label, "off-screen target guidance uses a drawn arrow instead of a font-dependent placeholder glyph")
 	var collapse_button := hud.telemetry_panel.find_children("*Collapse", "Button", true, false).front() as Button if not hud.telemetry_panel.find_children("*Collapse", "Button", true, false).is_empty() else null
 	_assert_true(collapse_button != null, "carrier telemetry exposes an interactive collapse header")
 	if collapse_button != null:

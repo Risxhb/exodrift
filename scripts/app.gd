@@ -51,6 +51,7 @@ func _show_main_menu() -> void:
 	main_menu.configure(run_state != null or save_manager.has_any_save())
 	main_menu.new_run_requested.connect(_on_menu_new_run)
 	main_menu.continue_requested.connect(_on_menu_continue)
+	main_menu.tutorial_trial_requested.connect(_on_menu_tutorial_trial)
 	main_menu.quit_requested.connect(func() -> void: get_tree().quit())
 
 func _on_menu_new_run() -> void:
@@ -69,6 +70,21 @@ func _on_menu_continue() -> void:
 	generator = SidebayCampaignGenerator.new()
 	generator.generate(run_state.seed)
 	_open_campaign("Operation restored. Choose a reachable node.")
+
+func _on_menu_tutorial_trial() -> void:
+	await _close_main_menu()
+	active_battle = (load("res://scenes/main.tscn") as PackedScene).instantiate()
+	active_battle.training_trial = true
+	active_battle.training_trial_finished.connect(_on_training_trial_finished)
+	add_child(active_battle)
+
+func _on_training_trial_finished(completed: bool) -> void:
+	get_tree().paused = false
+	if is_instance_valid(active_battle):
+		active_battle.queue_free()
+	active_battle = null
+	_show_main_menu()
+	main_menu.set_status("COMBAT TRIAL COMPLETE // CLEARED FOR OPERATIONS" if completed else "COMBAT TRIAL ENDED // TRAINING RECORD DISCARDED")
 
 func _close_main_menu() -> void:
 	if not is_instance_valid(main_menu):

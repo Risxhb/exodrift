@@ -19,7 +19,7 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 - A seam-feathered galaxy-arm panorama blended into the shader-driven deep-space sky, retaining sector palettes, procedural stars, foreground parallax, and a pulsing tactical radar.
 - Refit capital ships with faction-specific hull atlases, layered plating, modeled hardpoints, recognition lighting and wear; low-node fighter geometry, pooled combat flashes, missile exhaust, shield/hull feedback, and saved Low/Medium/High graphics profiles remain shared by Windows and Web.
 - Strict sensor fog with uncertain contacts, active emissions, identification requirements, stale tracks, and command-link loss.
-- Live 3D fleet command with selection, move, attack, intercept, escort, hold, recall, withdraw, stances, formations, and queued orders.
+- Live 3D fleet command with a click/flick context wheel, fixed F1–F4 groups, persistent numbered/ETA paths, delayed-link lifecycle feedback, contextual objectives, doctrine, formations, spacing, and queued orders.
 - An 18-node, three-sector run map with fuel, supplies, intel, forecasts, combat transitions, and manual versioned saves.
 - Persistent carrier condition, 240-person crew, eight damageable subsystems, finite combat/aviation stores, damage-control spares, wing losses and packages, escort survival, exact fleet-service actions, and five authored module slots.
 - Three fixed escort identities with requisition acquisition, sector-gated suppliers, reserve selection, unique permanent losses, and distinct tactical profiles.
@@ -27,7 +27,8 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 - Persistent salvage stock with fixed supply, fuel, and requisition conversions plus three route logistics postures with explicit travel tradeoffs.
 - Six objective types: command strike, interception, extraction, defense, escort, and capture.
 - Withdrawal pursuit, jump-range stragglers, recoverable escape pods, and an after-action rescue/salvage/departure choice with persistent consequences.
-- A compact bottom command row over a continuously simulated battle built from the current textured runtime ships and fighters, with New Operation, Continue, a nine-part animated communications tutorial, persistent settings, credits, and return-to-title navigation.
+- A compact bottom command row over a continuously simulated battle built from the current textured runtime ships and fighters, with New Operation, Continue, a nine-part animated communications briefing that launches a safe playable combat trial, persistent settings, credits, and return-to-title navigation.
+- A repeatable six-step training range teaches direct carrier movement, live tactical command, escort movement, active identification, wing launch, and target-dummy engagement without campaign or supply consequences.
 - A seven-step first-operation orientation that teaches helm translation, active sensors, flight operations, carrier engineering, the live tactical map, and intent-level orders without pausing combat.
 - Three sector-specific hostile fleets—Acheron, Vesper, and Crucible—with different capital roles, fighter complements, opening formations, weapons, pursuit identities, and battlefield palettes.
 - Three deterministic layouts per sector plus bespoke command battles: Acheron command-net screening, Vesper shield-break pincers, and the Crucible's anchored multi-phase strategic core.
@@ -62,10 +63,11 @@ All listed keyboard actions can be remapped from **Settings → Remap Controls**
 - `Z`, `X`: launch/recall interceptor and scout wings; pressing during servicing queues an automatic physical redeploy when turnaround completes
 - `B`: deploy/open both hangar wings, or recall both air groups and retract the galleries once recovery is complete
 - `Tab`: live tactical map
-- Tactical map: `F1–F4` groups, `1` flak placement, left-click select/confirm, right-click context order/cancel, `I` intercept, `E` escort carrier, Shift queue, `Q` stance, `F` formation, `R` recall, `H` hold, `X` withdraw, middle-drag orbit, wheel zoom
+- Tactical map: `F1–F4` groups, `Home` center/follow carrier, `Shift`+middle-drag pan, middle-drag orbit, `1` flak placement, left-click select/confirm, right-click command wheel/cancel, `I` intercept, `E` escort carrier, Shift queue, `Q` stance, `F` formation, `R` recall, `H` hold, `X` withdraw, wheel zoom
 - Tactical overview: select the carrier, then right-click an identified contact marker or overview row for Lock, Approach 500 m, Orbit, Keep at Distance, or Clear Relative Navigation. Orbit and Keep offer 500 m, 5 km, 10 km, and 25 km distances; empty-space and wing/escort right-click orders retain their existing behavior.
 - `V`: begin jump preparation and wing recall; press again to emergency-seal the bays and risk stragglers
 - `Esc`: pause/settings; `Enter`: restart or return to the campaign
+- Combat trial: complete the title-screen briefing to enter the range; `F9` exits to the title without changing campaign progress
 
 ## Tests and exports
 
@@ -84,6 +86,9 @@ godot --headless --path . --script tests/run_ship_surface_tests.gd
 godot --headless --path . --script tests/run_space_hud_readability_tests.gd
 godot --headless --path . --script tests/run_ordnance_screen_tests.gd
 godot --headless --path . --script tests/run_tutorial_tests.gd
+godot --headless --path . --script tests/run_training_trial_tests.gd
+godot --headless --path . --script tests/run_fleet_command_tests.gd
+godot --headless --path . --script tests/run_fleet_behavior_tests.gd
 godot --headless --path . --script tests/run_carrier_operations_state_tests.gd
 godot --headless --path . --script tests/run_carrier_combat_integration_tests.gd
 godot --headless --path . --script tests/run_deck_logistics_tests.gd

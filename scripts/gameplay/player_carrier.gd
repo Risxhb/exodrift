@@ -83,6 +83,8 @@ var target_navigation_distance_m: float = 1200.0
 var orbit_clockwise: bool = true
 var carrier_operations: CarrierOperationsState
 var last_missile_salvo_count: int = 0
+var point_defense_target: SidebayProjectile
+var point_defense_last_tti: float = INF
 
 func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: StringName, color: Color) -> void:
 	super.configure(ship_definition, entity_id, faction, color)
@@ -477,6 +479,37 @@ func control_state() -> Dictionary:
 		"target_navigation_distance_m": target_navigation_distance_m,
 	}
 
+
+func command_snapshot() -> Dictionary:
+	var snapshot := super.command_snapshot()
+	var order_type := "Hold"
+	var target_position := global_position
+	if target_navigation_mode != TargetNavigationMode.NONE and is_instance_valid(target_navigation_target):
+		order_type = TargetNavigationMode.keys()[target_navigation_mode].capitalize()
+		target_position = target_navigation_target.global_position
+	elif autopilot_active:
+		order_type = "Set Course"
+		target_position = autopilot_destination
+	elif has_commanded_heading and throttle_setting > 0.0:
+		order_type = "Helm Course"
+		target_position = global_position + commanded_heading * 1000.0
+	var ammunition_total := 0
+	if carrier_operations != null:
+		ammunition_total = int(carrier_operations.stores.get(&"flak_rounds", 0)) + int(carrier_operations.stores.get(&"guided_missiles", 0)) + int(carrier_operations.stores.get(&"nuclear_torpedoes", 0))
+	snapshot["current_order"] = {
+		"order_id": "carrier_navigation",
+		"type": order_type,
+		"status": "Active",
+		"target_position": target_position,
+		"queued": false,
+		"stance": String(stance)
+	}
+	snapshot["queue"] = []
+	snapshot["link"] = "Local"
+	snapshot["link_latency_seconds"] = 0.0
+	snapshot["ammunition"] = ammunition_total
+	return snapshot
+
 func command_heading(direction_value: Vector3, full_cruise: bool = false) -> bool:
 	if direction_value.length_squared() < 0.25:
 		return false
@@ -791,16 +824,34 @@ func _process_point_defense() -> void:
 		return
 	var registry := _combat_registry()
 	var projectiles: Array = registry.active_projectiles() if registry != null else get_tree().get_nodes_in_group("projectiles")
+	var best: SidebayProjectile
+	var best_score := INF
 	for candidate in projectiles:
-		if candidate is SidebayProjectile and candidate.team != team and candidate.can_be_intercepted:
-			if global_position.distance_to(candidate.global_position) <= 900.0:
-				var rounds_to_fire := mini(3, _available_store(&"flak_rounds", 3))
-				if rounds_to_fire <= 0 or not _consume_store(&"flak_rounds", rounds_to_fire):
-					return
-				_spawn_flak_barrage(global_position.direction_to(candidate.global_position), rounds_to_fire, 0.28)
-				candidate.intercept()
-				point_defense_cooldown = 0.28
-				return
+		if not candidate is SidebayProjectile or candidate.team == team or not candidate.can_be_intercepted:
+			continue
+		var distance := global_position.distance_to(candidate.global_position)
+		if distance > 900.0:
+			continue
+		var aimed_at_carrier: bool = is_instance_valid(candidate.target) and candidate.target == self
+		var closest_approach: float = candidate.direction.dot(candidate.global_position.direction_to(global_position))
+		var time_to_impact: float = distance / maxf(1.0, candidate.speed_mps)
+		var score: float = time_to_impact - (6.0 if aimed_at_carrier else 0.0) - maxf(0.0, closest_approach) * 2.0
+		if candidate.radial_warhead:
+			score -= 4.0
+		if score < best_score:
+			best = candidate
+			best_score = score
+			point_defense_last_tti = time_to_impact
+	point_defense_target = best
+	if not is_instance_valid(best):
+		point_defense_last_tti = INF
+		return
+	var rounds_to_fire := mini(3, _available_store(&"flak_rounds", 3))
+	if rounds_to_fire <= 0 or not _consume_store(&"flak_rounds", rounds_to_fire):
+		return
+	_spawn_flak_barrage(global_position.direction_to(best.global_position), rounds_to_fire, 0.28)
+	best.intercept()
+	point_defense_cooldown = 0.28
 
 func receive_damage(amount: float, source_entity_id: StringName = &"", impact_context: Dictionary = {}) -> Dictionary:
 	var localized_context := impact_context.duplicate(true)

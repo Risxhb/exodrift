@@ -195,7 +195,7 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 
 ## 8. Milestones and acceptance gates
 
-**Implementation status (2026-07-13):** M1–M19 are implemented. Twenty functional, integration, campaign, carrier-operations, onboarding, presentation, and regression suites pass. At 2560×1440, the normal gate measures 145.0 effective FPS with p95 7.50 ms/p99 7.72 ms; the carrier-incident/all-wings/ordnance stress gate measures 145.0 effective FPS with p95 10.14 ms/p99 10.60 ms and bounded nodes/VFX, and the full-runtime-model menu measures 144.9 effective FPS on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
+**Implementation status (2026-07-13):** M1–M20 are implemented. Twenty-two functional, integration, campaign, carrier-operations, fleet-command, onboarding, presentation, and regression suites are maintained. At 2560×1440, the M20 normal gate measures 144.9 effective FPS with p95 7.41 ms/p99 7.58 ms; the carrier-incident/all-wings/ordnance stress gate measures 144.9 effective FPS with p95 9.17 ms/p99 9.45 ms and bounded nodes/VFX on the development RTX 3060 using GL Compatibility. The mainstream GTX 1060/1650-class 1080p60 target remains a reference-hardware acceptance target rather than a claim measured on this machine.
 
 ### M1 — Canonical bible and Godot foundation `[IMPLEMENTED]`
 
@@ -349,7 +349,8 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - A seam-feathered 3840×1920 galaxy-arm panorama blends with the existing procedural sky in menu and combat, at reduced combat intensity for target and HUD legibility.
 - Desktop output defaults to 2560×1440. Edge-anchored combat HUD groups render at 75% visual scale while preserving the logical canvas, all information, and collapsible panels.
 - Right-clicking an identified contact marker or Tactical Overview row with the carrier selected opens one menu for lock, 500 m approach, 500 m/5 km/10 km/25 km orbit, the same keep-at-distance values, and clear relative navigation. Empty-space moves and wing/escort orders retain their established behavior.
-- The title menu includes an eight-lesson standalone communications tutorial with Commander Mara Voss. It resolves live key bindings and uses three consistent poses, four eye/mouth facial states per pose, 36-character-per-second text, punctuation pauses, speaking-only mouth animation, and randomized blinks.
+- The title menu includes a nine-lesson standalone communications briefing with Commander Mara Voss. It resolves live key bindings and uses three consistent poses, four eye/mouth facial states per pose, 36-character-per-second text, punctuation pauses, speaking-only mouth animation, and randomized blinks.
+- Completing the briefing launches a repeatable, campaign-isolated eight-step combat trial. An inert amber target drone, cyan navigation gate, and live guide teach carrier movement, fixed group slots, the click/flick command wheel, queued waypoints, doctrine/spacing, active identification, interceptor launch, and either carrier- or wing-led target engagement; completion and early exit both return cleanly to the title.
 
 ### M19 — Integrated Carrier Operations `[IMPLEMENTED]`
 
@@ -361,6 +362,15 @@ The first playable is one greybox locate-and-destroy battle. Campaign, economy, 
 - Severe uncontained subsystem incidents trap the assigned department lead behind a ten-second rescue countdown. Rescue or death produces immediate severity-three injury, succession, bond, telemetry, and after-action consequences; unresolved battle-end incidents receive a deterministic emergency recovery and cannot disappear.
 - Remappable `C` opens a responsive, non-pausing Carrier Operations console from direct or tactical view. A compact collapsible HUD summary shows the live binding, power preset, warnings, and officer countdown. Mara Voss's tutorial now has nine lessons and first-operation onboarding has seven steps.
 - Fleet logistics separates repair, rearm, air-group restoration, and full service with exact supply breakdowns. Repair nodes restore at most 24 missing generic crew; routine fleet service never replaces casualties.
+
+### M20 — Finished Core Combat and Fleet Command `[IMPLEMENTED]`
+
+- Ships and squadrons share one battle-local command state with unique order IDs, transmitting/queued/active/completed/rejected/cancelled lifecycle, eight-entry queues, real link latency, disconnect retention, doctrine, formation, spacing, leadership, and consistent CIC snapshots.
+- The live tactical map uses a full-battlespace carrier-origin grid with Home recenter/follow and Shift+middle-mouse panning, then teaches a target-sensitive right-click wheel with quick flick and precise click paths, Shift queuing, fixed F1 Carrier/F2 Escort/F3 Interceptors/F4 Scouts slots, contextual objectives, carrier autopilot geometry, and persistent numbered paths with status, ETA, and transmission countdowns.
+- Role AI uses predictive arrival, velocity matching, collision separation, boundary recovery, leader-local Wedge/Line/Screen/Column slots, 0.75x/1.0x/1.5x spacing, doctrine-specific range/leash/return thresholds, lost-track last-known behavior, and fighter approach/firing-run/breakaway/reform passes.
+- Unguided weapons lead moving targets and point defense ranks incoming ordnance by time-to-impact, protected-unit risk, and warhead danger. Existing flak, missile, nuclear, layered damage, subsystem, and finite-store mechanics remain unchanged.
+- Direct and tactical CIC layers show deconflicted allied brackets, orders, links, health, ammunition, endurance, formation, facing/velocity, selected envelopes/footprints, uncertainty volumes, missile state/TTI, point-defense state, nuclear warnings, and resolved hit direction/layer.
+- Acheron, Vesper, and Crucible forces receive authored opening doctrines and phase orders for screens, interceptions, flanking entry, range commitment, and withdrawal. Fleet telemetry records order type/lifecycle, wheel cancellation, rejection reason, link latency, doctrine changes, queue completion, and acknowledgement time.
 
 ## 9. Test matrix
 
@@ -383,6 +393,8 @@ M16 tests cover heading navigation, persistent throttle and stop/boost behavior,
 M17 tests cover remappable 1/2/3 and bracket actions, placement-camera travel and return, carrier-local screen anchoring, range clamps, staggered fire, airburst interception, nuclear inventory/arming/AoE/friendly fire/interception/trails, heavy carrier limits, speed-reactive engine trails, queued wing redeploy, exact runtime title/archive models, layered menu effects, pooled VFX bounds, and regression compatibility.
 
 M18 tests cover signed carrier zoom, carrier-centered flak framing, direct/tactical placement parity, remappable aggregate hangar-wing control, persistent manual target locks, orbit/approach/keep-distance geometry, collapsible command panels, the interactive overview, projected lock brackets and lead, shader-driven deep space, tapered hull construction, and all prior campaign/combat contracts.
+
+M20 tests cover lifecycle replacement/cancellation, eight-entry queues, delayed/disconnected links, objective interactions, status snapshots, click/flick/Shift/cancel wheel paths, stable F1–F4 slots, every stance and formation/spacing combination, lost/destroyed targets, move/hold/interact behavior, attack passes and reform, leader handoff, boundary/separation recovery, projectile lead, point-defense prioritization, carrier autopilot snapshots, eight-step training, direct/tactical visual captures, and normal/stress performance gates.
 
 The combat-presentation upgrade tests cover 250 m flak falloff and immunity, fuse clamps and upgrades, layered pooled airbursts, propulsion-demand plume layers, Sidebay geometry and material identity, panorama integration, 1440p HUD density and menu placement, every relative-navigation distance and clear command, all eight tutorial lessons, live bindings, typewriter completion, pose selection, blink/mouth timing, and clean repeated entry.
 

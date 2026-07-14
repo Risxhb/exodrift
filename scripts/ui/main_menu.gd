@@ -3,6 +3,7 @@ extends Node
 
 signal new_run_requested
 signal continue_requested
+signal tutorial_trial_requested
 signal quit_requested
 
 const SETTINGS_PATH := "user://exodrift_settings.cfg"
@@ -639,10 +640,15 @@ func _show_tutorial() -> void:
 	add_child(tutorial_screen)
 	tutorial_screen.configure()
 	tutorial_screen.closed.connect(_on_tutorial_closed)
+	tutorial_screen.trial_requested.connect(_on_tutorial_trial_requested)
 
 func _on_tutorial_closed() -> void:
 	tutorial_screen = null
 	_show_main()
+
+func _on_tutorial_trial_requested() -> void:
+	tutorial_screen = null
+	tutorial_trial_requested.emit()
 
 func _show_controls() -> void:
 	main_panel.visible = false

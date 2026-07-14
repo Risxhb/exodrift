@@ -4,6 +4,7 @@ extends CanvasLayer
 const RadarDisplay := preload("res://scripts/ui/radar_display.gd")
 const UIStyle := preload("res://scripts/ui/ui_style.gd")
 const TargetLockReticle := preload("res://scripts/ui/target_lock_reticle.gd")
+const TargetDirectionArrow := preload("res://scripts/ui/target_direction_arrow.gd")
 
 signal target_lock_requested(entity_id: StringName)
 signal target_command_requested(command: StringName, entity_id: StringName)
@@ -33,7 +34,7 @@ var wing_label: Label
 var weapon_label: Label
 var target_label: Label
 var target_panel: Panel
-var target_indicator: Label
+var target_indicator: Control
 var target_shield_bar: ProgressBar
 var target_armor_bar: ProgressBar
 var target_hull_bar: ProgressBar
@@ -80,6 +81,7 @@ var carrier_operations_state: Object
 var carrier_operations_panel: Panel
 var carrier_operations_label: Label
 var carrier_operations_button: Button
+var cic_overlay: ExodriftCICOverlay
 
 func configure(
 	player_carrier: PlayerCarrier,
@@ -95,6 +97,10 @@ func configure(
 	sensors = sensor_system
 	tactical = tactical_controller
 	_build_ui()
+	cic_overlay = ExodriftCICOverlay.new()
+	cic_overlay.name = "CICOverlay"
+	hud_root.add_child(cic_overlay)
+	cic_overlay.configure(carrier, tactical, tactical.commandables)
 	get_viewport().size_changed.connect(_layout_scaled_hud)
 
 func _build_ui() -> void:
@@ -155,12 +161,13 @@ func _build_ui() -> void:
 	overview_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_register_collapsible(overview_panel)
 	_build_target_context_menu(root)
-	target_indicator = _label(root, Vector2(624, 300), Vector2(38, 38), 30)
-	target_indicator.text = "▲"
-	target_indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	target_indicator.add_theme_color_override("font_color", Color(0.25, 0.92, 1.0))
+	target_indicator = TargetDirectionArrow.new()
+	target_indicator.name = "TargetDirectionArrow"
+	target_indicator.position = Vector2(624, 300)
+	target_indicator.size = Vector2(38, 38)
 	target_indicator.pivot_offset = Vector2(19, 19)
 	target_indicator.visible = false
+	root.add_child(target_indicator)
 	target_reticle = TargetLockReticle.new()
 	target_reticle.position = Vector2(560, 280)
 	target_reticle.size = Vector2(160, 160)
@@ -185,9 +192,9 @@ func _build_ui() -> void:
 	crosshair_label.text = "⌖"
 	crosshair_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	crosshair_label.visible = false
-	map_info_panel = _panel(root, Vector2(18, 74), Vector2(342, 210), Color(0.006, 0.024, 0.038, 0.94), UIStyle.CYAN)
+	map_info_panel = _panel(root, Vector2(18, 74), Vector2(390, 286), Color(0.006, 0.024, 0.038, 0.94), UIStyle.CYAN)
 	_section_heading(map_info_panel, "COMMAND LINK", UIStyle.CYAN)
-	map_info_label = _label(map_info_panel, Vector2(16, 34), Vector2(312, 164), 14)
+	map_info_label = _label(map_info_panel, Vector2(16, 34), Vector2(358, 238), 12)
 	map_info_panel.visible = false
 	radar_panel = _panel(root, Vector2(1032, 442), Vector2(230, 216), Color(0.004, 0.025, 0.038, 0.56), UIStyle.CYAN_SOFT)
 	radar_title = _label(radar_panel, Vector2(12, 8), Vector2(206, 24), 11, UIStyle.TEXT_MUTED)
@@ -268,14 +275,17 @@ func _process(delta: float) -> void:
 	armor_bar.value = layers.y * 100.0
 	hull_bar.value = layers.z * 100.0
 	status_label.text = "%s  //  SPD %4.0f m/s\nBAYS %s  //  CONTACTS %d\nSHD %3.0f%%    ARM %3.0f%%    HULL %3.0f%%" % [carrier.display_name.to_upper(), carrier.velocity.length(), carrier.bay_status(), sensors.contacts.size(), layers.x * 100.0, layers.y * 100.0, layers.z * 100.0]
-	wing_label.text = "[Z] %s  //  %s  •  %d CRAFT  •  %d AMMO  •  %.0fs\n[X] %s  //  %s  •  %d CRAFT  •  %d AMMO  •  %.0fs" % [
-		interceptor.display_name, _wing_state(interceptor), interceptor.living_craft_count(), interceptor.total_ammunition(), interceptor.average_endurance(),
-		scout.display_name, _wing_state(scout), scout.living_craft_count(), scout.total_ammunition(), scout.average_endurance()
+	wing_label.text = "[Z] %s  //  %s  •  %s  •  %dC/%dA/%.0fs\n[X] %s  //  %s  •  %s  •  %dC/%dA/%.0fs" % [
+		interceptor.display_name, _wing_state(interceptor), _group_order_label(interceptor), interceptor.living_craft_count(), interceptor.total_ammunition(), interceptor.average_endurance(),
+		scout.display_name, _wing_state(scout), _group_order_label(scout), scout.living_craft_count(), scout.total_ammunition(), scout.average_endurance()
 	]
 	var flak_status := "READY" if carrier.flak_cooldown <= 0.0 else "CYCLING %.1fs" % carrier.flak_cooldown
 	var missile_status := "READY" if carrier.missile_cooldown <= 0.0 else "RELOAD %.1fs" % carrier.missile_cooldown
 	var nuclear_status := "ARMED" if carrier.nuclear_available else "EXPENDED"
-	weapon_label.text = "[1] FLAK  //  %s  •  %s  •  %.1f km  •  R %.0fm\n[2] MISSILES  //  %s  •  %d WEAPONS  •  %.1f km\n[3] NUCLEAR  //  %s  •  ARM %.1f km  •  BLAST %.0fm" % [carrier.flak_screen_status(), flak_status, carrier.flak_screen_range_m / 1000.0, carrier.flak_airburst_radius_m, missile_status, carrier.missile_salvo_count, carrier.missile_weapon.range_m / 1000.0, nuclear_status, carrier.nuclear_arming_distance_m / 1000.0, carrier.nuclear_blast_radius_m]
+	var pd_status := "PD READY" if carrier.point_defense_cooldown <= 0.0 else "PD %.1fs" % carrier.point_defense_cooldown
+	if is_finite(carrier.point_defense_last_tti):
+		pd_status += " / TTI %.1fs" % carrier.point_defense_last_tti
+	weapon_label.text = "[1] FLAK  //  %s  •  %s  •  %.1f km  •  R %.0fm\n[2] MISSILES  //  %s  •  %d WEAPONS  •  %.1f km  •  %s\n[3] NUCLEAR  //  %s  •  ARM %.1f km  •  BLAST %.0fm" % [carrier.flak_screen_status(), flak_status, carrier.flak_screen_range_m / 1000.0, carrier.flak_airburst_radius_m, missile_status, carrier.missile_salvo_count, carrier.missile_weapon.range_m / 1000.0, pd_status, nuclear_status, carrier.nuclear_arming_distance_m / 1000.0, carrier.nuclear_blast_radius_m]
 	_update_carrier_operations_summary()
 	var graphics := get_node_or_null("/root/GraphicsQualityManager")
 	radar_title.text = "TACTICAL RADAR // %s" % (graphics.profile_label() if graphics != null else "ACTIVE")
@@ -297,7 +307,7 @@ func _process(delta: float) -> void:
 		map_info_panel.visible = true
 		mode_panel.visible = true
 		map_info_label.text = _map_information()
-		controls_label.text = "1 FLAK   %s CARRIER OPS   F1-F4 GROUPS   LMB SELECT/CONFIRM   RMB NAV/ORDER   I INTERCEPT   E ESCORT   SHIFT QUEUE   B WINGS   WHEEL ZOOM" % _operations_key_label()
+		controls_label.text = "1 FLAK  %s OPS  F1-F4 GROUPS  LMB SELECT  RMB WHEEL  SHIFT QUEUE  SHIFT+MMB PAN  HOME CARRIER  WHEEL ZOOM" % _operations_key_label()
 	else:
 		telemetry_panel.visible = true
 		wing_panel.visible = true
@@ -490,23 +500,38 @@ func _issue_overview_command(command: StringName) -> void:
 func _wing_state(wing: SidebaySquadron) -> String:
 	return "%s → REDEPLOY" % wing.operation.label() if wing.redeploy_requested else wing.operation.label()
 
+func _group_order_label(group: Node) -> String:
+	if not is_instance_valid(group) or not group.has_method("command_snapshot"):
+		return "NO ORDER"
+	var snapshot: Dictionary = group.command_snapshot()
+	var current: Dictionary = snapshot.get("current_order", {})
+	return "%s/%s" % [String(current.get("type", "Hold")).to_upper(), String(snapshot.get("stance", "balanced")).to_upper()]
+
 func set_objective(message: String) -> void:
 	objective_label.text = "OBJECTIVE  %s" % message
 
 func _map_information() -> String:
-	var selected_name := "None"
-	var link_name := "Local"
-	var stance_name := "—"
-	var formation := "—"
-	if tactical.selected != null:
-		selected_name = tactical.selected.display_name if "display_name" in tactical.selected else tactical.selected.name
-		if "command_link" in tactical.selected:
-			link_name = tactical.selected.command_link.label()
-		if "stance" in tactical.selected:
-			stance_name = String(tactical.selected.stance).capitalize()
-		if "formation_name" in tactical.selected:
-			formation = String(tactical.selected.formation_name).capitalize()
-	return "SELECTED  %s\nLINK  %s\nSTANCE  %s\nFORMATION  %s\n\nCONTACTS  %d" % [selected_name, link_name, stance_name, formation, sensors.contacts.size()]
+	if tactical.selected == null:
+		return "SELECTED  NONE\n\nF1 CARRIER  F2 ESCORT\nF3 INTERCEPTORS  F4 SCOUTS\n\nCONTACTS  %d" % sensors.contacts.size()
+	var selected_name: String = tactical.selected.display_name if "display_name" in tactical.selected else tactical.selected.name
+	var snapshot: Dictionary = tactical.selected.command_snapshot() if tactical.selected.has_method("command_snapshot") else {}
+	var current: Dictionary = snapshot.get("current_order", {})
+	var queue: Array = snapshot.get("queue", [])
+	var transmitting: Array = snapshot.get("transmitting", [])
+	var queue_lines: Array[String] = []
+	for index in mini(5, queue.size()):
+		queue_lines.append("%d  %s  %s" % [index + 1, String(queue[index].get("type", "Order")).to_upper(), String(queue[index].get("status", "Queued")).to_upper()])
+	if queue_lines.is_empty():
+		queue_lines.append("—  QUEUE EMPTY")
+	var transmission := ""
+	if not transmitting.is_empty():
+		transmission = "\nTX  %s  %.1fs" % [String(transmitting[0].get("type", "Order")).to_upper(), float(transmitting[0].get("seconds_remaining", 0.0))]
+	return "SELECTED  %s\nLINK  %s%s\nORDER  %s  //  %s\nDOCTRINE  %s\nFORMATION  %s / %s\nLEADER  %s\n\nORDER QUEUE\n%s\n\nCONTACTS  %d" % [
+		selected_name, String(snapshot.get("link", "Local")).to_upper(), transmission,
+		String(current.get("type", "Hold")).to_upper(), String(current.get("status", "Active")).to_upper(),
+		String(snapshot.get("stance", "balanced")).to_upper(), String(snapshot.get("formation", "wedge")).to_upper(), String(snapshot.get("spacing", "standard")).to_upper(),
+		String(snapshot.get("leader_id", "—")).to_upper(), "\n".join(queue_lines), sensors.contacts.size()
+	]
 
 func update_target(contact: SensorContact, target_name: String = "", target_ship: CombatShip = null) -> void:
 	if contact == null:
@@ -571,13 +596,12 @@ func _update_target_presentation() -> void:
 		target_reticle.set_solution(span, lock_color, lead_screen - projected, true)
 		target_reticle.visible = true
 		var relative_speed := (locked_target.velocity - carrier.velocity).length()
-		target_caption.text = "%s  //  %.1f KM  //  ΔV %.0f M/S" % [locked_target.display_name.to_upper(), range_m / 1000.0, relative_speed]
+		target_caption.text = "%s  //  %.1f KM  //  ΔV %.0f M/S  //  TTI %.1fs" % [locked_target.display_name.to_upper(), range_m / 1000.0, relative_speed, flight_time]
 		target_caption.position = projected + Vector2(-92.0, span * 0.5 + 10.0)
 		target_caption.visible = true
 	else:
 		target_reticle.visible = false
 		target_caption.visible = false
-		target_indicator.text = "▲"
 		target_indicator.rotation = direction.angle() + PI * 0.5
 		var edge := center + direction * minf(viewport_size.x * 0.42, viewport_size.y * 0.38)
 		edge.x = clampf(edge.x, 54.0, viewport_size.x - 54.0)
@@ -591,6 +615,8 @@ func set_result(victory: bool, action_text: String = "Press Enter to restart", o
 	var summary := "CARRIER LOST\nTask force command destroyed"
 	if victory:
 		match outcome:
+			"training":
+				summary = "COMBAT TRIAL COMPLETE\nTarget dummy disabled — systems qualified"
 			"withdrawal":
 				summary = "WITHDRAWAL COMPLETE\nTask force extracted under pressure"
 			"interception":

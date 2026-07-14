@@ -1,10 +1,13 @@
 extends Node3D
 
 const OnboardingController := preload("res://scripts/systems/onboarding_controller.gd")
+const TrainingTrialController := preload("res://scripts/systems/training_trial_controller.gd")
 const EncounterDirector := preload("res://scripts/systems/encounter_director.gd")
 const SpaceSky := preload("res://scripts/systems/space_sky.gd")
+const UIStyle := preload("res://scripts/ui/ui_style.gd")
 
 signal return_to_campaign(victory: bool, battle_report: Dictionary)
+signal training_trial_finished(completed: bool)
 
 var carrier: PlayerCarrier
 var escort: CombatShip
@@ -22,6 +25,7 @@ var battle_finished: bool = false
 var target_lock: CombatShip
 var elapsed_seconds: float = 0.0
 var hosted_campaign: bool = false
+var training_trial: bool = false
 var campaign_node_id: StringName = &""
 var campaign_sector_index: int = 0
 var guided_onboarding: bool = false
@@ -50,7 +54,11 @@ var manual_target_lock_id: StringName = &""
 var aggregate_bay_closure_pending: bool = false
 var aggregate_wing_launch_pending: bool = false
 var onboarding: ExodriftOnboardingController
+var training_controller: ExodriftTrainingTrialController
 var encounter: ExodriftEncounterDirector
+var training_exit_emitted: bool = false
+var training_navigation_gate: Node3D
+var issued_order_telemetry: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -60,24 +68,38 @@ func _ready() -> void:
 	_configure_input_map()
 	_build_environment()
 	_build_battlefield()
-	_configure_objective()
-	encounter = EncounterDirector.new()
-	add_child(encounter)
-	encounter.configure(self)
-	audio.configure_sector(campaign_sector_index, encounter.is_sector_command)
-	var recorder := _playtest_recorder()
-	if recorder != null:
-		recorder.begin_battle({"node_id": String(campaign_node_id), "sector": campaign_sector_index, "layout": String(encounter.layout_id), "objective": campaign_objective_type, "boss": encounter.is_sector_command})
+	if training_trial:
+		_configure_training_arena()
+		audio.configure_sector(0, false)
+	else:
+		_configure_objective()
+		encounter = EncounterDirector.new()
+		add_child(encounter)
+		encounter.configure(self)
+		audio.configure_sector(campaign_sector_index, encounter.is_sector_command)
+		var recorder := _playtest_recorder()
+		if recorder != null:
+			recorder.begin_battle({"node_id": String(campaign_node_id), "sector": campaign_sector_index, "layout": String(encounter.layout_id), "objective": campaign_objective_type, "boss": encounter.is_sector_command})
 	_apply_carrier_mouse_mode()
 	await get_tree().process_frame
 	await get_tree().process_frame
 	_apply_campaign_fleet_snapshot()
-	_deploy_initial_forces()
+	if training_trial:
+		_deploy_training_forces()
+	else:
+		_deploy_initial_forces()
 	_connect_feedback()
-	var opening_call := "SENSORS: Passive contacts detected. Launch scouts or use active ping."
+	var opening_call := "TRAINING RANGE: Systems safe. Follow the combat trial prompts." if training_trial else "SENSORS: Passive contacts detected. Launch scouts or use active ping."
 	hud.notify(opening_call)
 	audio.play_radio(opening_call, 0.32)
-	if guided_onboarding:
+	if training_trial:
+		training_controller = TrainingTrialController.new()
+		add_child(training_controller)
+		training_controller.configure(carrier, escort, interceptor, sensors, tactical, hostile_command, hud, training_navigation_gate)
+		training_controller.target_lock_requested.connect(_on_target_lock_requested)
+		training_controller.completed.connect(_finish_training_trial)
+		training_controller.exit_requested.connect(_exit_training_trial)
+	elif guided_onboarding:
 		onboarding = OnboardingController.new()
 		add_child(onboarding)
 		onboarding.configure(carrier, interceptor, scout, sensors, tactical)
@@ -97,6 +119,9 @@ func _process(delta: float) -> void:
 	_update_flight_operations_effects()
 	_process_aggregate_flight_ops()
 	_update_target_lock()
+	if training_trial:
+		audio.set_intensity(0.18)
+		return
 	_process_objective(delta)
 	_process_escape_pods()
 	var carrier_pressure := 1.0 - carrier.damage_state.normalized_layers().z if carrier.damage_state != null else 0.0
@@ -105,12 +130,14 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_ENTER:
+		if event.keycode == KEY_ENTER and battle_finished:
 			_restart_encounter()
 			return
 		if event.keycode == KEY_ESCAPE:
 			if is_instance_valid(carrier_operations_console) and carrier_operations_console.consume_escape():
 				hud.notify("CARRIER OPERATIONS CONSOLE CLOSED")
+				return
+			if is_instance_valid(tactical) and tactical.consume_escape():
 				return
 			if is_instance_valid(carrier) and carrier.cancel_flak_placement():
 				hud.notify("FLAK PLACEMENT CANCELLED — previous screen retained")
@@ -474,6 +501,49 @@ func _build_environment() -> void:
 	_build_starfield()
 	_apply_graphics_quality()
 
+func _configure_training_arena() -> void:
+	hud.set_objective("COMBAT TRIAL  Awaiting helm calibration")
+	training_navigation_gate = _training_ring("NavigationGate", 185.0, UIStyle.CYAN, "NAV GATE // 01")
+	training_navigation_gate.position = Vector3(0.0, 0.0, 1950.0)
+	add_child(training_navigation_gate)
+	if is_instance_valid(hostile_command):
+		var target_marker := _training_ring("TargetDummyMarker", 150.0, UIStyle.AMBER, "TARGET DUMMY // INERT")
+		target_marker.rotation.z = PI * 0.25
+		hostile_command.add_child(target_marker)
+
+func _training_ring(node_name: String, radius: float, color: Color, caption: String) -> Node3D:
+	var marker := Node3D.new()
+	marker.name = node_name
+	var ring := MeshInstance3D.new()
+	var mesh := ImmediateMesh.new()
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color = Color(color.r, color.g, color.b, 0.82)
+	material.emission_enabled = true
+	material.emission = color * 2.4
+	mesh.surface_begin(Mesh.PRIMITIVE_LINES, material)
+	for ring_index in 3:
+		var ring_radius := radius + float(ring_index - 1) * 6.0
+		for segment in 48:
+			var angle_a := TAU * float(segment) / 48.0
+			var angle_b := TAU * float(segment + 1) / 48.0
+			mesh.surface_add_vertex(Vector3(cos(angle_a) * ring_radius, sin(angle_a) * ring_radius, float(ring_index - 1) * 2.0))
+			mesh.surface_add_vertex(Vector3(cos(angle_b) * ring_radius, sin(angle_b) * ring_radius, float(ring_index - 1) * 2.0))
+	mesh.surface_end()
+	ring.mesh = mesh
+	marker.add_child(ring)
+	var label := Label3D.new()
+	label.name = "TrainingMarkerLabel"
+	label.text = caption
+	label.font_size = 30
+	label.outline_size = 8
+	label.modulate = color
+	label.position = Vector3(0.0, radius + 38.0, 0.0)
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	marker.add_child(label)
+	return marker
+
 func _build_starfield() -> void:
 	var sector := _sector_encounter_profile()
 	var mesh := SphereMesh.new()
@@ -665,27 +735,34 @@ func _build_battlefield() -> void:
 	scout.configure_deck_logistics(Callable(self, "_consume_aviation_store"), carrier.flight_operations_multiplier(&"starboard"), Callable(carrier, "is_flight_deck_operational"))
 	hostile_command = CombatShip.new()
 	add_child(hostile_command)
-	hostile_command.configure(_frigate_definition(sector.command_name, true), &"hostile_command", &"hostile", sector.command_color)
-	hostile_command.is_command_ship = true
-	hostile_command.global_position = sector.command_position
-	hostile_command.ai_enabled = true
-	hostile_corvette = CombatShip.new()
-	add_child(hostile_corvette)
-	hostile_corvette.configure(_corvette_definition(), &"hostile_corvette", &"hostile", sector.corvette_color)
-	hostile_corvette.global_position = sector.corvette_position
-	hostile_corvette.ai_enabled = true
-	hostile_fighters = SidebaySquadron.new()
-	add_child(hostile_fighters)
-	hostile_fighters.configure(_hostile_squadron_definition(), &"hostile_fighter_wing", &"hostile", null, &"port", sector.fighter_color)
+	if training_trial:
+		hostile_command.configure(_training_target_definition(), &"training_target_dummy", &"hostile", Color(0.96, 0.54, 0.08))
+		hostile_command.global_position = Vector3(0.0, 0.0, -1800.0)
+		hostile_command.ai_enabled = false
+	else:
+		hostile_command.configure(_frigate_definition(sector.command_name, true), &"hostile_command", &"hostile", sector.command_color)
+		hostile_command.is_command_ship = true
+		hostile_command.global_position = sector.command_position
+		hostile_command.ai_enabled = true
+		hostile_corvette = CombatShip.new()
+		add_child(hostile_corvette)
+		hostile_corvette.configure(_corvette_definition(), &"hostile_corvette", &"hostile", sector.corvette_color)
+		hostile_corvette.global_position = sector.corvette_position
+		hostile_corvette.ai_enabled = true
+		hostile_fighters = SidebaySquadron.new()
+		add_child(hostile_fighters)
+		hostile_fighters.configure(_hostile_squadron_definition(), &"hostile_fighter_wing", &"hostile", null, &"port", sector.fighter_color)
 	sensors = SidebaySensorSystem.new()
 	add_child(sensors)
 	sensors.configure(carrier)
+	var target_provider := Callable(self, "_friendly_target_state")
+	if is_instance_valid(escort):
+		escort.configure_target_state_provider(target_provider)
+	interceptor.configure_target_state_provider(target_provider)
+	scout.configure_target_state_provider(target_provider)
 	tactical = TacticalController.new()
 	add_child(tactical)
-	var commandables: Array[Node] = [interceptor, scout]
-	if is_instance_valid(escort):
-		commandables.append(escort)
-	commandables.append(carrier)
+	var commandables: Array[Node] = [carrier, escort, interceptor, scout]
 	tactical.configure(carrier, sensors, commandables)
 	hud = SidebayHUD.new()
 	add_child(hud)
@@ -701,6 +778,21 @@ func _build_battlefield() -> void:
 	carrier_operations_console.wing_loadout_requested.connect(_on_wing_loadout_requested)
 	interceptor.set_service_priority(carrier.carrier_operations.service_priority)
 	scout.set_service_priority(carrier.carrier_operations.service_priority)
+
+func _friendly_target_state(entity_id: StringName) -> Dictionary:
+	if not is_instance_valid(sensors):
+		return {"visible": false}
+	var contact := sensors.get_contact(entity_id)
+	if contact == null:
+		return {"visible": false}
+	var target := sensors.resolve_combat_target(entity_id)
+	return {
+		"visible": contact.is_targetable() and is_instance_valid(target) and not target.is_destroyed,
+		"destroyed": is_instance_valid(target) and target.is_destroyed,
+		"position": contact.estimated_position,
+		"velocity": contact.estimated_velocity,
+		"node": target
+	}
 
 func _consume_aviation_store(store_id: StringName, requested_amount: int) -> int:
 	if not is_instance_valid(carrier) or carrier.carrier_operations == null:
@@ -740,11 +832,15 @@ func _deploy_initial_forces() -> void:
 	var sector := _sector_encounter_profile()
 	var fighter_position: Vector3 = get_meta("encounter_fighter_position", sector.fighter_position)
 	hostile_fighters.start_deployed(fighter_position)
+	hostile_command.set_stance(&"defensive")
+	hostile_corvette.set_stance(&"aggressive")
+	hostile_fighters.set_stance(&"aggressive")
+	hostile_fighters.set_formation(&"line", &"wide")
 	var priority_target_id := objective_ship.stable_entity_id if is_instance_valid(objective_ship) else carrier.stable_entity_id
 	var priority_attack := FleetOrder.at_entity(FleetOrder.OrderType.ATTACK, priority_target_id, elapsed_seconds)
 	priority_attack.requires_command_link = false
 	hostile_command.issue_order(priority_attack)
-	var corvette_attack := FleetOrder.at_entity(FleetOrder.OrderType.ATTACK, priority_target_id, elapsed_seconds)
+	var corvette_attack := FleetOrder.at_entity(FleetOrder.OrderType.INTERCEPT, priority_target_id, elapsed_seconds)
 	corvette_attack.requires_command_link = false
 	hostile_corvette.issue_order(corvette_attack)
 	var fighter_attack := FleetOrder.at_entity(FleetOrder.OrderType.ATTACK, priority_target_id, elapsed_seconds)
@@ -755,8 +851,20 @@ func _deploy_initial_forces() -> void:
 		convoy_order.requires_command_link = false
 		objective_ship.issue_order(convoy_order)
 	if is_instance_valid(escort):
+		escort.set_stance(&"defensive")
+		escort.set_formation(&"screen", &"standard")
 		var escort_order := FleetOrder.at_entity(FleetOrder.OrderType.ESCORT, carrier.stable_entity_id, elapsed_seconds)
 		escort.issue_order(escort_order)
+	if is_instance_valid(encounter):
+		encounter.apply_opening_doctrine()
+
+func _deploy_training_forces() -> void:
+	if is_instance_valid(hostile_command):
+		hostile_command.ai_enabled = false
+		hostile_command.velocity = Vector3.ZERO
+	if is_instance_valid(escort):
+		var hold_order := FleetOrder.at_position(FleetOrder.OrderType.HOLD, escort.global_position, elapsed_seconds)
+		escort.issue_order(hold_order)
 
 func _connect_feedback() -> void:
 	carrier.ship_destroyed.connect(_on_ship_destroyed)
@@ -768,27 +876,39 @@ func _connect_feedback() -> void:
 	if is_instance_valid(escort):
 		escort.ship_destroyed.connect(_on_ship_destroyed)
 		escort.ship_destroyed.connect(_on_friendly_capital_destroyed.bind(escort))
-	hostile_command.ship_destroyed.connect(_on_ship_destroyed)
-	hostile_corvette.ship_destroyed.connect(_on_ship_destroyed)
-	for ship in [escort, hostile_command, hostile_corvette]:
+	if is_instance_valid(hostile_command):
+		hostile_command.ship_destroyed.connect(_on_ship_destroyed)
+	if is_instance_valid(hostile_corvette):
+		hostile_corvette.ship_destroyed.connect(_on_ship_destroyed)
+	for ship in [carrier, escort, hostile_command, hostile_corvette]:
 		if is_instance_valid(ship):
 			ship.order_acknowledged.connect(_on_order_feedback)
+			ship.order_status_changed.connect(_on_order_status_changed)
+			ship.doctrine_changed.connect(_on_doctrine_changed)
 	for wing in [interceptor, scout, hostile_fighters]:
-		wing.status_changed.connect(_on_wing_feedback)
-	hostile_fighters.squadron_destroyed.connect(_on_hostile_squadron_destroyed)
+		if is_instance_valid(wing):
+			wing.status_changed.connect(_on_wing_feedback)
+			wing.order_status_changed.connect(_on_order_status_changed)
+			wing.doctrine_changed.connect(_on_doctrine_changed)
+	if is_instance_valid(hostile_fighters):
+		hostile_fighters.squadron_destroyed.connect(_on_hostile_squadron_destroyed)
 	for wing in [interceptor, scout]:
 		for craft in wing.crafts:
 			if is_instance_valid(craft):
 				craft.ship_destroyed.connect(_on_friendly_craft_destroyed.bind(craft))
-	for craft in hostile_fighters.crafts:
-		if is_instance_valid(craft):
-			craft.ship_destroyed.connect(_on_hostile_craft_destroyed)
+	if is_instance_valid(hostile_fighters):
+		for craft in hostile_fighters.crafts:
+			if is_instance_valid(craft):
+				craft.ship_destroyed.connect(_on_hostile_craft_destroyed)
 	if is_instance_valid(objective_ship):
 		objective_ship.ship_destroyed.connect(_on_objective_ship_destroyed)
 	tactical.notification_requested.connect(hud.notify)
 	tactical.selection_changed.connect(func(name: String) -> void: hud.notify("Selected: %s" % name))
 	tactical.target_lock_requested.connect(_on_target_lock_requested)
 	tactical.context_menu_requested.connect(hud.open_target_context_menu)
+	tactical.carrier_navigation_requested.connect(_on_target_navigation_requested)
+	tactical.command_issued.connect(_on_tactical_command_issued)
+	tactical.wheel_cancelled.connect(_on_tactical_wheel_cancelled)
 	if hud.has_signal("target_lock_requested"):
 		hud.connect("target_lock_requested", Callable(self, "_on_target_lock_requested"))
 	if hud.has_signal("target_command_requested"):
@@ -945,11 +1065,67 @@ func _process_aggregate_flight_ops() -> void:
 		aggregate_wing_launch_pending = not _launch_all_available_wings()
 
 func _on_order_feedback(_entity_id: StringName, message: String) -> void:
-	var recorder := _playtest_recorder()
-	if recorder != null and message.contains("acknowledges"):
-		recorder.increment(&"orders_issued")
 	if hud != null:
 		hud.notify(message)
+	if is_instance_valid(audio):
+		var rejected := message.to_lower().contains("reject") or message.to_lower().contains("lost")
+		audio.play_tone(190.0 if rejected else 690.0, 0.14 if rejected else 0.08, -12.0 if rejected else -18.0)
+
+func _on_tactical_command_issued(entity_id: StringName, order: FleetOrder) -> void:
+	var commandable := _commandable_by_id(entity_id)
+	var link_latency: float = commandable.command_link.latency_seconds if is_instance_valid(commandable) and "command_link" in commandable else 0.0
+	issued_order_telemetry[order.order_id] = {
+		"issued_msec": Time.get_ticks_msec(),
+		"link_latency_seconds": link_latency
+	}
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		recorder.increment(&"orders_issued")
+		recorder.record_event(&"fleet_order_issued", {
+			"entity_id": String(entity_id), "order_id": String(order.order_id),
+			"type": order.type_label(), "queued": order.queued, "stance": String(order.stance),
+			"link_latency_seconds": link_latency
+		})
+
+func _on_order_status_changed(entity_id: StringName, order_id: StringName, status: FleetOrder.Status, reason: String) -> void:
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		var timing: Dictionary = issued_order_telemetry.get(order_id, {})
+		var acknowledgement_seconds := float(Time.get_ticks_msec() - int(timing.get("issued_msec", Time.get_ticks_msec()))) / 1000.0
+		recorder.record_event(&"fleet_order_status", {
+			"entity_id": String(entity_id), "order_id": String(order_id),
+			"status": FleetOrder.Status.keys()[status], "reason": reason,
+			"link_latency_seconds": float(timing.get("link_latency_seconds", 0.0)),
+			"time_to_acknowledgement_seconds": acknowledgement_seconds if status == FleetOrder.Status.ACTIVE else -1.0
+		})
+		if status == FleetOrder.Status.COMPLETED:
+			recorder.increment(&"orders_completed")
+		elif status == FleetOrder.Status.REJECTED:
+			recorder.increment(&"orders_rejected")
+	if status in [FleetOrder.Status.ACTIVE, FleetOrder.Status.COMPLETED, FleetOrder.Status.REJECTED, FleetOrder.Status.CANCELLED]:
+		issued_order_telemetry.erase(order_id)
+
+
+func _on_doctrine_changed(entity_id: StringName, next_stance: StringName, next_formation: StringName, next_spacing: StringName) -> void:
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		recorder.increment(&"stance_changes")
+		recorder.record_event(&"fleet_doctrine_changed", {
+			"entity_id": String(entity_id), "stance": String(next_stance),
+			"formation": String(next_formation), "spacing": String(next_spacing)
+		})
+
+
+func _commandable_by_id(entity_id: StringName) -> Node:
+	for candidate in [carrier, escort, interceptor, scout, hostile_command, hostile_corvette, hostile_fighters]:
+		if is_instance_valid(candidate) and candidate.stable_entity_id == entity_id:
+			return candidate
+	return null
+
+func _on_tactical_wheel_cancelled() -> void:
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		recorder.increment(&"command_wheel_cancels")
 
 func _on_wing_feedback(_entity_id: StringName, message: String) -> void:
 	if hud != null:
@@ -1033,13 +1209,21 @@ func _escape_pod_recovery_distance(pod_node: Node3D) -> float:
 func _on_ship_destroyed(entity_id: StringName) -> void:
 	if battle_finished:
 		return
+	if training_trial:
+		if is_instance_valid(hostile_command) and entity_id == hostile_command.stable_entity_id:
+			destroyed_hostile_count += 1
+			if is_instance_valid(training_controller):
+				training_controller.complete_trial()
+			else:
+				_finish_training_trial()
+		return
 	if entity_id in [&"hostile_command", &"hostile_corvette", &"hostile_pursuit"]:
 		destroyed_hostile_count += 1
 	if entity_id == carrier.stable_entity_id:
 		_finish_battle(false, "carrier_lost")
-	elif entity_id == hostile_command.stable_entity_id and campaign_objective_type == SidebayCampaignNode.ObjectiveType.COMMAND_STRIKE:
+	elif is_instance_valid(hostile_command) and entity_id == hostile_command.stable_entity_id and campaign_objective_type == SidebayCampaignNode.ObjectiveType.COMMAND_STRIKE:
 		_finish_battle(true, "command_strike")
-	elif entity_id == hostile_corvette.stable_entity_id:
+	elif is_instance_valid(hostile_corvette) and entity_id == hostile_corvette.stable_entity_id:
 		hostile_corvette_destroyed = true
 		_check_objective_completion()
 
@@ -1092,6 +1276,24 @@ func _configure_objective() -> void:
 			hud.set_objective("CAPTURE  Hold friendly forces inside the violet control zone")
 		_:
 			hud.set_objective("COMMAND STRIKE  Identify and destroy the hostile command frigate")
+	_refresh_tactical_objectives()
+
+func _refresh_tactical_objectives() -> void:
+	if not is_instance_valid(tactical):
+		return
+	var descriptors: Array[TacticalObjectiveDescriptor] = []
+	match campaign_objective_type:
+		SidebayCampaignNode.ObjectiveType.DEFENSE:
+			if is_instance_valid(objective_ship):
+				descriptors.append(TacticalObjectiveDescriptor.create(&"longwatch_defense", "Longwatch Relay", "Defend", TacticalObjectiveDescriptor.InteractionKind.DEFEND, objective_ship.global_position, 520.0, objective_ship.stable_entity_id))
+		SidebayCampaignNode.ObjectiveType.ESCORT:
+			if is_instance_valid(objective_ship):
+				descriptors.append(TacticalObjectiveDescriptor.create(&"atlas_escort", "Atlas Convoy", "Escort", TacticalObjectiveDescriptor.InteractionKind.ESCORT, objective_ship.global_position, 420.0, objective_ship.stable_entity_id))
+		SidebayCampaignNode.ObjectiveType.CAPTURE:
+			descriptors.append(TacticalObjectiveDescriptor.create(&"capture_zone", "Control Zone", "Secure", TacticalObjectiveDescriptor.InteractionKind.SECURE, objective_destination, 420.0))
+	if extraction_requested and is_instance_valid(extraction_beacon):
+		descriptors.append(TacticalObjectiveDescriptor.create(&"extraction_corridor", "Extraction Corridor", "Withdraw", TacticalObjectiveDescriptor.InteractionKind.WITHDRAW, extraction_position, 300.0))
+	tactical.set_objective_descriptors(descriptors)
 
 func _spawn_defense_objective() -> void:
 	objective_ship = CombatShip.new()
@@ -1138,6 +1340,9 @@ func _spawn_mission_marker(marker_name: String, at_position: Vector3, color: Col
 
 func request_withdrawal() -> void:
 	if battle_finished:
+		return
+	if training_trial:
+		hud.notify("JUMP PREPARATION LOCKED — complete or exit the combat trial first")
 		return
 	if extraction_requested:
 		if not carrier.are_bays_closed() and not emergency_bay_seal:
@@ -1192,6 +1397,7 @@ func _spawn_extraction_beacon() -> void:
 	label.position = Vector3(0.0, 145.0, 0.0)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	extraction_beacon.add_child(label)
+	_refresh_tactical_objectives()
 
 func _process_objective(delta: float) -> void:
 	if battle_finished:
@@ -1260,6 +1466,26 @@ func _finish_battle(victory: bool, outcome: String = "victory") -> void:
 	audio.play_stinger(victory)
 	get_tree().paused = true
 
+func _finish_training_trial() -> void:
+	if battle_finished:
+		return
+	battle_finished = true
+	battle_result_victory = true
+	battle_outcome = "training"
+	hud.set_objective("COMBAT TRIAL COMPLETE  Target dummy disabled")
+	if is_instance_valid(training_controller) and training_controller.panel != null:
+		training_controller.panel.visible = false
+	hud.set_result(true, "Press Enter to return to title", "training")
+	audio.play_stinger(true)
+	get_tree().paused = true
+
+func _exit_training_trial(completed: bool) -> void:
+	if training_exit_emitted:
+		return
+	training_exit_emitted = true
+	get_tree().paused = false
+	training_trial_finished.emit(completed)
+
 func _toggle_pause() -> void:
 	if battle_finished:
 		return
@@ -1273,7 +1499,9 @@ func _apply_carrier_mouse_mode() -> void:
 
 func _restart_encounter() -> void:
 	get_tree().paused = false
-	if hosted_campaign:
+	if training_trial:
+		_exit_training_trial(battle_result_victory)
+	elif hosted_campaign:
 		return_to_campaign.emit(battle_result_victory, _create_battle_report())
 	else:
 		get_tree().reload_current_scene()
@@ -1391,6 +1619,20 @@ func _objective_ship_definition(ship_name: String, stationary: bool) -> ShipDefi
 	definition.rotation_speed_radians = 0.0 if stationary else 0.65
 	definition.signature = 1.25
 	definition.damage_layers = _damage_layers(420.0, 520.0, 650.0, 7.0, 0.25) if stationary else _damage_layers(260.0, 330.0, 420.0, 4.0, 0.18)
+	definition.weapons = []
+	return definition
+
+func _training_target_definition() -> ShipDefinition:
+	var definition := ShipDefinition.new()
+	definition.ship_id = &"training_target_drone"
+	definition.display_name = "CT-01 Target Dummy"
+	definition.role = "target drone"
+	definition.dimensions_m = Vector3(22.0, 18.0, 40.0)
+	definition.acceleration_mps2 = 0.0
+	definition.maximum_speed_mps = 0.0
+	definition.rotation_speed_radians = 0.0
+	definition.signature = 1.5
+	definition.damage_layers = _damage_layers(50.0, 70.0, 90.0, 0.0, 0.05)
 	definition.weapons = []
 	return definition
 
