@@ -32,6 +32,7 @@ var quality_selector: OptionButton
 var menu_buttons: Array[Button] = []
 var ships: Array[Dictionary] = []
 var tracers: Array[Dictionary] = []
+var flak_airbursts: Array[Dictionary] = []
 var explosions: Array[Dictionary] = []
 var elapsed: float = 0.0
 var reduced_flashes: bool = false
@@ -122,14 +123,35 @@ func _build_world() -> void:
 	_add_ship(&"acheron_command_frigate", "Acheron Command", "command", Vector3(455.0, 48.0, -735.0), Color(0.55, 0.2, 0.08), Vector3(34.0, 18.0, 86.0), &"hostile", 2.9, 3.1)
 	_add_ship(&"vesper_lance_cruiser", "Vesper Spear", "cruiser", Vector3(725.0, -120.0, -960.0), Color(0.42, 0.16, 0.58), Vector3(30.0, 15.0, 80.0), &"hostile", 2.35, 4.7)
 	_add_ship(&"crucible_war_regent", "Crucible Guard", "cruiser", Vector3(220.0, -205.0, -1190.0), Color(0.29, 0.17, 0.4), Vector3(32.0, 17.0, 86.0), &"hostile", 2.35, 5.4)
-	for index in 12:
-		var friendly := index < 6
-		var phase := float(index) * 0.57
-		var origin := Vector3(-410.0 if friendly else 465.0, -25.0, -650.0 if friendly else -830.0)
-		var fighter_id := (&"watcher_drone" if index % 3 == 0 else &"raptor_interceptor") if friendly else (&"crucible_talon_fighter" if index % 3 == 0 else &"acheron_interceptor")
-		var fighter_role := "drone" if fighter_id == &"watcher_drone" else "fighter"
-		_add_fighter(fighter_id, fighter_role, origin, Color(0.28, 0.62, 0.78) if friendly else Color(0.62, 0.2, 0.08), phase, friendly)
+	# Each friendly silhouette is a flight leader for one of the six fighter
+	# squadrons or the dedicated Watcher EW wing. They launch from the matching
+	# physical gallery/hive below instead of orbiting an arbitrary world origin.
+	for index in 7:
+		var watcher := index == 6
+		_add_fighter(
+			&"watcher_drone" if watcher else &"raptor_interceptor",
+			"drone" if watcher else "fighter",
+			Vector3(-410.0, -25.0, -650.0),
+			Color(0.22, 0.68, 0.84) if watcher else Color(0.28, 0.62, 0.78),
+			float(index) / 7.0,
+			true,
+			"Watcher EW Wing" if watcher else "Raptor Squadron %02d Lead" % (index + 1),
+			index
+		)
+	for index in 6:
+		var talon := index % 3 == 0
+		_add_fighter(
+			&"crucible_talon_fighter" if talon else &"acheron_interceptor",
+			"fighter",
+			Vector3(465.0, -25.0, -830.0),
+			Color(0.62, 0.2, 0.08),
+			fposmod(float(index) / 6.0 + 0.12, 1.0),
+			false,
+			"Hostile Attack Craft %02d" % (index + 1),
+			index
+		)
 	_build_tracers()
+	_build_flak_wall_airbursts()
 	_build_explosions()
 
 func _build_stars() -> void:
@@ -193,16 +215,16 @@ func _add_ship(ship_id: StringName, ship_name: String, role: String, base_positi
 	ship.add_to_group("menu_runtime_ship")
 	ships.append({"node": ship, "base": base_position, "phase": phase, "fighter": false, "friendly": faction == &"friendly", "model_id": ship_id})
 
-func _add_fighter(ship_id: StringName, role: String, origin: Vector3, color: Color, phase: float, friendly: bool) -> void:
+func _add_fighter(ship_id: StringName, role: String, origin: Vector3, color: Color, phase: float, friendly: bool, unit_name: String = "", formation_slot: int = 0) -> void:
 	var fighter := FighterCraft.new()
-	fighter.name = "Menu %s" % String(ship_id).capitalize()
+	fighter.name = unit_name if not unit_name.is_empty() else "Menu %s" % String(ship_id).capitalize()
 	world_root.add_child(fighter)
 	var dimensions := Vector3(8.0, 3.0, 14.0) if role == "fighter" else Vector3(7.0, 3.2, 12.0)
 	fighter.configure(_menu_ship_definition(ship_id, fighter.name, role, dimensions), StringName("menu_%s_%d" % [ship_id, ships.size()]), &"friendly" if friendly else &"hostile", color)
 	fighter.set_physics_process(false)
 	fighter.scale = Vector3.ONE * 1.45
 	fighter.add_to_group("menu_runtime_fighter")
-	ships.append({"node": fighter, "base": origin, "phase": phase, "fighter": true, "friendly": friendly, "model_id": ship_id})
+	ships.append({"node": fighter, "base": origin, "phase": phase, "fighter": true, "friendly": friendly, "model_id": ship_id, "role": role, "formation_slot": formation_slot})
 
 func _menu_ship_definition(ship_id: StringName, display_name: String, role: String, dimensions: Vector3) -> ShipDefinition:
 	var definition := ShipDefinition.new()
@@ -214,11 +236,17 @@ func _menu_ship_definition(ship_id: StringName, display_name: String, role: Stri
 	return definition
 
 func _build_tracers() -> void:
-	for index in 28:
+	# Six guided weapons cross the engagement while three seven-round friendly
+	# curtains establish the lock-directed wall. A final hostile seven-round
+	# battery makes the exchange feel reciprocal without obscuring the carrier.
+	for index in 34:
 		var tracer := Node3D.new()
-		var is_missile := index % 5 == 0
+		var is_missile := index < 6
+		var ordnance_index := index if is_missile else index - 6
+		var friendly := ordnance_index < 3 if is_missile else ordnance_index < 21
+		var lane := ordnance_index % (3 if is_missile else 7)
+		var salvo := 0 if is_missile else int(ordnance_index / 7)
 		tracer.name = "MenuMissileTrail" if is_missile else "MenuFlakTracer"
-		var friendly := index % 2 == 0
 		var shot_color := Color(0.1, 0.78, 1.0) if friendly else Color(1.0, 0.18, 0.025)
 		var head := MeshInstance3D.new()
 		head.name = "Warhead" if is_missile else "FlakRound"
@@ -260,7 +288,37 @@ func _build_tracers() -> void:
 		else:
 			tracer.add_to_group("menu_flak_tracer")
 		world_root.add_child(tracer)
-		tracers.append({"node": tracer, "phase": float(index) / 28.0, "friendly": friendly, "lane": index % 5, "missile": is_missile})
+		var phase := float(ordnance_index) / (6.0 if is_missile else 28.0)
+		tracers.append({"node": tracer, "phase": phase, "friendly": friendly, "lane": lane, "salvo": salvo, "missile": is_missile})
+
+func _build_flak_wall_airbursts() -> void:
+	for index in 14:
+		var burst := Node3D.new()
+		burst.name = "MenuFlakAirburst%02d" % (index + 1)
+		burst.add_to_group("menu_flak_airburst")
+		world_root.add_child(burst)
+		var core := _explosion_sphere(burst, "FlakCore", 6.5, Color(1.0, 0.78, 0.34, 0.92), 7.2)
+		var pressure_ring := MeshInstance3D.new()
+		pressure_ring.name = "FlakPressureRing"
+		var ring_mesh := TorusMesh.new()
+		ring_mesh.inner_radius = 8.0
+		ring_mesh.outer_radius = 11.0
+		ring_mesh.rings = 12
+		ring_mesh.ring_segments = 6
+		pressure_ring.mesh = ring_mesh
+		pressure_ring.rotation_degrees = Vector3(78.0, float(index % 7) * 17.0, 0.0)
+		var ring_material := _material(Color(0.42, 0.82, 1.0, 0.72), 4.8)
+		ring_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		pressure_ring.material_override = ring_material
+		burst.add_child(pressure_ring)
+		flak_airbursts.append({
+			"node": burst,
+			"core": core,
+			"ring": pressure_ring,
+			"lane": index % 7,
+			"row": int(index / 7),
+			"phase": float(index % 7) * 0.075 + float(index / 7) * 0.48,
+		})
 
 func _build_explosions() -> void:
 	for index in 4:
@@ -306,7 +364,7 @@ func _build_explosions() -> void:
 		blast_light.light_energy = 5.0
 		blast_light.omni_range = 190.0
 		burst.add_child(blast_light)
-		explosions.append({"node": burst, "core": core, "fire": fire_shell, "smoke": smoke, "shockwave": shockwave, "sparks": sparks, "light": blast_light, "phase": float(index) * 2.15 - 0.15, "position": Vector3(-280.0 + index * 205.0, -90.0 + index * 55.0, -650.0 - index * 110.0)})
+		explosions.append({"node": burst, "core": core, "fire": fire_shell, "smoke": smoke, "shockwave": shockwave, "sparks": sparks, "light": blast_light, "phase": float(index) * 2.15 - 0.15, "impact_index": index})
 
 func _explosion_sphere(parent: Node3D, node_name: String, radius: float, color: Color, emission_energy: float) -> MeshInstance3D:
 	var sphere := MeshInstance3D.new()
@@ -336,33 +394,74 @@ func _update_battle(_delta: float) -> void:
 		var phase := float(ship_data.phase)
 		if bool(ship_data.fighter):
 			var friendly := bool(ship_data.friendly)
-			var angle := elapsed * (0.31 if friendly else -0.35) + phase
-			ship.position = base + Vector3(cos(angle) * 315.0, sin(angle * 1.7) * 118.0, sin(angle) * 390.0)
-			ship.rotation = Vector3(sin(angle) * 0.22, -angle + (PI * 0.5 if friendly else -PI * 0.5), cos(angle) * 0.25)
+			var attack_progress := fposmod(elapsed * (0.046 if friendly else 0.052) + phase, 1.0)
+			var next_progress := fposmod(attack_progress + 0.0025, 1.0)
+			ship.position = _fighter_path_position(ship_data, attack_progress)
+			var next_position := _fighter_path_position(ship_data, next_progress)
+			if ship.position.distance_squared_to(next_position) > 0.001:
+				ship.look_at(next_position, Vector3.UP)
+				ship.rotate_object_local(Vector3.FORWARD, sin(attack_progress * TAU) * 0.16)
 		else:
-			ship.position = base + Vector3(sin(elapsed * 0.12 + phase) * 50.0, cos(elapsed * 0.16 + phase) * 28.0, sin(elapsed * 0.09 + phase) * 36.0)
+			# Capital ships share slow formation drift instead of bobbing independently.
+			var formation_direction := -1.0 if bool(ship_data.friendly) else 1.0
+			var formation_drift := Vector3(sin(elapsed * 0.028) * 58.0, sin(elapsed * 0.019) * 10.0, cos(elapsed * 0.024) * 42.0) * formation_direction
+			ship.position = base + formation_drift
 			var broadside_yaw := -0.58 if bool(ship_data.friendly) else 0.58
-			ship.rotation.y = broadside_yaw + sin(elapsed * 0.07 + phase) * 0.09
+			ship.rotation.y = broadside_yaw + sin(elapsed * 0.035 + phase) * 0.035
+	var flak_center := _flak_intercept_center()
 	for tracer_data in tracers:
 		var tracer := tracer_data.node as Node3D
 		var friendly := bool(tracer_data.friendly)
 		var is_missile := bool(tracer_data.missile)
-		var cycle_speed := 0.18 if is_missile else (0.26 if tracer_data.lane == 0 else 0.42)
+		var lane := int(tracer_data.lane)
+		var salvo := int(tracer_data.salvo)
+		var cycle_speed := 0.105 if is_missile else 0.36
 		var cycle := fposmod(elapsed * cycle_speed + float(tracer_data.phase), 1.0)
-		var origin := Vector3(-590.0, -35.0 + float(tracer_data.lane) * 45.0, -520.0) if friendly else Vector3(610.0, 80.0 - float(tracer_data.lane) * 38.0, -790.0)
-		var target := Vector3(610.0, 60.0, -790.0) if friendly else Vector3(-590.0, -45.0, -520.0)
-		var arc_height := (150.0 if is_missile else 72.0) + float(tracer_data.lane) * 13.0
-		var current_position := origin.lerp(target, cycle) + Vector3(0.0, sin(cycle * PI) * arc_height, sin(cycle * TAU + tracer_data.lane) * (34.0 if is_missile else 8.0))
+		var origin: Vector3
+		var target: Vector3
+		if is_missile:
+			var source_index := (1 + lane % 3) if friendly else (4 + lane % 3)
+			var target_index := (4 + lane % 3) if friendly else (0 if lane < 2 else 1)
+			origin = (ships[source_index].node as Node3D).position + Vector3(0.0, 28.0, -34.0)
+			target = (ships[target_index].node as Node3D).position + Vector3(0.0, 5.0, -45.0)
+		else:
+			if friendly:
+				origin = (ships[0].node as Node3D).position + Vector3(-28.0 + float(lane) * 9.0, 46.0, -60.0)
+				target = flak_center + Vector3((float(salvo) - 1.0) * 34.0, (float(lane) - 3.0) * 27.0, (float(lane % 2) - 0.5) * 32.0)
+			else:
+				origin = (ships[4 + lane % 3].node as Node3D).position + Vector3(0.0, 24.0, -26.0)
+				target = (ships[7 + lane % 7].node as Node3D).position
+		var arc_height := (170.0 + float(lane) * 18.0) if is_missile else (38.0 + float(salvo) * 10.0)
+		var current_position := origin.lerp(target, cycle) + Vector3(0.0, sin(cycle * PI) * arc_height, sin(cycle * TAU + lane) * (42.0 if is_missile else 5.0))
 		var next_cycle := minf(cycle + 0.012, 1.0)
-		var next_position := origin.lerp(target, next_cycle) + Vector3(0.0, sin(next_cycle * PI) * arc_height, sin(next_cycle * TAU + tracer_data.lane) * (34.0 if is_missile else 8.0))
+		var next_position := origin.lerp(target, next_cycle) + Vector3(0.0, sin(next_cycle * PI) * arc_height, sin(next_cycle * TAU + lane) * (42.0 if is_missile else 5.0))
 		tracer.position = current_position
 		if not current_position.is_equal_approx(next_position):
 			tracer.look_at(next_position, Vector3.UP)
-		tracer.visible = cycle > 0.04 and cycle < 0.94
+		tracer.visible = cycle > 0.035 and cycle < (0.96 if is_missile else 0.84)
+	for burst_data in flak_airbursts:
+		var flak_burst := burst_data.node as Node3D
+		var wall_pulse := fposmod(elapsed * 0.82 + float(burst_data.phase), 2.4)
+		var lane_offset := (float(burst_data.lane) - 3.0) * 29.0
+		var row_offset := (float(burst_data.row) - 0.5) * 52.0
+		flak_burst.position = flak_center + Vector3(row_offset, lane_offset, sin(float(burst_data.lane) * 1.7) * 22.0)
+		flak_burst.visible = wall_pulse < 0.52
+		if flak_burst.visible:
+			var burst_fade := clampf(1.0 - wall_pulse / 0.52, 0.0, 1.0)
+			(burst_data.core as MeshInstance3D).scale = Vector3.ONE * (0.25 + wall_pulse * 4.2)
+			(burst_data.ring as MeshInstance3D).scale = Vector3.ONE * (0.35 + wall_pulse * 5.8)
+			_set_mesh_alpha(burst_data.core, burst_fade * (0.68 if reduced_flashes else 1.0))
+			_set_mesh_alpha(burst_data.ring, burst_fade * 0.62)
 	for explosion_data in explosions:
 		var burst := explosion_data.node as Node3D
 		var pulse := fposmod(elapsed - float(explosion_data.phase), 8.6)
-		burst.position = explosion_data.position
+		var impact_index := int(explosion_data.impact_index)
+		if impact_index < 2:
+			burst.position = flak_center + Vector3(-58.0 + impact_index * 116.0, -42.0 + impact_index * 76.0, -20.0)
+		elif impact_index == 2:
+			burst.position = (ships[4].node as Node3D).position + Vector3(-76.0, 34.0, 22.0)
+		else:
+			burst.position = (ships[1].node as Node3D).position + Vector3(58.0, -28.0, -16.0)
 		burst.visible = pulse < 1.15
 		if burst.visible:
 			var flash_limit := 0.76 if reduced_flashes else 1.0
@@ -379,6 +478,41 @@ func _update_battle(_delta: float) -> void:
 			_set_mesh_alpha(explosion_data.smoke, smoke_fade * 0.4)
 			_set_mesh_alpha(explosion_data.shockwave, fire_fade * 0.68 * flash_limit)
 			(explosion_data.light as OmniLight3D).light_energy = core_fade * (2.2 if reduced_flashes else 6.2)
+
+func _fighter_path_position(ship_data: Dictionary, progress: float) -> Vector3:
+	var friendly := bool(ship_data.friendly)
+	var slot := int(ship_data.formation_slot)
+	var launch: Vector3
+	var attack: Vector3
+	if friendly:
+		launch = _friendly_launch_position(slot)
+		attack = (ships[4 + slot % 3].node as Node3D).position + Vector3(-90.0 + float(slot % 3) * 82.0, -46.0 + float(slot % 2) * 86.0, 24.0)
+	else:
+		launch = (ships[4 + slot % 3].node as Node3D).position + Vector3(-42.0 + float(slot % 3) * 38.0, 24.0 + float(slot % 2) * 34.0, 76.0)
+		attack = (ships[slot % 4].node as Node3D).position + Vector3(-70.0 + float(slot % 3) * 70.0, -42.0 + float(slot % 2) * 72.0, 28.0)
+	if progress < 0.58:
+		var attack_t := progress / 0.58
+		var control_a := launch.lerp(attack, 0.3) + Vector3(0.0, 120.0 + slot * 9.0, 110.0)
+		var control_b := launch.lerp(attack, 0.72) + Vector3(0.0, -62.0 + float(slot % 3) * 34.0, -85.0)
+		return launch.bezier_interpolate(control_a, control_b, attack, attack_t)
+	var return_t := (progress - 0.58) / 0.42
+	var egress_a := attack + Vector3(140.0 if friendly else -140.0, 90.0 + slot * 7.0, -230.0)
+	var egress_b := launch + Vector3(-110.0 if friendly else 110.0, -65.0 + float(slot % 3) * 25.0, 250.0)
+	return attack.bezier_interpolate(egress_a, egress_b, launch, return_t)
+
+func _friendly_launch_position(slot: int) -> Vector3:
+	var carrier := ships[0].node as Node3D
+	var marker_name := "ScoutEWBay"
+	if slot < 6:
+		var side_name := "Port" if slot < 3 else "Starboard"
+		marker_name = "%sBay%d" % [side_name, slot % 3 + 1]
+	var marker := carrier.find_child(marker_name, true, false) as Node3D
+	return marker.global_position if marker != null else carrier.position
+
+func _flak_intercept_center() -> Vector3:
+	var carrier := ships[0].node as Node3D
+	var locked_track := ships[14].node as Node3D
+	return carrier.position.lerp(locked_track.position, 0.54)
 
 func _set_mesh_alpha(mesh_instance: MeshInstance3D, alpha: float) -> void:
 	var material := mesh_instance.material_override as StandardMaterial3D
@@ -403,7 +537,7 @@ func _build_interface(can_continue: bool) -> void:
 	top_line.size = Vector2(1280, 3)
 	interface.add_child(top_line)
 	var telemetry := _label(interface, Vector2(26, 22), Vector2(350, 56), 13)
-	telemetry.text = "LIVE COMBAT FEED // HELIOS REACH\nCOMMAND LINK: STANDBY"
+	telemetry.text = "LIVE COMBAT FEED // HELIOS REACH\nFLAK WALL ACTIVE // AIR GROUP 6+1"
 	var build := _label(interface, Vector2(990, 22), Vector2(260, 52), 13)
 	build.text = "COMMAND INTERFACE // ONLINE\nSINGLE-PLAYER // PC + WEB"
 	build.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT

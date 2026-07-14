@@ -25,19 +25,23 @@ func _run() -> void:
 	var branding_copy := " ".join(menu.main_panel.get_children().filter(func(child: Node) -> bool: return child is Label).map(func(child: Node) -> String: return (child as Label).text))
 	_assert_true(not branding_copy.contains("M19") and branding_copy.contains("CARRIER COMMAND"), "title branding presents the game identity without development milestone copy")
 	_assert_true(menu.settings_panel.size == Vector2(440.0, 552.0) and menu.controls_panel.size == Vector2(440.0, 552.0), "secondary settings and controls remain focused overlays")
-	_assert_true(menu.ships.size() == 19, "background battle contains two capital formations and twelve fighter craft")
+	_assert_true(menu.ships.size() == 20, "background battle contains two capital formations, six Raptor leaders, one Watcher, and six hostile attack craft")
 	var capital_models := menu.ships.filter(func(ship_data: Dictionary) -> bool: return not bool(ship_data.fighter))
 	var fighter_models := menu.ships.filter(func(ship_data: Dictionary) -> bool: return bool(ship_data.fighter))
 	_assert_true(capital_models.all(func(ship_data: Dictionary) -> bool: return ship_data.node is CombatShip and not ship_data.node is FighterCraft), "menu capital formation uses the current CombatShip model builder")
 	_assert_true(fighter_models.all(func(ship_data: Dictionary) -> bool: return ship_data.node is FighterCraft), "menu wings use the current FighterCraft model builder")
 	var sidebay := capital_models[0].node as CombatShip
 	_assert_true(sidebay is PlayerCarrier, "menu flagship instantiates the exact playable carrier model")
-	_assert_true(sidebay.find_child("ArmoredCore", true, false) != null and sidebay.find_child("PortBayAssembly", true, false) != null and sidebay.find_child("StarboardBayAssembly", true, false) != null, "menu flagship carries the playable armored core and mirrored hangar assemblies")
+	var gallery_names := ["PortBay1Assembly", "PortBay2Assembly", "PortBay3Assembly", "StarboardBay1Assembly", "StarboardBay2Assembly", "StarboardBay3Assembly"]
+	_assert_true(sidebay.find_child("ArmoredCore", true, false) != null and gallery_names.all(func(node_name: String) -> bool: return sidebay.find_child(node_name, true, false) != null) and sidebay.find_child("ScoutEWHive", true, false) != null, "menu flagship carries the playable armored core, six fighter galleries, and Watcher EW hive")
 	var armored_core := sidebay.find_child("ArmoredCore", true, false) as MeshInstance3D
 	var sidebay_material := armored_core.material_override as StandardMaterial3D if armored_core != null else null
 	_assert_true(sidebay_material != null and sidebay_material.albedo_texture != null, "menu flagship renders the current textured hull surface")
 	_assert_true(sidebay.find_child("RecessedWaist", true, false) != null and sidebay.find_child("OverlappingArmorRib06", true, false) != null and sidebay.find_child("CarrierEngineCorePlume", true, false) != null, "menu flagship uses the Sidebay-specific recessed hull, armor courses, and layered engine plume")
-	_assert_true(get_nodes_in_group("menu_missile_trail").size() >= 5 and get_nodes_in_group("menu_flak_tracer").size() >= 20, "menu battle layers missile plumes and dense flak tracer streaks")
+	var friendly_air_group := fighter_models.filter(func(ship_data: Dictionary) -> bool: return bool(ship_data.friendly))
+	_assert_true(friendly_air_group.size() == 7 and friendly_air_group.filter(func(ship_data: Dictionary) -> bool: return ship_data.model_id == &"raptor_interceptor").size() == 6 and friendly_air_group.filter(func(ship_data: Dictionary) -> bool: return ship_data.model_id == &"watcher_drone").size() == 1, "menu air group presents six Raptor squadron leaders and the dedicated Watcher EW wing")
+	_assert_true(get_nodes_in_group("menu_missile_trail").size() == 6 and get_nodes_in_group("menu_flak_tracer").size() == 28 and get_nodes_in_group("menu_flak_airburst").size() == 14, "menu battle layers guided salvos, three seven-round friendly flak curtains, reciprocal fire, and a dense airburst wall")
+	_assert_true(menu.tracers.filter(func(tracer_data: Dictionary) -> bool: return not bool(tracer_data.missile) and bool(tracer_data.friendly)).size() == 21, "title-screen flak uses three lock-directed seven-round friendly curtains")
 	var layered_impacts := get_nodes_in_group("menu_layered_explosion")
 	_assert_true(layered_impacts.size() == 4 and layered_impacts.all(func(effect: Node) -> bool: return effect.find_child("WhiteHotCore", true, false) != null and effect.find_child("ShockwaveRing", true, false) != null and effect.find_child("DirectionalDebris", true, false) != null), "menu ship hits use layered core, shockwave, and debris effects")
 	_assert_true(menu.camera.fov <= 51.0 and menu.camera.far >= 30000.0, "battle camera holds the full readable command-view backdrop")
