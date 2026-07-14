@@ -279,7 +279,7 @@ func _lesson_text(index: int) -> String:
 		2:
 			return "Contacts begin uncertain. Press %s for an active sensor ping: nearby tracks become identifiable, but the emission reveals Sidebay. Left-click an identified contact to select or lock it before launching guided weapons." % _key("sensor_ping")
 		3:
-			return "%s places the flak fuse plane; %s and %s move it between one kilometer and the battery's effective range. %s launches four guided missiles at the current lock. %s releases the single nuclear torpedo—respect its arming distance and friendly-fire radius." % [_key("flak_screen"), _key("flak_range_decrease"), _key("flak_range_increase"), _key("missile_salvo"), _key("nuclear_torpedo")]
+			return "Lock an identified target, then press %s to saturate that firing sector with a seven-round flak wall. It destroys missiles and strikecraft, lightly damages capital ships, and will hit friendly craft, ships, or ordnance caught in the burst. %s launches four guided missiles at the current lock. %s releases the single nuclear torpedo—respect its arming distance and friendly-fire radius." % [_key("flak_screen"), _key("missile_salvo"), _key("nuclear_torpedo")]
 		4:
 			return "%s controls both hangar wings. %s operates the interceptor group and %s operates the scouts. Re-issuing a wing command during servicing queues redeployment; recall every craft before jump preparation with %s." % [_key("toggle_all_wings"), _key("interceptor_wing"), _key("scout_wing"), _key("jump_prep")]
 		5:

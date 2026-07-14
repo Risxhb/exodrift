@@ -495,13 +495,6 @@ func _screen_to_command_plane(screen_point: Vector2) -> Vector3:
 	var intersection = plane.intersects_ray(origin, direction)
 	return intersection if intersection != null else carrier.global_position
 
-func flak_placement_world_point(screen_point: Vector2, range_m: float) -> Vector3:
-	var plane_point := _screen_to_command_plane(screen_point)
-	var direction := plane_point - carrier.global_position
-	if direction.length_squared() < 1.0:
-		direction = -carrier.global_transform.basis.z.normalized()
-	return carrier.global_position + direction.normalized() * range_m
-
 func _update_contact_markers() -> void:
 	var live_ids: Dictionary = {}
 	for contact in sensors.contacts.values():

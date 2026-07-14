@@ -45,10 +45,10 @@ func _run() -> void:
 
 	carrier.carrier_operations.stores["flak_rounds"] = 7
 	carrier.flak_cooldown = 0.0
-	_assert_true(carrier.fire_flak(), "seven-round flak pattern fires when exactly one spread remains")
+	_assert_true(carrier.fire_flak(target), "seven-round flak pattern fires toward a locked target when exactly one spread remains")
 	_assert_true(int(carrier.carrier_operations.stores.flak_rounds) == 0 and carrier.pending_flak_shots.size() == 6, "flak spread consumes seven actual rounds and retains its authored pattern")
 	carrier.flak_cooldown = 0.0
-	_assert_true(not carrier.fire_flak(), "empty flak magazine rejects the next screen burst")
+	_assert_true(not carrier.fire_flak(target), "empty flak magazine rejects the next flak-wall burst")
 
 	carrier.free()
 	if is_instance_valid(target):

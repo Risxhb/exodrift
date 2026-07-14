@@ -29,6 +29,8 @@ func _profile_resolution(resolution: Vector2i) -> Dictionary:
 	scene.carrier.damage_state.shields = 100000.0
 	scene.carrier.damage_state.armor = 100000.0
 	scene.carrier.damage_state.hull = 100000.0
+	scene.hostile_command.global_position = scene.carrier.global_position + Vector3(0.0, 0.0, -2400.0)
+	scene.hostile_command.velocity = Vector3.ZERO
 	var operations := scene.carrier.carrier_operations as CarrierOperationsState
 	operations.stores.flak_rounds = 10000
 	operations.stores.guided_missiles = 1000
@@ -52,7 +54,7 @@ func _profile_resolution(resolution: Vector2i) -> Dictionary:
 	for frame in SAMPLE_FRAMES:
 		if frame % 12 == 0:
 			scene.carrier.flak_cooldown = 0.0
-			scene.carrier.fire_flak()
+			scene.carrier.fire_flak(scene.hostile_command)
 		if frame % 90 == 0:
 			scene.carrier.missile_cooldown = 0.0
 			scene.carrier.fire_missile(scene.hostile_command)

@@ -16,7 +16,7 @@ func _run() -> void:
 			ship.ai_enabled = false
 
 	_assert_true(ExodriftInputSettings.action_key("flak_screen") == KEY_1 and ExodriftInputSettings.action_key("missile_salvo") == KEY_2 and ExodriftInputSettings.action_key("nuclear_torpedo") == KEY_3, "ordnance actions use the requested remappable 1/2/3 defaults")
-	_assert_true(ExodriftInputSettings.action_key("flak_range_decrease") == KEY_BRACKETLEFT and ExodriftInputSettings.action_key("flak_range_increase") == KEY_BRACKETRIGHT, "brackets provide remappable flak fuse-range adjustment")
+	_assert_true(ExodriftInputSettings.ACTION_LABELS.get("flak_screen") == "Fire Flak Wall" and not ExodriftInputSettings.ACTION_LABELS.has("flak_range_decrease"), "1 is a direct flak-wall command with no placement-range bindings")
 	_assert_true(ExodriftInputSettings.action_key("toggle_all_wings") == KEY_B, "B provides the remappable aggregate hangar-wing deployment and retraction control")
 	_assert_true(carrier.definition.acceleration_mps2 <= 18.0 and carrier.definition.rotation_speed_radians <= 0.38, "carrier uses capital-ship acceleration and turn-rate limits")
 	_assert_true(not carrier.engine_trails.is_empty() and carrier.engine_trails[0].has("outer") and carrier.engine_trails[0].has("inner") and carrier.engine_trails[0].has("core"), "carrier engine banks expose layered propulsion-demand plumes")
@@ -27,46 +27,49 @@ func _run() -> void:
 	carrier.chase_target_distance_m = PlayerCarrier.CHASE_DEFAULT_DISTANCE_M
 	carrier.chase_distance_m = PlayerCarrier.CHASE_DEFAULT_DISTANCE_M
 
-	var screen_center := game.get_viewport().get_visible_rect().size * 0.5
-	_assert_true(carrier.begin_flak_placement(screen_center) and carrier.flak_placement_active, "1-style placement creates a valid world-space fuse preview")
-	for _frame in 8:
-		carrier._update_camera()
-	var camera_to_carrier := carrier.chase_camera.global_position.direction_to(carrier.global_position)
-	_assert_true(carrier.flak_camera_blend > 0.7 and carrier.chase_camera.position.z > 0.0 and carrier.chase_camera.position.length() > 800.0 and (-carrier.chase_camera.global_transform.basis.z).dot(camera_to_carrier) > 0.98, "placement zooms out while keeping the carrier centered instead of travelling toward the fuse volume")
-	var minimum := carrier.adjust_flak_screen_range(-20)
-	var maximum := carrier.adjust_flak_screen_range(20)
-	_assert_true(is_equal_approx(minimum, 1000.0) and is_equal_approx(maximum, 3200.0), "flak fuse range clamps to the authored 1.0–3.2 km envelope")
-	carrier.adjust_flak_screen_range(-4)
-	_assert_true(carrier.confirm_flak_placement() and carrier.flak_screen_active and not carrier.flak_placement_active, "LMB-style confirmation commits sustained flak and exits placement")
-	for _frame in 18:
-		carrier._update_camera()
-	_assert_true(carrier.flak_camera_blend < 0.05 and carrier.chase_camera.position.z > 0.0, "confirmation returns the camera to the carrier command view")
-	var committed_local := carrier.flak_screen_local_offset
-	carrier.global_position += Vector3(220.0, 35.0, -90.0)
-	carrier.global_transform.basis = carrier.global_transform.basis.rotated(Vector3.UP, 0.4)
-	carrier._update_flak_indicator(false)
-	_assert_true(carrier.flak_screen_world_position().distance_to(carrier.global_transform * committed_local) < 0.01, "committed screen stays fixed in carrier-local space through translation and turn")
-	carrier.clear_flak_screen()
-	game.tactical.set_enabled(true)
-	var tactical_point: Vector3 = game.tactical.flak_placement_world_point(screen_center + Vector2(120.0, 40.0), carrier.flak_screen_range_m)
-	_assert_true(carrier.begin_flak_placement_world(tactical_point) and carrier.confirm_flak_placement() and game.tactical.camera.current, "tactical overlay places and confirms the same carrier-relative flak screen without leaving tactical command")
-	game.tactical.set_enabled(false)
-
+	var lock_target: CombatShip = game.hostile_command
+	lock_target.global_position = carrier.global_position + Vector3(0.0, 0.0, -1800.0)
+	lock_target.velocity = Vector3.ZERO
 	carrier.flak_cooldown = 0.0
 	var before_flak := _source_projectiles(carrier.stable_entity_id).size()
-	carrier._process_flak_screen()
+	_assert_true(not carrier.fire_flak(null), "flak rejects fire without a valid target lock")
+	game.target_lock = lock_target
+	_assert_true(game._fire_flak_barrage() and game.hud.notification_label.text.contains("FRIENDLIES KEEP CLEAR"), "1-style flak command immediately fires toward an in-range target lock and warns about the hazardous sector")
 	_assert_true(carrier.pending_flak_shots.size() == carrier.flak_burst_count - 1, "capital batteries stagger the remaining rounds instead of spawning a simultaneous wall")
 	carrier._process_flak_salvo_queue(1.0)
 	var flak_rounds := _source_projectiles(carrier.stable_entity_id).filter(func(projectile: SidebayProjectile) -> bool: return projectile.projectile_role == "flak")
-	_assert_true(flak_rounds.size() >= before_flak + carrier.flak_burst_count, "active screen sustains a staggered seven-round battery barrage")
+	_assert_true(flak_rounds.size() >= before_flak + carrier.flak_burst_count, "lock-directed fire creates a staggered seven-round wall")
 	var screen_round: SidebayProjectile = flak_rounds.back() if not flak_rounds.is_empty() else null
-	_assert_true(screen_round != null and screen_round.airburst_distance_m > 0.0 and is_equal_approx(screen_round.blast_radius_m, carrier.flak_airburst_radius_m), "screen rounds carry a bounded proximity/airburst fuse")
+	var lock_direction := carrier.global_position.direction_to(lock_target.global_position)
+	_assert_true(screen_round != null and screen_round.direction.dot(lock_direction) > 0.99 and screen_round.airburst_distance_m > 0.0 and is_equal_approx(screen_round.blast_radius_m, carrier.flak_airburst_radius_m), "flak rounds follow the target lock and carry a bounded airburst fuse")
 	if screen_round != null:
+		_assert_true(screen_round.friendly_fire and screen_round.airburst_intercepts_friendlies and is_equal_approx(screen_round.airburst_capital_damage_multiplier, carrier.flak_capital_damage_multiplier), "the flak firing sector is a friendly-fire hazard with reduced capital damage")
+		var burst_position := carrier.global_position + lock_direction * 1800.0
 		var hostile_weapon: WeaponDefinition = game.hostile_command.definition.weapons[0]
-		var threat: SidebayProjectile = game.hostile_command.spawn_projectile(hostile_weapon, screen_round.global_position + Vector3(20.0, 0.0, 0.0), Vector3.FORWARD, carrier)
-		screen_round.global_position = threat.global_position
+		var threat: SidebayProjectile = game.hostile_command.spawn_projectile(hostile_weapon, burst_position + Vector3(20.0, 0.0, 0.0), Vector3.FORWARD, carrier)
+		var friendly_missile: SidebayProjectile = carrier.spawn_projectile(carrier.missile_weapon, burst_position + Vector3(-20.0, 0.0, 0.0), Vector3.FORWARD, lock_target)
+		var hostile_craft: CombatShip = game.hostile_fighters.crafts[0]
+		var friendly_craft: CombatShip = game.interceptor.crafts[0]
+		var path_round: SidebayProjectile = flak_rounds.front()
+		friendly_craft.global_position = path_round.global_position
+		_assert_true(path_round._check_proximity_hit(), "flak detects allied strikecraft that stray through the firing solution")
+		lock_target.global_position = burst_position + Vector3(0.0, 0.0, 25.0)
+		game.escort.global_position = burst_position + Vector3(25.0, 0.0, 0.0)
+		hostile_craft.global_position = burst_position + Vector3(0.0, 25.0, 0.0)
+		friendly_craft.global_position = burst_position + Vector3(0.0, -25.0, 0.0)
+		var hostile_capital_before := _total_layers(lock_target)
+		var friendly_capital_before := _total_layers(game.escort)
+		var hostile_craft_before := _total_layers(hostile_craft)
+		var friendly_craft_before := _total_layers(friendly_craft)
+		screen_round.global_position = burst_position
 		screen_round.detonate()
-		_assert_true(threat.expired, "flak airburst intercepts an incoming missile inside its screening radius")
+		_assert_true(threat.expired and friendly_missile.expired, "the flak wall destroys hostile and friendly missiles caught in its firing sector")
+		var hostile_capital_damage := hostile_capital_before - _total_layers(lock_target)
+		var friendly_capital_damage := friendly_capital_before - _total_layers(game.escort)
+		var hostile_craft_damage := hostile_craft_before - _total_layers(hostile_craft)
+		var friendly_craft_damage := friendly_craft_before - _total_layers(friendly_craft)
+		_assert_true(hostile_craft_damage > 0.0 and friendly_craft_damage > 0.0, "flak heavily damages hostile and friendly strikecraft in the saturated sector")
+		_assert_true(hostile_capital_damage > 0.0 and friendly_capital_damage > 0.0 and hostile_capital_damage < hostile_craft_damage * 0.5, "flak applies light damage to hostile and friendly capital ships")
 		var active_roles: Array[String] = []
 		var combat_vfx := root.get_node_or_null("CombatVFX")
 		if combat_vfx != null:
@@ -117,7 +120,7 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	if failures.is_empty():
-		print("PASS: sustained flak placement, guided ordnance, nuclear risk, trails, and wing redeploy")
+		print("PASS: lock-directed hazardous flak wall, guided ordnance, nuclear risk, trails, and wing redeploy")
 		quit(0)
 	else:
 		for failure in failures:

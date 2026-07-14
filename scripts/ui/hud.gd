@@ -201,7 +201,7 @@ func _build_ui() -> void:
 	controls_panel = _panel(root, Vector2(84, 680), Vector2(1112, 28), Color(0.004, 0.018, 0.028, 0.62), UIStyle.CYAN_SOFT)
 	controls_label = _label(controls_panel, Vector2(10, 3), Vector2(1092, 22), 10, UIStyle.TEXT_MUTED)
 	controls_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	controls_label.text = "1 FLAK SCREEN  2 MISSILES  3 NUCLEAR  %s CARRIER OPS  B HANGAR WINGS  [ / ] FUSE RANGE  MMB ORBIT  WHEEL ZOOM" % _operations_key_label()
+	controls_label.text = "1 FLAK WALL  2 MISSILES  3 NUCLEAR  %s CARRIER OPS  B HANGAR WINGS  MMB ORBIT  WHEEL ZOOM" % _operations_key_label()
 	crosshair_label = _label(root, Vector2(624, 340), Vector2(32, 32), 24)
 	crosshair_label.text = "⌖"
 	crosshair_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -233,7 +233,7 @@ func _build_ui() -> void:
 	pause_title.text = "PAUSED / SETTINGS"
 	pause_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var pause_copy := _label(pause_panel, Vector2(40, 90), Vector2(420, 160), 18)
-	pause_copy.text = "Esc - resume\n\n1: place / relocate flak screen  /  Shift+1: cease\n2: guided missile salvo  /  3: one nuclear torpedo\n%s: live carrier operations console\nB: deploy or retract all wings  /  Z: fighter squadron menu\nX: Watcher EW/scout wing  /  [ / ]: flak fuse range\nW/S: throttle  /  Double-click: full-cruise heading\nMiddle-drag: camera orbit  /  Wheel: signed zoom\n\nEnter - restart encounter" % _operations_key_label()
+	pause_copy.text = "Esc - resume\n\n1: fire a flak wall toward the identified target lock\n2: guided missile salvo  /  3: one nuclear torpedo\nFlak destroys missiles and strikecraft; friendlies must clear the firing sector\n%s: live carrier operations console\nB: deploy or retract all wings  /  Z: fighter squadron menu\nX: Watcher EW/scout wing\nW/S: throttle  /  Double-click: full-cruise heading\nMiddle-drag: camera orbit  /  Wheel: signed zoom\n\nEnter - restart encounter" % _operations_key_label()
 	pause_copy.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pause_panel.visible = false
 	pause_veil.visible = false
@@ -358,7 +358,7 @@ func _process(delta: float) -> void:
 	var pd_status := "PD READY" if carrier.point_defense_cooldown <= 0.0 else "PD %.1fs" % carrier.point_defense_cooldown
 	if is_finite(carrier.point_defense_last_tti):
 		pd_status += " / TTI %.1fs" % carrier.point_defense_last_tti
-	weapon_label.text = "[1] FLAK  //  %s  •  %s  •  %.1f km  •  R %.0fm\n[2] MISSILES  //  %s  •  %d WEAPONS  •  %.1f km  •  %s\n[3] NUCLEAR  //  %s  •  ARM %.1f km  •  BLAST %.0fm" % [carrier.flak_screen_status(), flak_status, carrier.flak_screen_range_m / 1000.0, carrier.flak_airburst_radius_m, missile_status, carrier.missile_salvo_count, carrier.missile_weapon.range_m / 1000.0, pd_status, nuclear_status, carrier.nuclear_arming_distance_m / 1000.0, carrier.nuclear_blast_radius_m]
+	weapon_label.text = "[1] FLAK WALL  //  LOCK DIRECTED  •  %s  •  %.1f km  •  HAZARD R %.0fm\n[2] MISSILES  //  %s  •  %d WEAPONS  •  %.1f km  •  %s\n[3] NUCLEAR  //  %s  •  ARM %.1f km  •  BLAST %.0fm" % [flak_status, carrier.flak_weapon.range_m / 1000.0, carrier.flak_airburst_radius_m, missile_status, carrier.missile_salvo_count, carrier.missile_weapon.range_m / 1000.0, pd_status, nuclear_status, carrier.nuclear_arming_distance_m / 1000.0, carrier.nuclear_blast_radius_m]
 	_update_carrier_operations_summary()
 	var graphics := get_node_or_null("/root/GraphicsQualityManager")
 	radar_title.text = "TACTICAL RADAR // %s" % (graphics.profile_label() if graphics != null else "ACTIVE")
@@ -373,27 +373,22 @@ func _process(delta: float) -> void:
 		wing_panel.visible = false
 		weapon_panel.visible = false
 		carrier_operations_panel.visible = true
-		crosshair_label.visible = carrier.flak_placement_active
-		if crosshair_label.visible:
-			crosshair_label.position = get_viewport().get_mouse_position() - crosshair_label.size * 0.5
+		crosshair_label.visible = false
 		objective_panel.visible = false
 		map_info_panel.visible = true
 		mode_panel.visible = true
 		map_info_label.text = _map_information()
-		controls_label.text = "1 FLAK  %s OPS  F1-F4 GROUPS  LMB SELECT  RMB WHEEL  SHIFT QUEUE  SHIFT+MMB PAN  HOME CARRIER  WHEEL ZOOM" % _operations_key_label()
+		controls_label.text = "1 FLAK WALL  %s OPS  F1-F4 GROUPS  LMB SELECT  RMB WHEEL  SHIFT QUEUE  SHIFT+MMB PAN  HOME CARRIER  WHEEL ZOOM" % _operations_key_label()
 	else:
 		telemetry_panel.visible = true
 		wing_panel.visible = true
 		weapon_panel.visible = true
 		carrier_operations_panel.visible = true
-		crosshair_label.visible = carrier.flak_placement_active
-		if crosshair_label.visible:
-			var director_position := carrier.flak_aim_screen_position if carrier.flak_aim_uses_pointer else get_viewport().get_visible_rect().size * 0.5
-			crosshair_label.position = director_position - crosshair_label.size * 0.5
+		crosshair_label.visible = false
 		objective_panel.visible = true
 		map_info_panel.visible = false
 		mode_panel.visible = true
-		controls_label.text = "1 FLAK   2 MISSILES   3 NUCLEAR   %s OPS   [ / ] RANGE   %s   B ALL WINGS   Z SQUADRON MENU   X WATCHER EW/SCOUT   TAB MAP" % [_operations_key_label(), "LMB CONFIRM / RMB CANCEL" if carrier.flak_placement_active else "SHIFT+1 CEASE"]
+		controls_label.text = "LOCK + 1 FLAK WALL   2 MISSILES   3 NUCLEAR   %s OPS   B ALL WINGS   Z SQUADRON MENU   X WATCHER EW/SCOUT   TAB MAP" % _operations_key_label()
 	if notification_time > 0.0:
 		notification_time -= delta
 		if notification_time <= 0.0:

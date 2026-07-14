@@ -3,8 +3,7 @@ extends RefCounted
 
 const ACTION_LABELS := {
 	"accelerate": "Increase Throttle", "decelerate": "Decrease Throttle", "boost": "Boost", "brake": "Full Stop",
-	"flak_screen": "Place Flak Screen", "missile_salvo": "Missile Salvo", "nuclear_torpedo": "Nuclear Torpedo",
-	"flak_range_decrease": "Flak Range Down", "flak_range_increase": "Flak Range Up",
+	"flak_screen": "Fire Flak Wall", "missile_salvo": "Missile Salvo", "nuclear_torpedo": "Nuclear Torpedo",
 	"toggle_tactical": "Tactical Map", "sensor_ping": "Active Ping", "interceptor_wing": "Interceptor Wing",
 	"scout_wing": "Scout Wing", "toggle_all_wings": "All Wings / Hangars", "jump_prep": "Jump Preparation",
 	"carrier_operations": "Carrier Operations",
@@ -19,7 +18,6 @@ const ACTION_LABELS := {
 const DEFAULT_KEYS := {
 	"accelerate": KEY_W, "decelerate": KEY_S, "boost": KEY_SHIFT, "brake": KEY_CTRL,
 	"flak_screen": KEY_1, "missile_salvo": KEY_2, "nuclear_torpedo": KEY_3,
-	"flak_range_decrease": KEY_BRACKETLEFT, "flak_range_increase": KEY_BRACKETRIGHT,
 	"toggle_tactical": KEY_TAB, "sensor_ping": KEY_P, "interceptor_wing": KEY_Z,
 	"scout_wing": KEY_X, "toggle_all_wings": KEY_B, "jump_prep": KEY_V,
 	"carrier_operations": KEY_C,

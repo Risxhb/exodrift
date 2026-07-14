@@ -12,7 +12,7 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 
 ## Current playable
 
-- Heavy carrier flight with persistent throttle and inertia, carrier-relative placed flak screens, four-missile guided salvos, one nuclear torpedo per battle, visible automated defense, and shields → armor → hull damage.
+- Heavy carrier flight with persistent throttle and inertia, lock-directed flak walls, four-missile guided salvos, one nuclear torpedo per battle, visible automated defense, and shields → armor → hull damage.
 - A unified command-interface style groups carrier telemetry, air-group state, fire control, target data, radar, notifications, and controls into compact scalable panels. The four primary command panels and tactical overview are collapsible.
 - Six independently deployable Raptor fighter squadrons (four craft each), one three-craft Watcher EW/scout wing, and the commandable missile frigate `ISS Resolute`.
 - Visible launch, engagement, recall, side-bay recovery, servicing, relaunch, and armored bay-retraction cycles with a closed-bay jump interlock.
@@ -55,7 +55,7 @@ All listed keyboard actions can be remapped from **Settings → Remap Controls**
 
 - `W/S`: increase/decrease persistent throttle; `Ctrl`: full stop; `Shift`: boost
 - Mouse: visible unified command cursor; double-click empty space for a full-cruise heading, middle-drag to orbit, and use the wheel for signed zoom. The authored carrier framing is 0%; the camera can zoom farther out to -100% or in to +100%.
-- `1`: enter or relocate the carrier-centered flak-screen placement view from direct combat or the tactical overlay; left-click confirms, right-click or `Esc` cancels, and `Shift+1` ceases the active screen. `[`/`]` adjust its 1.0–3.2 km fuse distance in 250 m steps; the flak-director upgrade extends the maximum to 4 km.
+- `1`: fire a staggered seven-round “wall of flak” toward the current identified target lock. The 250 m saturation sector destroys missiles and nuclear torpedoes, heavily damages strikecraft, and lightly damages capital ships. It has no friendly-fire immunity: allied craft, ships, and ordnance must stay out of the firing solution. Base range is 3.2 km; the flak-director upgrade extends it to 4 km.
 - `2`: fire a four-weapon guided missile salvo at the identified lock. Right mouse remains a compatibility shortcut.
 - `3`: fire the single 10 km nuclear torpedo. It arms after 1.2 km, has a 650 m falloff blast, can be intercepted, and damages friendlies.
 - `P`: active sensor ping
@@ -64,7 +64,7 @@ All listed keyboard actions can be remapped from **Settings → Remap Controls**
 - `X`: launch/recall the Watcher EW/scout wing; pressing during servicing queues an automatic physical redeploy when turnaround completes
 - `B`: deploy/open both hangar wings, or recall both air groups and retract the galleries once recovery is complete
 - `Tab`: live tactical map
-- Tactical map: `F1–F4` groups, `Home` center/follow carrier, `Shift`+middle-drag pan, middle-drag orbit, `1` flak placement, left-click select/confirm, right-click command wheel/cancel, `I` intercept, `E` escort carrier, Shift queue, `Q` stance, `F` formation, `R` recall, `H` hold, `X` withdraw, wheel zoom
+- Tactical map: `F1–F4` groups, `Home` center/follow carrier, `Shift`+middle-drag pan, middle-drag orbit, `1` fire the flak wall toward the current lock, left-click select, right-click command wheel/cancel, `I` intercept, `E` escort carrier, Shift queue, `Q` stance, `F` formation, `R` recall, `H` hold, `X` withdraw, wheel zoom
 - Tactical overview: select the carrier, then right-click an identified contact marker or overview row for Lock, Approach 500 m, Orbit, Keep at Distance, or Clear Relative Navigation. Orbit and Keep offer 500 m, 5 km, 10 km, and 25 km distances; empty-space and wing/escort right-click orders retain their existing behavior.
 - `V`: begin jump preparation and wing recall; press again to emergency-seal the bays and risk stragglers
 - `Esc`: pause/settings; `Enter`: restart or return to the campaign

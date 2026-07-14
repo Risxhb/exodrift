@@ -21,6 +21,9 @@ var arming_distance_m: float = 0.0
 var radial_warhead: bool = false
 var friendly_fire: bool = false
 var detonate_on_expiry: bool = false
+var airburst_strikecraft_damage_multiplier: float = 1.0
+var airburst_capital_damage_multiplier: float = 1.0
+var airburst_intercepts_friendlies: bool = false
 var vertical_launch_clearance_m: float = 0.0
 
 func configure(
@@ -118,16 +121,32 @@ func _check_proximity_hit() -> bool:
 	var registry := _combat_registry()
 	var candidates: Array = registry.active_combat_entities() if registry != null else get_tree().get_nodes_in_group("combat_entities")
 	for candidate in candidates:
-		if candidate is CombatShip and candidate.team != team and not candidate.is_destroyed:
-			if global_position.distance_to(candidate.global_position) <= collision_radius_m + candidate.collision_radius_m:
-				if not radial_warhead and airburst_distance_m <= 0.0:
-					candidate.receive_damage(damage, source_entity_id, _impact_context())
-				return true
+		if not candidate is CombatShip or candidate.is_destroyed:
+			continue
+		if candidate.stable_entity_id == source_entity_id:
+			continue
+		if candidate.team == team and not friendly_fire:
+			continue
+		if global_position.distance_to(candidate.global_position) <= collision_radius_m + candidate.collision_radius_m:
+			if not radial_warhead and airburst_distance_m <= 0.0:
+				candidate.receive_damage(damage, source_entity_id, _impact_context())
+			return true
 	return false
 
-func configure_airburst(distance_m: float, radius_m: float) -> void:
+func configure_airburst(
+	distance_m: float,
+	radius_m: float,
+	strikecraft_damage_multiplier: float = 1.0,
+	capital_damage_multiplier: float = 1.0,
+	harms_friendlies: bool = false,
+	intercepts_friendly_projectiles: bool = false
+) -> void:
 	airburst_distance_m = clampf(distance_m, 1.0, maximum_distance_m)
 	blast_radius_m = maxf(1.0, radius_m)
+	airburst_strikecraft_damage_multiplier = maxf(0.0, strikecraft_damage_multiplier)
+	airburst_capital_damage_multiplier = maxf(0.0, capital_damage_multiplier)
+	friendly_fire = harms_friendlies
+	airburst_intercepts_friendlies = intercepts_friendly_projectiles
 	detonate_on_expiry = true
 
 func configure_warhead(arming_distance: float, radius_m: float, harms_friendlies: bool, explode_at_max_range: bool) -> void:
@@ -147,7 +166,7 @@ func detonate() -> void:
 	var registry := _combat_registry()
 	var projectiles: Array = registry.active_projectiles() if registry != null else get_tree().get_nodes_in_group("projectiles")
 	for candidate in projectiles:
-		if candidate is SidebayProjectile and candidate != self and candidate.team != team and candidate.can_be_intercepted:
+		if candidate is SidebayProjectile and candidate != self and candidate.can_be_intercepted and (candidate.team != team or airburst_intercepts_friendlies):
 			if global_position.distance_to(candidate.global_position) <= blast_radius_m:
 				candidate.intercept()
 	var entities: Array = registry.active_combat_entities() if registry != null else get_tree().get_nodes_in_group("combat_entities")
@@ -160,7 +179,8 @@ func detonate() -> void:
 		if distance > blast_radius_m + candidate.collision_radius_m:
 			continue
 		var falloff := lerpf(1.0, 0.18, clampf(distance / blast_radius_m, 0.0, 1.0))
-		candidate.receive_damage(damage * falloff, source_entity_id, _impact_context(distance, falloff))
+		var target_damage_multiplier := _airburst_target_damage_multiplier(candidate)
+		candidate.receive_damage(damage * falloff * target_damage_multiplier, source_entity_id, _impact_context(distance, falloff, target_damage_multiplier))
 	var vfx := _combat_vfx()
 	if vfx != null:
 		if projectile_role == "flak" and vfx.has_method("spawn_flak_airburst"):
@@ -169,7 +189,14 @@ func detonate() -> void:
 			vfx.spawn_faction_burst(projectile_role, global_position, team, source_visual_id, 4.8 if projectile_role == "nuclear" else 1.15)
 	queue_free()
 
-func _impact_context(distance_from_blast_m: float = 0.0, radial_falloff: float = 1.0) -> Dictionary:
+func _airburst_target_damage_multiplier(candidate: CombatShip) -> float:
+	if airburst_distance_m <= 0.0:
+		return 1.0
+	var role := String(candidate.definition.role).to_lower() if candidate.definition != null else ""
+	var strikecraft := candidate is FighterCraft or role in ["fighter", "drone", "interceptor", "scout"] or role.contains("fighter") or role.contains("drone")
+	return airburst_strikecraft_damage_multiplier if strikecraft else airburst_capital_damage_multiplier
+
+func _impact_context(distance_from_blast_m: float = 0.0, radial_falloff: float = 1.0, target_damage_multiplier: float = 1.0) -> Dictionary:
 	return {
 		"position": global_position,
 		"weapon_role": projectile_role,
@@ -178,6 +205,7 @@ func _impact_context(distance_from_blast_m: float = 0.0, radial_falloff: float =
 		"projectile_direction": direction,
 		"distance_from_blast_m": distance_from_blast_m,
 		"radial_falloff": radial_falloff,
+		"target_damage_multiplier": target_damage_multiplier,
 		"radial_warhead": radial_warhead or airburst_distance_m > 0.0,
 	}
 
