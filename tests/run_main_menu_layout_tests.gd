@@ -20,7 +20,10 @@ func _run() -> void:
 		if child is Button:
 			command_buttons.append(child)
 	_assert_true(command_buttons.size() == 6, "command bar exposes new, continue, tutorial, settings, credits, and quit actions")
-	_assert_true(command_buttons.all(func(button: Button) -> bool: return is_equal_approx(button.position.y, command_buttons[0].position.y)), "primary commands share one horizontal row")
+	_assert_true(menu.primary_action_button != null and menu.primary_action_button.text == "NEW OPERATION" and menu.primary_action_button.size.y > menu.continue_button.size.y, "new operation owns the primary title action when no checkpoint is available")
+	_assert_true(command_buttons.filter(func(button: Button) -> bool: return button != menu.primary_action_button).all(func(button: Button) -> bool: return button.size.y <= 40.0), "tutorial and system actions remain visually secondary to the primary operation command")
+	var branding_copy := " ".join(menu.main_panel.get_children().filter(func(child: Node) -> bool: return child is Label).map(func(child: Node) -> String: return (child as Label).text))
+	_assert_true(not branding_copy.contains("M19") and branding_copy.contains("CARRIER COMMAND"), "title branding presents the game identity without development milestone copy")
 	_assert_true(menu.settings_panel.size == Vector2(440.0, 552.0) and menu.controls_panel.size == Vector2(440.0, 552.0), "secondary settings and controls remain focused overlays")
 	_assert_true(menu.ships.size() == 19, "background battle contains two capital formations and twelve fighter craft")
 	var capital_models := menu.ships.filter(func(ship_data: Dictionary) -> bool: return not bool(ship_data.fighter))
@@ -61,7 +64,7 @@ func _run() -> void:
 	menu.queue_free()
 	await process_frame
 	if failures.is_empty():
-		print("PASS: compact bottom command menu and readable fleet engagement layout")
+		print("PASS: hierarchical title command menu and readable fleet engagement layout")
 		quit(0)
 	else:
 		for failure in failures:

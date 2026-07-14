@@ -130,9 +130,8 @@ func _open_campaign(status: String) -> void:
 		campaign_map.title_requested.connect(_show_main_menu)
 		campaign_map.configure(run_state, generator)
 	else:
-		campaign_map.visible = true
 		campaign_map.replace_state(run_state, generator)
-	campaign_map.set_status(status)
+	campaign_map.present(status, run_state.current_node_id != &"")
 	if not run_state.pending_operational_event.is_empty():
 		call_deferred("_show_operational_event")
 
@@ -172,7 +171,7 @@ func _resolve_noncombat_node(node: SidebayCampaignNode) -> void:
 			message = "Signals decoded: +%d intel." % node.reward_intel
 	_complete_node(node)
 	campaign_map.refresh()
-	campaign_map.set_status(message)
+	campaign_map.present(message, true)
 	active_node = null
 	if run_state.prepare_operational_event(node.node_type, node.node_id):
 		_show_operational_event()
@@ -284,7 +283,7 @@ func _resolve_after_action(decision: StringName) -> void:
 	pending_battle_victory = false
 	active_node = null
 	campaign_map.refresh()
-	campaign_map.set_status(status)
+	campaign_map.present(status, true)
 
 func _open_fleet_loadout() -> void:
 	if is_instance_valid(fleet_loadout):

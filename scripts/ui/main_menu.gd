@@ -21,6 +21,7 @@ var controls_panel: Control
 var tutorial_screen: ExodriftTutorialScreen
 var confirmation_panel: Control
 var continue_button: Button
+var primary_action_button: Button
 var status_label: Label
 var volume_slider: HSlider
 var music_slider: HSlider
@@ -404,43 +405,59 @@ func _build_interface(can_continue: bool) -> void:
 	var telemetry := _label(interface, Vector2(26, 22), Vector2(350, 56), 13)
 	telemetry.text = "LIVE COMBAT FEED // HELIOS REACH\nCOMMAND LINK: STANDBY"
 	var build := _label(interface, Vector2(990, 22), Vector2(260, 52), 13)
-	build.text = "INTEGRATED CARRIER OPERATIONS // M19\nSINGLE-PLAYER // PC + WEB"
+	build.text = "COMMAND INTERFACE // ONLINE\nSINGLE-PLAYER // PC + WEB"
 	build.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	main_panel = _command_bar()
 	var title := _label(main_panel, Vector2(22, 14), Vector2(218, 42), 30)
 	title.text = "EXODRIFT"
 	var subtitle := _label(main_panel, Vector2(23, 51), Vector2(218, 22), 11)
-	subtitle.text = "CARRIER COMMAND // M19"
+	subtitle.text = "CARRIER COMMAND"
 	var divider := ColorRect.new()
 	divider.color = Color(0.08, 0.7, 0.96, 0.72)
 	divider.position = Vector2(246, 14)
 	divider.size = Vector2(1, 72)
 	main_panel.add_child(divider)
-	var new_button := _button(main_panel, "NEW OPERATION", Vector2(264, 18), Vector2(170, 46))
+	var primary_position := Vector2(264, 18)
+	var secondary_position := Vector2(462, 21)
+	var new_button := _button(main_panel, "NEW OPERATION", primary_position if not can_continue else secondary_position, Vector2(190, 46) if not can_continue else Vector2(152, 40))
 	new_button.pressed.connect(_request_new_run)
-	continue_button = _button(main_panel, "CONTINUE", Vector2(442, 18), Vector2(140, 46))
+	continue_button = _button(main_panel, "CONTINUE OPERATION", primary_position if can_continue else secondary_position, Vector2(190, 46) if can_continue else Vector2(152, 40))
 	continue_button.disabled = not can_continue
 	continue_button.tooltip_text = "No manual run save is available." if not can_continue else "Load the current manual campaign save."
 	continue_button.pressed.connect(_request_continue)
-	var tutorial_button := _button(main_panel, "TUTORIAL", Vector2(590, 18), Vector2(130, 46))
+	primary_action_button = continue_button if can_continue else new_button
+	_apply_primary_action(primary_action_button)
+	var tutorial_button := _button(main_panel, "TUTORIAL", Vector2(622, 21), Vector2(116, 40))
 	tutorial_button.pressed.connect(_show_tutorial)
-	var settings_button := _button(main_panel, "SETTINGS", Vector2(728, 18), Vector2(130, 46))
+	var settings_button := _button(main_panel, "SETTINGS", Vector2(746, 21), Vector2(112, 40))
 	settings_button.pressed.connect(_show_settings)
-	var credits_button := _button(main_panel, "CREDITS", Vector2(866, 18), Vector2(110, 46))
+	var credits_button := _button(main_panel, "CREDITS", Vector2(866, 21), Vector2(96, 40))
 	credits_button.pressed.connect(_show_credits)
-	var quit_button := _button(main_panel, "QUIT", Vector2(984, 18), Vector2(92, 46))
+	var quit_button := _button(main_panel, "QUIT", Vector2(970, 21), Vector2(106, 40))
 	quit_button.visible = not OS.has_feature("web")
 	if OS.has_feature("web"):
 		credits_button.size.x = 210.0
 	quit_button.pressed.connect(func() -> void: quit_requested.emit())
 	status_label = _label(main_panel, Vector2(264, 68), Vector2(796, 20), 10)
-	status_label.text = "COMMAND LINK READY // SELECT AN OPERATION"
+	status_label.text = "CHECKPOINT DETECTED // CONTINUE OPERATION" if can_continue else "COMMAND LINK READY // BEGIN A NEW OPERATION"
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_build_settings_panel()
 	_build_credits_panel()
 	_build_controls_panel()
 	_build_confirmation_panel()
-	new_button.grab_focus()
+	primary_action_button.grab_focus()
+
+func _apply_primary_action(button: Button) -> void:
+	UIStyle.apply_button(button, 16, UIStyle.CYAN)
+	var normal := UIStyle.panel_style(Color(0.012, 0.09, 0.125, 0.98), Color(0.42, 0.9, 1.0), 2, 4)
+	normal.shadow_color = Color(0.05, 0.68, 0.9, 0.24)
+	normal.shadow_size = 10
+	var hover := UIStyle.panel_style(Color(0.025, 0.15, 0.2, 1.0), Color(0.78, 0.97, 1.0), 2, 4)
+	hover.shadow_color = Color(0.08, 0.75, 1.0, 0.34)
+	hover.shadow_size = 12
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("focus", hover)
 
 func _command_bar() -> Panel:
 	var panel := Panel.new()
@@ -538,7 +555,7 @@ func _build_credits_panel() -> void:
 	credits_panel = _menu_panel()
 	credits_panel.visible = false
 	var title := _label(credits_panel, Vector2(28, 28), Vector2(384, 44), 28)
-	title.text = "CREDITS // ALPHA"
+	title.text = "CREDITS"
 	var copy := _label(credits_panel, Vector2(38, 100), Vector2(364, 300), 16)
 	copy.text = "EXODRIFT: CARRIER COMMAND\n\nDesign & Direction\nRisxhb Games\n\nEngineering & Production\nBuilt collaboratively with Codex\n\nEngine\nGodot 4\n\nAdaptive score & combat audio\nProcedurally synthesized in-engine\n\nProject Sidebay remains the internal codename."
 	copy.vertical_alignment = VERTICAL_ALIGNMENT_TOP
@@ -668,7 +685,8 @@ func _show_main() -> void:
 	controls_panel.visible = false
 	confirmation_panel.visible = false
 	listening_action = ""
-	menu_buttons[0].grab_focus()
+	if is_instance_valid(primary_action_button):
+		primary_action_button.grab_focus()
 
 func _begin_binding(action: String) -> void:
 	listening_action = action

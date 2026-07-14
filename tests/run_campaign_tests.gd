@@ -247,6 +247,14 @@ func _test_application_flow() -> void:
 			break
 		await process_frame
 	_assert_true(app.run_state != null and app.campaign_map.visible and not is_instance_valid(app.main_menu), "new operation transitions from title into the sector map")
+	_assert_true(is_instance_valid(app.campaign_map.dossier_panel) and app.campaign_map.selected_node_id in [&"s1_entry_a", &"s1_entry_b"], "opening deployment presents a selected route in the persistent mission dossier")
+	_assert_true(app.campaign_map.node_buttons[&"s1_entry_a"].size.x > app.campaign_map.node_buttons[&"s1_mid_a"].size.x and app.campaign_map.node_buttons[&"s1_mid_a"].text == "?", "reachable missions dominate while unrevealed forecasts collapse to quiet markers")
+	_assert_true(is_instance_valid(app.campaign_map.course_button) and app.campaign_map.course_button.text == "PLOT COURSE" and not app.campaign_map.course_button.disabled, "opening route requires an explicit plot-course command")
+	app.campaign_map._toggle_system_panel()
+	app.campaign_map._show_restart_confirmation()
+	_assert_true(not app.campaign_map.system_panel.visible and app.campaign_map.restart_confirmation_panel.visible, "destructive new-operation command requires confirmation inside the secondary system menu")
+	app.campaign_map._cancel_restart_confirmation()
+	app.campaign_map._close_system_panel()
 	var command_lead_before: StringName = app.run_state.assigned_person(&"Command").personnel_id
 	app._open_personnel_screen()
 	_assert_true(is_instance_valid(app.personnel_screen) and app.personnel_screen.department_buttons.size() == 6, "sector map opens all six department command cards")
@@ -278,7 +286,9 @@ func _test_application_flow() -> void:
 	var starting_fuel: int = app.run_state.fuel
 	var starting_route_supplies: int = app.run_state.supplies
 	_assert_true(app.campaign_map.node_buttons[&"s1_entry_b"].text.contains("S6"), "campaign nodes quote the active posture's supply overhead")
-	app._on_node_selected(&"s1_entry_b")
+	app.campaign_map._select_node(&"s1_entry_b")
+	_assert_true(app.run_state.fuel == starting_fuel and app.run_state.supplies == starting_route_supplies and app.campaign_map.mission_name_label.text == "SIGNAL ROUTE", "route selection previews the mission without spending campaign resources")
+	app.campaign_map._confirm_course()
 	_assert_true(app.run_state.current_node_id == &"s1_entry_b", "noncombat node resolves immediately")
 	_assert_true(app.run_state.fuel == starting_fuel - 1 and app.run_state.supplies == starting_route_supplies - 6 and app.run_state.intel >= 5, "route executor spends the active posture's quoted fuel and supply costs")
 	_assert_true(is_instance_valid(app.operational_event_screen) and not app.run_state.pending_operational_event.is_empty(), "noncombat nodes open a blocking authored operational decision")
@@ -296,7 +306,8 @@ func _test_application_flow() -> void:
 			break
 		await process_frame
 	_assert_true(app.run_state.fuel == saved_fuel and app.campaign_map.visible, "Continue restores the manual save and returns to the campaign")
-	app._on_node_selected(&"s1_mid_b")
+	app.campaign_map._select_node(&"s1_mid_b")
+	app.campaign_map._confirm_course()
 	for _frame in 6:
 		await process_frame
 	_assert_true(is_instance_valid(app.active_battle) and not app.campaign_map.visible, "combat node launches existing battle scene")
@@ -329,7 +340,8 @@ func _test_application_flow() -> void:
 	_assert_true(app.run_state.supplies == supplies_before_salvage + victory_reward_supplies, "salvage sweep no longer bypasses allocation by granting supplies directly")
 	_assert_true(app.run_state.unlocked_module_ids.size() == 6, "victory unlocks one authored module sidegrade")
 	_assert_true(app.campaign_map.visible, "campaign map becomes visible after battle")
-	app._on_node_selected(&"s1_boss")
+	app.campaign_map._select_node(&"s1_boss")
+	app.campaign_map._confirm_course()
 	for _frame in 6:
 		await process_frame
 	_assert_true(is_instance_valid(app.active_battle), "sector command launches after the completed midpoint")

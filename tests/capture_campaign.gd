@@ -9,7 +9,7 @@ func _capture() -> void:
 	for _frame in 4:
 		await process_frame
 	app._start_new_run()
-	for _frame in 18:
+	for _frame in 30:
 		await process_frame
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://build"))
 	var image := root.get_texture().get_image()
@@ -17,4 +17,13 @@ func _capture() -> void:
 		quit(2)
 		return
 	image.save_png(ProjectSettings.globalize_path("res://build/campaign-preview.png"))
+	var completed_node: SidebayCampaignNode = app.generator.get_node(&"s1_entry_a")
+	app.run_state.mark_completed(completed_node.node_id, completed_node.sector)
+	app.campaign_map.refresh()
+	app.campaign_map.present("Contact Line resolved. Two navigation solutions are now confirmed.", true)
+	for _frame in 30:
+		await process_frame
+	var progress_image := root.get_texture().get_image()
+	if progress_image != null:
+		progress_image.save_png(ProjectSettings.globalize_path("res://build/campaign-progress-preview.png"))
 	quit(0)
