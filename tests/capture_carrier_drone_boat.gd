@@ -40,7 +40,7 @@ func _capture() -> void:
 	camera.fov = 38.0
 	# Match the close three-quarter gameplay view where armor depth and gallery
 	# readability actually matter instead of reviewing a distant beauty shot.
-	camera.position = Vector3(145.0, 54.0, 205.0)
+	camera.position = Vector3(235.0, 85.0, 330.0)
 	stage.add_child(camera)
 	camera.look_at(Vector3(0.0, 4.0, 0.0), Vector3.UP)
 	camera.current = true
@@ -60,7 +60,7 @@ func _carrier_definition() -> ShipDefinition:
 	definition.ship_id = &"cvn_sidebay"
 	definition.display_name = "CVN Sidebay"
 	definition.role = "carrier"
-	definition.dimensions_m = Vector3(76.0, 32.0, 220.0)
+	definition.dimensions_m = Vector3(96.0, 40.0, 360.0)
 	definition.maximum_speed_mps = 260.0
 	definition.acceleration_mps2 = 14.0
 	definition.rotation_speed_radians = 0.3

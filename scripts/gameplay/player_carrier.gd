@@ -13,9 +13,9 @@ enum TargetNavigationMode {
 	KEEP_DISTANCE,
 }
 
-const CHASE_DEFAULT_DISTANCE_M := 230.0
-const CHASE_MIN_DISTANCE_M := 120.0
-const CHASE_MAX_DISTANCE_M := 900.0
+const CHASE_DEFAULT_DISTANCE_M := 360.0
+const CHASE_MIN_DISTANCE_M := 180.0
+const CHASE_MAX_DISTANCE_M := 1200.0
 
 var control_enabled: bool = true
 var mouse_sensitivity: float = 0.0022
@@ -180,9 +180,9 @@ func _bind_authored_carrier_sockets(dimensions: Vector3) -> void:
 	for socket in _authored_socket_nodes("socket_engine_"):
 		_add_authored_engine_trail(socket, dimensions)
 	_bind_authored_blast_doors(dimensions)
-	_add_authored_hangar_lighting()
+	_add_authored_hangar_lighting(dimensions)
 
-func _add_authored_hangar_lighting() -> void:
+func _add_authored_hangar_lighting(dimensions: Vector3) -> void:
 	# Emissive GLB strips identify fixtures but do not cast light in the Web/
 	# compatibility renderer. Small local lights give the deep galleries actual
 	# volume and keep parked craft readable from the chase camera.
@@ -196,13 +196,13 @@ func _add_authored_hangar_lighting() -> void:
 		var light := OmniLight3D.new()
 		light.name = "%sGalleryLight" % socket.name
 		light.light_color = Color(0.28, 0.66, 1.0)
-		light.light_energy = 16.0
+		light.light_energy = 20.0
 		light.light_indirect_energy = 0.0
 		light.light_specular = 0.45
-		light.omni_range = 21.0
+		light.omni_range = dimensions.x * 0.34
 		light.omni_attenuation = 1.35
 		light.shadow_enabled = false
-		light.position = Vector3(-side_sign * 7.8, 3.2, 0.0)
+		light.position = Vector3(-side_sign * dimensions.x * 0.14, dimensions.y * 0.1, 0.0)
 		socket.add_child(light)
 
 func _bind_authored_blast_doors(dimensions: Vector3) -> void:
@@ -694,7 +694,7 @@ func _update_camera() -> void:
 	if chase_camera == null:
 		return
 	chase_distance_m = lerpf(chase_distance_m, chase_target_distance_m, 0.18)
-	var height := lerpf(34.0, 152.0, inverse_lerp(CHASE_MIN_DISTANCE_M, CHASE_MAX_DISTANCE_M, chase_distance_m))
+	var height := lerpf(55.0, 220.0, inverse_lerp(CHASE_MIN_DISTANCE_M, CHASE_MAX_DISTANCE_M, chase_distance_m))
 	var camera_offset := Vector3(0.0, height, chase_distance_m)
 	camera_offset = camera_offset.rotated(Vector3.RIGHT, camera_orbit_pitch)
 	camera_offset = camera_offset.rotated(Vector3.UP, camera_orbit_yaw)
@@ -759,11 +759,14 @@ func fire_missile(target_ship: CombatShip) -> bool:
 	if not _consume_store(&"guided_missiles", last_missile_salvo_count):
 		last_missile_salvo_count = 0
 		return false
+	var missile_sockets := _authored_socket_nodes("socket_missile_")
 	for index in last_missile_salvo_count:
 		var side := -1.0 if index % 2 == 0 else 1.0
 		var rack := index / 2
-		var local_offset := Vector3(side * (14.0 + rack * 4.0), 11.0 + rack * 5.0, -32.0 + rack * 8.0)
+		var local_offset := Vector3(side * definition.dimensions_m.x * 0.18, definition.dimensions_m.y * (0.375 + rack * 0.06), lerpf(-definition.dimensions_m.z * 0.29, definition.dimensions_m.z * 0.27, clampf(float(rack), 0.0, 1.0)))
 		var start := global_transform * local_offset
+		if index < missile_sockets.size():
+			start = missile_sockets[index].global_position
 		var missile := spawn_projectile(missile_weapon, start, start.direction_to(target_ship.global_position), target_ship)
 		missile.direction = missile.direction.rotated(global_transform.basis.z.normalized(), side * 0.018)
 	missile_cooldown = missile_weapon.cooldown_seconds
@@ -777,7 +780,10 @@ func fire_nuclear(target_ship: CombatShip) -> bool:
 	if not _consume_store(&"nuclear_torpedoes", 1):
 		nuclear_available = false
 		return false
-	var start := global_transform * Vector3(0.0, 5.0, -42.0)
+	var start := global_transform * Vector3(0.0, definition.dimensions_m.y * 0.2, -definition.dimensions_m.z * 0.32)
+	var missile_sockets := _authored_socket_nodes("socket_missile_")
+	if not missile_sockets.is_empty():
+		start = missile_sockets[0].global_position
 	var torpedo := spawn_projectile(nuclear_weapon, start, start.direction_to(target_ship.global_position), target_ship)
 	torpedo.configure_warhead(nuclear_arming_distance_m, nuclear_blast_radius_m, true, true)
 	nuclear_available = false
@@ -825,8 +831,11 @@ func _spawn_flak_round(direction_value: Vector3, pattern_index: int, damage_scal
 		director_right = global_transform.basis.x.normalized()
 	var shot_direction := yaw_direction.rotated(director_right, pitch).normalized()
 	var side := -1.0 if pattern_index % 2 == 0 else 1.0
-	var local_start := Vector3(side * 23.0, 11.0, -30.0 + float(pattern_index % 3) * 30.0)
-	var projectile := spawn_projectile(flak_weapon, global_transform * local_start, shot_direction)
+	var local_start := Vector3(side * definition.dimensions_m.x * 0.38, definition.dimensions_m.y * 0.38, -definition.dimensions_m.z * 0.32 + float(pattern_index % 3) * definition.dimensions_m.z * 0.3)
+	var start := global_transform * local_start
+	if not flak_mounts.is_empty():
+		start = flak_mounts[pattern_index % flak_mounts.size()].global_position
+	var projectile := spawn_projectile(flak_weapon, start, shot_direction)
 	projectile.damage *= damage_scale
 	if airburst_distance_m > 0.0:
 		projectile.configure_airburst(airburst_distance_m, airburst_radius_m, 1.0, flak_capital_damage_multiplier, true, true)

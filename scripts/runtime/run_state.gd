@@ -95,7 +95,7 @@ static func carrier_catalog() -> Array[Dictionary]:
 			"id": &"cvn_sidebay", "name": "CVN Sidebay", "class_name": "Command Carrier",
 			"summary": "Balanced command hull with standard mobility, protection, and strike power.",
 			"requisition_cost": 0, "required_sector": 0,
-			"width": 76.0, "height": 32.0, "length": 220.0,
+			"width": 96.0, "height": 40.0, "length": 360.0,
 			"acceleration": 1.0, "speed": 1.0, "rotation": 1.0, "signature": 1.0,
 			"shields": 1.0, "armor": 1.0, "hull": 1.0, "shield_regen": 1.0, "armor_mitigation": 1.0,
 			"sensors": 1.0, "command": 1.0, "weapon_damage": 1.0
@@ -104,7 +104,7 @@ static func carrier_catalog() -> Array[Dictionary]:
 			"id": &"cvn_vanguard", "name": "CVN Vanguard", "class_name": "Assault Carrier",
 			"summary": "Fast attack frame with stronger weapons but lighter protection and command reach.",
 			"requisition_cost": 3, "required_sector": 1,
-			"width": 72.0, "height": 28.0, "length": 204.0,
+			"width": 90.0, "height": 36.0, "length": 330.0,
 			"acceleration": 1.18, "speed": 1.15, "rotation": 1.12, "signature": 1.10,
 			"shields": 0.85, "armor": 0.95, "hull": 0.90, "shield_regen": 0.90, "armor_mitigation": 0.95,
 			"sensors": 0.90, "command": 0.90, "weapon_damage": 1.18
@@ -113,7 +113,7 @@ static func carrier_catalog() -> Array[Dictionary]:
 			"id": &"cvn_citadel", "name": "CVN Citadel", "class_name": "Fleet Carrier",
 			"summary": "Slow armored command frame with exceptional durability and fleet-control reach.",
 			"requisition_cost": 4, "required_sector": 2,
-			"width": 88.0, "height": 38.0, "length": 246.0,
+			"width": 112.0, "height": 50.0, "length": 400.0,
 			"acceleration": 0.78, "speed": 0.80, "rotation": 0.82, "signature": 1.15,
 			"shields": 1.25, "armor": 1.30, "hull": 1.35, "shield_regen": 1.20, "armor_mitigation": 1.12,
 			"sensors": 1.05, "command": 1.20, "weapon_damage": 0.90

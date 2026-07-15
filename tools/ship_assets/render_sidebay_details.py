@@ -33,6 +33,7 @@ def detail_light(name: str, location, target, energy: float, color, size: float)
 def render_view(camera, filename: str, location, target, lens: float) -> None:
     camera.location = location
     camera.data.lens = lens
+    camera.data.clip_end = 3000.0
     look_at(camera, target)
     scene = bpy.context.scene
     scene.render.filepath = str(BUILD_ROOT / filename)
@@ -47,11 +48,11 @@ def set_blast_doors_closed(closed: bool) -> None:
             if upper is None or lower is None:
                 continue
             if closed:
-                upper.location.z = 2.35
-                lower.location.z = -2.35
+                upper.location.z = 3.0
+                lower.location.z = -3.0
             else:
-                upper.location.z = 8.0
-                lower.location.z = -8.0
+                upper.location.z = 10.25
+                lower.location.z = -10.25
 
 
 def main() -> None:
@@ -76,30 +77,30 @@ def main() -> None:
         light = bpy.data.objects.get(light_name)
         if light is not None and light.type == "LIGHT":
             light.data.energy = energy
-    detail_light("SternDetailKey", (75.0, -170.0, 72.0), (0.0, -106.0, 0.0), 420000.0, (0.68, 0.82, 1.0), 42.0)
-    detail_light("SternDetailFill", (-72.0, -155.0, -18.0), (0.0, -106.0, 0.0), 220000.0, (0.12, 0.42, 1.0), 34.0)
-    detail_light("HangarDetailKey", (135.0, 5.0, 82.0), (30.0, 12.0, 0.0), 390000.0, (0.72, 0.86, 1.0), 46.0)
+    detail_light("SternDetailKey", (110.0, -255.0, 94.0), (0.0, -174.0, 0.0), 520000.0, (0.68, 0.82, 1.0), 54.0)
+    detail_light("SternDetailFill", (-100.0, -235.0, -24.0), (0.0, -174.0, 0.0), 270000.0, (0.12, 0.42, 1.0), 44.0)
+    detail_light("HangarDetailKey", (180.0, 15.0, 100.0), (37.0, 15.0, 0.0), 480000.0, (0.72, 0.86, 1.0), 58.0)
     for side_name, side in (("Port", -1.0), ("Starboard", 1.0)):
-        for gallery_name, center_y, _length in (("Forward", 43.5, 53.0), ("Aft", -20.0, 60.0)):
+        for gallery_name, center_y, _length in (("Forward", 90.0, 68.0), ("Midship", 20.0, 68.0), ("Aft", -56.0, 74.0)):
             detail_light(
                 f"{side_name}{gallery_name}InteriorLight",
-                (side * 30.0, center_y, 4.6),
-                (side * 30.0, center_y, -4.2),
-                75000.0,
+                (side * 37.0, center_y, 6.0),
+                (side * 37.0, center_y, -5.8),
+                92000.0,
                 (0.12, 0.5, 1.0),
-                18.0,
+                22.0,
             )
 
     set_blast_doors_closed(False)
-    render_view(camera, "cvn_sidebay_reference_hero_0001.png", (-220.0, 300.0, 142.0), (0.0, -5.0, 0.0), 60.0)
-    render_view(camera, "cvn_sidebay_reference_top_0001.png", (0.0, 0.0, 720.0), (0.0, 0.0, 0.0), 60.0)
-    render_view(camera, "cvn_sidebay_reference_side_0001.png", (430.0, 0.0, 24.0), (0.0, 0.0, 0.0), 62.0)
-    render_view(camera, "cvn_sidebay_reference_bow_0001.png", (0.0, 285.0, 52.0), (0.0, 100.0, 0.0), 56.0)
-    render_view(camera, "cvn_sidebay_reference_stern_0001.png", (0.0, -285.0, 52.0), (0.0, -104.0, 0.0), 56.0)
-    render_view(camera, "cvn_sidebay_armored_engine_wall_0001.png", (92.0, -185.0, 58.0), (0.0, -105.0, 0.0), 64.0)
-    render_view(camera, "cvn_sidebay_blast_doors_open_0001.png", (145.0, -105.0, 48.0), (30.0, 10.0, 0.0), 62.0)
+    render_view(camera, "cvn_sidebay_reference_hero_0001.png", (-330.0, 480.0, 220.0), (0.0, -8.0, 0.0), 58.0)
+    render_view(camera, "cvn_sidebay_reference_top_0001.png", (0.0, 0.0, 1200.0), (0.0, 0.0, 0.0), 60.0)
+    render_view(camera, "cvn_sidebay_reference_side_0001.png", (740.0, 0.0, 42.0), (0.0, 0.0, 0.0), 62.0)
+    render_view(camera, "cvn_sidebay_reference_bow_0001.png", (0.0, 430.0, 78.0), (0.0, 164.0, 0.0), 56.0)
+    render_view(camera, "cvn_sidebay_reference_stern_0001.png", (0.0, -430.0, 78.0), (0.0, -174.0, 0.0), 56.0)
+    render_view(camera, "cvn_sidebay_armored_engine_wall_0001.png", (132.0, -305.0, 82.0), (0.0, -174.0, 0.0), 64.0)
+    render_view(camera, "cvn_sidebay_blast_doors_open_0001.png", (195.0, -125.0, 72.0), (37.0, -15.0, 0.0), 62.0)
     set_blast_doors_closed(True)
-    render_view(camera, "cvn_sidebay_blast_doors_closed_0001.png", (145.0, -105.0, 48.0), (30.0, 10.0, 0.0), 62.0)
+    render_view(camera, "cvn_sidebay_blast_doors_closed_0001.png", (195.0, -125.0, 72.0), (37.0, -15.0, 0.0), 62.0)
     set_blast_doors_closed(False)
 
 

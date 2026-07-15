@@ -116,7 +116,7 @@ func _build_world() -> void:
 	# The menu battle is composed as two readable formations instead of a loose
 	# collection of ships. Sidebay owns the near-left foreground while the enemy
 	# command group holds the high-right distance, leaving the center as a firing lane.
-	_add_ship(&"cvn_sidebay", "Sidebay Carrier", "carrier", Vector3(-395.0, -82.0, -470.0), Color(0.26, 0.5, 0.66), Vector3(76.0, 32.0, 220.0), &"friendly", 3.2, 0.0)
+	_add_ship(&"cvn_sidebay", "Sidebay Carrier", "carrier", Vector3(-395.0, -82.0, -470.0), Color(0.26, 0.5, 0.66), Vector3(96.0, 40.0, 360.0), &"friendly", 2.65, 0.0)
 	_add_ship(&"iss_resolute", "Resolute", "frigate", Vector3(-665.0, 105.0, -810.0), Color(0.28, 0.52, 0.67), Vector3(24.0, 12.0, 65.0), &"friendly", 2.5, 1.8)
 	_add_ship(&"iss_harrier", "Harrier", "corvette", Vector3(-175.0, 145.0, -1010.0), Color(0.26, 0.54, 0.68), Vector3(16.0, 8.0, 42.0), &"friendly", 2.7, 2.5)
 	_add_ship(&"iss_bulwark", "Bulwark", "frigate", Vector3(-720.0, -180.0, -1140.0), Color(0.3, 0.48, 0.62), Vector3(28.0, 15.0, 70.0), &"friendly", 2.6, 4.0)

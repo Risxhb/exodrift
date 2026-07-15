@@ -3,9 +3,9 @@
   "blender_version": "5.2.0 LTS",
   "blend": "assets\\ships\\cvn_sidebay\\source\\cvn_sidebay.blend",
   "glb": "assets\\ships\\cvn_sidebay\\cvn_sidebay.glb",
-  "vertices": 32160,
-  "polygons": 30528,
-  "triangles": 61840,
+  "vertices": 37884,
+  "polygons": 36664,
+  "triangles": 72400,
   "material_slots": 51,
   "materials": [
     "Accent",
@@ -56,14 +56,14 @@
   ],
   "bounds": {
     "min_blender_xyz": [
-      -38.0,
-      -110.55000305175781,
-      -15.850000381469727
+      -48.7599983215332,
+      -180.44000244140625,
+      -20.399999618530273
     ],
     "max_blender_xyz": [
-      38.0,
-      110.0,
-      15.925000190734863
+      48.7599983215332,
+      180.6999969482422,
+      20.399999618530273
     ]
   }
 }

@@ -56,7 +56,7 @@ func _run() -> void:
 	var sidebay := load(SIDEBAY_PATH) as ShipVisualAsset
 	_assert_true(sidebay != null and sidebay.enabled, "Sidebay reference-sheet asset is enabled as the production carrier visual")
 	if sidebay != null:
-		_assert_true(sidebay.manifest_errors(&"cvn_sidebay", Vector3(76.0, 32.0, 220.0)).is_empty(), "Sidebay production manifest matches runtime identity and dimensions")
+		_assert_true(sidebay.manifest_errors(&"cvn_sidebay", Vector3(96.0, 40.0, 360.0)).is_empty(), "Sidebay production manifest matches runtime identity and capital-ship dimensions")
 		var sidebay_model := sidebay.instantiate_model()
 		var sidebay_errors := sidebay.instance_errors(sidebay_model, {
 			"socket_flak_": 10,
@@ -68,7 +68,7 @@ func _run() -> void:
 		_assert_true(sidebay_errors.is_empty(), "Sidebay GLB passes geometry, material, bounds, and carrier socket contracts")
 		if sidebay_model != null:
 			var sidebay_metrics := sidebay.model_metrics(sidebay_model)
-			_assert_true(int(sidebay_metrics.get("triangles", 0)) == 61840 and int(sidebay_metrics.get("material_slots", 0)) == 51, "Sidebay source exports the recorded runtime-refined model with ten linked PDWs, six armored drives, five material classes, and twelve blast-door halves")
+			_assert_true(int(sidebay_metrics.get("triangles", 0)) == 72400 and int(sidebay_metrics.get("material_slots", 0)) == 51, "Sidebay source exports the recorded capital-scale model with ten linked PDWs, six armored drives, five material classes, three galleries per side, and twelve blast-door halves")
 			sidebay_model.free()
 		var authored_carrier := PlayerCarrier.new()
 		root.add_child(authored_carrier)
@@ -125,7 +125,7 @@ func _sidebay_definition() -> ShipDefinition:
 	definition.ship_id = &"cvn_sidebay"
 	definition.display_name = "CVN Sidebay"
 	definition.role = "carrier"
-	definition.dimensions_m = Vector3(76.0, 32.0, 220.0)
+	definition.dimensions_m = Vector3(96.0, 40.0, 360.0)
 	definition.damage_layers = DamageLayerDefinition.new()
 	return definition
 

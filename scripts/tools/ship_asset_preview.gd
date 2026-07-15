@@ -79,7 +79,7 @@ func _build_studio() -> void:
 	camera.fov = 48.0
 	camera.current = true
 	add_child(camera)
-	_frame_camera(Vector3(76.0, 32.0, 220.0))
+	_frame_camera(Vector3(96.0, 40.0, 360.0))
 
 func _frame_camera(dimensions: Vector3) -> void:
 	var camera := get_node_or_null("StudioCamera") as Camera3D
