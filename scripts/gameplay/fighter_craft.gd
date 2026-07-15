@@ -33,6 +33,10 @@ var desired_facing: Vector3 = Vector3.ZERO
 
 func _build_visual() -> void:
 	var identity := String(definition.ship_id)
+	if _try_build_authored_visual():
+		_add_engine_trails(identity)
+		_add_default_collision()
+		return
 	if definition.role == "drone":
 		_build_watcher_drone()
 	elif identity.begins_with("vesper_"):
@@ -43,11 +47,10 @@ func _build_visual() -> void:
 		_build_interceptor(identity.begins_with("acheron_"))
 	_build_craft_surface_details(identity)
 	_add_engine_trails(identity)
-	var collision := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
-	shape.size = definition.dimensions_m
-	collision.shape = shape
-	add_child(collision)
+	_add_default_collision()
+
+func _authored_socket_requirements() -> Dictionary:
+	return {"socket_engine_": 2 if definition != null and definition.role == "drone" else 1}
 
 func _build_interceptor(hostile: bool) -> void:
 	var fuselage := MeshInstance3D.new()
@@ -138,19 +141,27 @@ func _add_engine_trails(identity: String) -> void:
 		trail_color = Color(0.65, 0.16, 1.0, 0.52)
 	elif team == &"hostile":
 		trail_color = Color(1.0, 0.28, 0.04, 0.48)
+	var authored_engines := _authored_socket_nodes("socket_engine_")
+	if not authored_engines.is_empty():
+		for socket in authored_engines:
+			_add_engine_trail(socket, Vector3(0.0, 0.0, definition.dimensions_m.z * 0.4), trail_color)
+		return
 	for side in ([-1.0, 1.0] if definition.role == "drone" else [0.0]):
-		var trail := MeshInstance3D.new()
-		trail.name = "EngineTrail"
-		var trail_mesh := PrismMesh.new()
-		trail_mesh.size = Vector3(definition.dimensions_m.x * 0.12, definition.dimensions_m.y * 0.12, definition.dimensions_m.z * 0.8)
-		trail.mesh = trail_mesh
-		trail.position = Vector3(side * definition.dimensions_m.x * 0.28, 0.0, definition.dimensions_m.z * 0.88)
-		trail.rotation.y = PI
-		var material := _make_material(trail_color, 2.2)
-		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		trail.material_override = material
-		add_child(trail)
-		engine_trails.append(trail)
+		_add_engine_trail(self, Vector3(side * definition.dimensions_m.x * 0.28, 0.0, definition.dimensions_m.z * 0.88), trail_color)
+
+func _add_engine_trail(parent: Node3D, local_position: Vector3, trail_color: Color) -> void:
+	var trail := MeshInstance3D.new()
+	trail.name = "EngineTrail"
+	var trail_mesh := PrismMesh.new()
+	trail_mesh.size = Vector3(definition.dimensions_m.x * 0.12, definition.dimensions_m.y * 0.12, definition.dimensions_m.z * 0.8)
+	trail.mesh = trail_mesh
+	trail.position = local_position
+	trail.rotation.y = PI
+	var material := _make_material(trail_color, 2.2)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	trail.material_override = material
+	parent.add_child(trail)
+	engine_trails.append(trail)
 
 func configure_craft(
 	ship_definition: ShipDefinition,

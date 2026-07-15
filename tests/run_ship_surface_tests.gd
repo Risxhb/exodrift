@@ -6,7 +6,7 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	var sidebay := _spawn_ship(&"cvn_sidebay", "carrier", &"friendly", Vector3(42.0, 20.0, 120.0), Color(0.35, 0.55, 0.7))
+	var sidebay := _spawn_ship(&"cvn_sidebay", "carrier", &"friendly", Vector3(76.0, 32.0, 220.0), Color(0.35, 0.55, 0.7))
 	var resolute := _spawn_ship(&"iss_resolute", "frigate", &"friendly", Vector3(24.0, 12.0, 65.0), Color(0.34, 0.56, 0.7))
 	var harrier := _spawn_ship(&"iss_harrier", "corvette", &"friendly", Vector3(16.0, 8.0, 42.0), Color(0.32, 0.54, 0.68))
 	var bulwark := _spawn_ship(&"iss_bulwark", "frigate", &"friendly", Vector3(28.0, 15.0, 70.0), Color(0.38, 0.55, 0.66))
@@ -14,7 +14,16 @@ func _run() -> void:
 	var vesper := _spawn_ship(&"vesper_lance_cruiser", "cruiser", &"hostile", Vector3(36.0, 17.0, 94.0), Color(0.48, 0.18, 0.68))
 	var crucible := _spawn_ship(&"crucible_war_regent", "cruiser", &"hostile", Vector3(42.0, 22.0, 108.0), Color(0.34, 0.2, 0.46))
 
-	_assert_true(sidebay.find_child("SidebayFlightDeck", true, false) != null and sidebay.find_child("SidebayHangarMouth", true, false) != null, "CVN Sidebay has a readable flight deck and sidebay apertures")
+	var authored_sidebay := sidebay.authored_visual_root != null
+	var sidebay_has_carrier_surface := (
+		authored_sidebay
+		and sidebay.find_child("Hull_LOD0", true, false) != null
+		and sidebay.find_child("blastdoor_port_01_upper", true, false) != null
+	) or (
+		sidebay.find_child("SidebayFlightDeck", true, false) != null
+		and sidebay.find_child("SidebayHangarMouth", true, false) != null
+	)
+	_assert_true(sidebay_has_carrier_surface, "CVN Sidebay has an enclosed armored hull and functional sidebay apertures")
 	var resolute_compartment_count := 0
 	for compartment_index in CombatShip.RESOLUTE_VLS_COMPARTMENT_COUNT:
 		if resolute.find_child("ResoluteMissileCompartment%02d" % compartment_index, true, false) != null:
@@ -35,8 +44,22 @@ func _run() -> void:
 		_assert_true(ResourceLoader.exists(profile.hull_texture_path), "surface atlas exists: %s" % profile.hull_texture_path)
 	_assert_true(texture_paths.size() == 4, "Navy, Acheron, Vesper, and Crucible use four distinct surface atlases")
 	_assert_true(acheron.visual_profile.surface_roughness > vesper.visual_profile.surface_roughness + 0.3, "worn Acheron plate and polished Vesper phase hulls have distinct material response")
-	var hull_material := sidebay.get_node("Hull").material_override as StandardMaterial3D
-	_assert_true(hull_material != null and hull_material.albedo_texture != null and is_equal_approx(hull_material.roughness, sidebay.visual_profile.surface_roughness), "profile texture and roughness reach the rendered hull material")
+	var hull_material: StandardMaterial3D
+	if authored_sidebay:
+		var authored_hull := sidebay.find_child("Hull_LOD0", true, false) as MeshInstance3D
+		if authored_hull != null:
+			hull_material = authored_hull.get_surface_override_material(0) as StandardMaterial3D
+	else:
+		hull_material = sidebay.get_node("Hull").material_override as StandardMaterial3D
+	var expected_hull_roughness := sidebay.visual_asset.hull_material.fallback_roughness if authored_sidebay and sidebay.visual_asset != null else sidebay.visual_profile.surface_roughness
+	_assert_true(
+		hull_material != null
+		and hull_material.albedo_texture != null
+		and hull_material.normal_enabled
+		and hull_material.ao_enabled
+		and is_equal_approx(hull_material.roughness, expected_hull_roughness),
+		"production hull texture, normal/ORM data, and authored roughness reach the rendered carrier material",
+	)
 	for ship: CombatShip in [sidebay, resolute, harrier, bulwark, acheron, vesper, crucible]:
 		_assert_true(ship.get_child_count() <= 80, "%s stays within the 80-node capital surface budget" % ship.definition.ship_id)
 

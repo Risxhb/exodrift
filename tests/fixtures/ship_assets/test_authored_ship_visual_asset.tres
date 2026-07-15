@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="ShipVisualAsset" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ship_visual_asset.gd" id="1_asset"]
+[ext_resource type="PackedScene" path="res://tests/fixtures/ship_assets/authored_ship_fixture.tscn" id="2_scene"]
+[ext_resource type="Script" path="res://scripts/data/ship_pbr_material.gd" id="3_material"]
+[ext_resource type="Texture2D" path="res://assets/textures/sidebay_gunmetal_hull.svg" id="4_texture"]
+
+[sub_resource type="Resource" id="Resource_hull_material"]
+script = ExtResource("3_material")
+material_name = &"Hull"
+base_color_texture = ExtResource("4_texture")
+normal_texture = ExtResource("4_texture")
+orm_texture = ExtResource("4_texture")
+fallback_metallic = 0.72
+fallback_roughness = 0.42
+
+[resource]
+script = ExtResource("1_asset")
+enabled = true
+ship_id = &"test_authored_ship"
+authored_dimensions_m = Vector3(42, 20, 120)
+source_file = "res://tests/fixtures/ship_assets/authored_ship_fixture.tscn"
+model_scene = ExtResource("2_scene")
+replace_imported_materials = true
+hull_material = SubResource("Resource_hull_material")
+required_sockets = Array[StringName]([&"socket_engine_01", &"socket_weapon_primary_01"])
+maximum_lod0_triangles = 100
+maximum_material_slots = 2
+authoring_notes = "Automated contract fixture; not a production model."

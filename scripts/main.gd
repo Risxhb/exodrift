@@ -5,6 +5,7 @@ const TrainingTrialController := preload("res://scripts/systems/training_trial_c
 const EncounterDirector := preload("res://scripts/systems/encounter_director.gd")
 const SpaceSky := preload("res://scripts/systems/space_sky.gd")
 const UIStyle := preload("res://scripts/ui/ui_style.gd")
+const MINIMUM_JUMP_PREP_SECONDS := 2.0
 
 signal return_to_campaign(victory: bool, battle_report: Dictionary)
 signal training_trial_finished(completed: bool)
@@ -1053,12 +1054,6 @@ func _toggle_all_wings_and_hangars() -> void:
 		hud.notify("FLIGHT OPS LOCKED — jump preparation is active")
 		return
 	var wings: Array[SidebaySquadron] = _friendly_wings()
-	if aggregate_bay_closure_pending or carrier.bay_target_closure > 0.5 or carrier.are_bays_closed():
-		aggregate_bay_closure_pending = false
-		aggregate_wing_launch_pending = true
-		carrier.request_bays_open()
-		hud.notify("ALL HANGARS OPENING — wings queued for deployment")
-		return
 	var any_wing_out := false
 	for wing in wings:
 		if is_instance_valid(wing) and wing.operation.state in [BayOperation.State.QUEUED, BayOperation.State.LAUNCHING, BayOperation.State.DEPLOYED, BayOperation.State.RETURNING, BayOperation.State.APPROACH, BayOperation.State.DOCKING]:
@@ -1074,6 +1069,12 @@ func _toggle_all_wings_and_hangars() -> void:
 			wing.redeploy_requested = false
 			wing.prepare_for_jump()
 		hud.notify("ALL WINGS RECALLING — hangars close when recovery is complete")
+		return
+	if aggregate_bay_closure_pending or carrier.bay_target_closure > 0.5 or carrier.are_bays_closed():
+		aggregate_bay_closure_pending = false
+		aggregate_wing_launch_pending = true
+		carrier.request_bays_open()
+		hud.notify("ALL HANGARS OPENING — wings queued for deployment")
 		return
 	_launch_all_available_wings()
 
@@ -1479,7 +1480,7 @@ func _process_objective(delta: float) -> void:
 		_process_capture_objective(delta)
 	if extraction_requested:
 		withdrawal_elapsed += delta
-		if withdrawal_elapsed >= 2.0 and not pursuit_spawned:
+		if withdrawal_elapsed >= MINIMUM_JUMP_PREP_SECONDS and not pursuit_spawned:
 			_spawn_withdrawal_pursuit()
 		var distance := carrier.global_position.distance_to(extraction_position)
 		var wings_aboard := _prepare_wings_for_jump()
@@ -1488,7 +1489,9 @@ func _process_objective(delta: float) -> void:
 			hud.set_objective("JUMP PREP  %.0f m to corridor — %s" % [distance, interlock])
 		elif distance > 300.0:
 			hud.set_objective("JUMP READY  Bays sealed — %.0f m to corridor" % distance)
-		if distance <= 300.0 and carrier.are_bays_closed():
+		elif withdrawal_elapsed < MINIMUM_JUMP_PREP_SECONDS:
+			hud.set_objective("JUMP SPOOL  Bays sealed — drive synchronization %.0f%%" % (withdrawal_elapsed / MINIMUM_JUMP_PREP_SECONDS * 100.0))
+		if distance <= 300.0 and carrier.are_bays_closed() and withdrawal_elapsed >= MINIMUM_JUMP_PREP_SECONDS:
 			_finish_battle(true, "withdrawal")
 
 func _process_capture_objective(delta: float) -> void:

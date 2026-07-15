@@ -1,0 +1,68 @@
+{
+  "ship_id": "cvn_sidebay",
+  "blender_version": "5.2.0 LTS",
+  "blend": "assets\\ships\\cvn_sidebay\\source\\cvn_sidebay.blend",
+  "glb": "assets\\ships\\cvn_sidebay\\cvn_sidebay.glb",
+  "vertices": 50864,
+  "polygons": 47184,
+  "triangles": 99016,
+  "material_slots": 50,
+  "materials": [
+    "Accent",
+    "Emission",
+    "Hull",
+    "Marking"
+  ],
+  "pdw_count": 10,
+  "pdw_shared_meshes": 1,
+  "engine_count": 6,
+  "engine_layout": "three-by-two recessed drive wall",
+  "engine_armor": "compartmentalized stern citadel with sacrificial collars and full-depth firebreaks",
+  "hangar_blast_door_count": 12,
+  "hangar_blast_door_shared_meshes": 3,
+  "sockets": [
+    "socket_bay_port_01",
+    "socket_bay_port_02",
+    "socket_bay_port_03",
+    "socket_bay_scout_01",
+    "socket_bay_starboard_01",
+    "socket_bay_starboard_02",
+    "socket_bay_starboard_03",
+    "socket_damage_01",
+    "socket_damage_02",
+    "socket_damage_03",
+    "socket_damage_04",
+    "socket_engine_01",
+    "socket_engine_02",
+    "socket_engine_03",
+    "socket_engine_04",
+    "socket_engine_05",
+    "socket_engine_06",
+    "socket_flak_01",
+    "socket_flak_02",
+    "socket_flak_03",
+    "socket_flak_04",
+    "socket_flak_05",
+    "socket_flak_06",
+    "socket_flak_07",
+    "socket_flak_08",
+    "socket_flak_09",
+    "socket_flak_10",
+    "socket_missile_01",
+    "socket_missile_02",
+    "socket_missile_03",
+    "socket_missile_04"
+  ],
+  "bounds": {
+    "min_blender_xyz": [
+      -38.0,
+      -110.55000305175781,
+      -15.850000381469727
+    ],
+    "max_blender_xyz": [
+      38.0,
+      110.0,
+      15.925000190734863
+    ]
+  }
+}

@@ -258,16 +258,20 @@ func request_launch() -> bool:
 	operation.transition(BayOperation.State.QUEUED)
 	launch_index = 0
 	cycle_timer = 0.0
+	home_carrier.notify_flight_launch_started(stable_entity_id)
 	status_changed.emit(stable_entity_id, "%s queued in %s bay" % [display_name, String(bay_side)])
 	return true
 
 func request_recall() -> bool:
 	if operation.state == BayOperation.State.QUEUED:
 		operation.transition(BayOperation.State.READY)
+		home_carrier.notify_flight_launch_finished(stable_entity_id)
 		status_changed.emit(stable_entity_id, "%s launch cancelled for jump preparation" % display_name)
 		return true
 	if operation.state not in [BayOperation.State.DEPLOYED, BayOperation.State.LAUNCHING]:
 		return false
+	home_carrier.notify_flight_recovery_started(stable_entity_id)
+	home_carrier.notify_flight_launch_finished(stable_entity_id)
 	operation.transition(BayOperation.State.RETURNING)
 	cycle_timer = 0.0
 	status_changed.emit(stable_entity_id, "%s returning to %s bay" % [display_name, String(bay_side)])
@@ -277,6 +281,11 @@ func request_redeploy() -> bool:
 	if home_carrier == null:
 		return false
 	if operation.state == BayOperation.State.READY:
+		if not home_carrier.are_bays_open():
+			redeploy_requested = true
+			home_carrier.request_bays_open()
+			status_changed.emit(stable_entity_id, "%s redeploy queued while %s bay opens" % [display_name, String(bay_side)])
+			return true
 		return request_launch()
 	if not operation.is_service_state():
 		status_changed.emit(stable_entity_id, "%s redeploy rejected: flight deck is %s" % [display_name, operation.label()])
@@ -331,8 +340,11 @@ func _process(delta: float) -> void:
 			_process_service_task()
 		BayOperation.State.READY:
 			if redeploy_requested and is_deck_operational():
-				redeploy_requested = false
-				request_launch()
+				if home_carrier.are_bays_open():
+					redeploy_requested = false
+					request_launch()
+				else:
+					home_carrier.request_bays_open()
 	if current_order != null and current_order.order_type == FleetOrder.OrderType.RECALL and deployed_craft_count() == 0:
 		_complete_order()
 
@@ -344,6 +356,7 @@ func _process_launch_cycle() -> void:
 		launch_index += 1
 	if launch_index >= crafts.size():
 		operation.transition(BayOperation.State.DEPLOYED)
+		home_carrier.notify_flight_launch_finished(stable_entity_id)
 		status_changed.emit(stable_entity_id, "%s launch complete" % display_name)
 		return
 	var craft := crafts[launch_index]
@@ -482,6 +495,9 @@ func _process_approach() -> void:
 		craft.command_move(approach_point + _formation_offset(index) * 0.3)
 		if craft.global_position.distance_to(approach_point) > 120.0:
 			all_in_approach = false
+	if all_in_approach and not home_carrier.are_bays_open():
+		home_carrier.request_bays_open()
+		return
 	if all_in_approach:
 		operation.transition(BayOperation.State.DOCKING)
 		docking_count = 0
@@ -501,6 +517,7 @@ func _process_docking() -> void:
 			docking_count += 1
 			break
 	if deployed_craft_count() == 0:
+		home_carrier.notify_flight_recovery_finished(stable_entity_id)
 		_begin_service_cycle()
 
 func _begin_service_cycle() -> void:

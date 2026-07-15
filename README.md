@@ -95,11 +95,15 @@ godot --headless --path . --script tests/run_carrier_combat_integration_tests.gd
 godot --headless --path . --script tests/run_deck_logistics_tests.gd
 godot --headless --path . --script tests/run_carrier_operations_ui_tests.gd
 godot --headless --path . --script tests/run_carrier_service_ui_tests.gd
+godot --headless --path . --script tests/run_ship_asset_pipeline_tests.gd
 godot --headless --path . --script tests/profile_combat_stress.gd
 godot --path . --script tests/profile_menu.gd
 godot --headless --path . --export-release "Web"
 godot --headless --path . --export-release "Windows Desktop"
 ```
+
+Authored `.glb` ships, PBR texture packs, socket naming, preview, and validation
+are documented in [docs/SHIP_ASSET_PIPELINE.md](docs/SHIP_ASSET_PIPELINE.md).
 
 The M19 automated combat gate measures 145.0 effective FPS at 2560×1440 with p95 7.50 ms and p99 7.72 ms. The sustained carrier-incident/all-wings/ordnance stress gate measures 145.0 effective FPS at 2560×1440 with p95 10.14 ms and p99 10.60 ms while keeping nodes and the 80-slot VFX pool bounded; the full-runtime-model menu measures 144.9 effective FPS. These are development RTX 3060 measurements. See [GAME_BIBLE.md](GAME_BIBLE.md) for acceptance evidence and hardware-target caveats.
 
