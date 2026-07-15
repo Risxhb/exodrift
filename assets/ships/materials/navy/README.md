@@ -11,7 +11,7 @@ godot --headless --path . --script tools/ship_assets/rasterize_texture.gd -- `
 python tools/ship_assets/build_pbr_maps.py `
   --input assets/ships/materials/navy/source/navy_gunmetal_source.png `
   --output-dir assets/ships/materials/navy/runtime `
-  --name navy_gunmetal --roughness 0.44 --metallic 0.66 --normal-strength 1.7
+  --name navy_gunmetal --roughness 0.58 --metallic 0.48 --normal-strength 1.8
 ```
 
 This is the reference plumbing material and a readable dark-space Navy baseline. A hero

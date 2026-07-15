@@ -180,6 +180,30 @@ func _bind_authored_carrier_sockets(dimensions: Vector3) -> void:
 	for socket in _authored_socket_nodes("socket_engine_"):
 		_add_authored_engine_trail(socket, dimensions)
 	_bind_authored_blast_doors(dimensions)
+	_add_authored_hangar_lighting()
+
+func _add_authored_hangar_lighting() -> void:
+	# Emissive GLB strips identify fixtures but do not cast light in the Web/
+	# compatibility renderer. Small local lights give the deep galleries actual
+	# volume and keep parked craft readable from the chase camera.
+	var bay_sockets: Array[Node3D] = []
+	bay_sockets.append_array(_authored_socket_nodes("socket_bay_port_"))
+	bay_sockets.append_array(_authored_socket_nodes("socket_bay_starboard_"))
+	for socket in bay_sockets:
+		var side_sign := signf(socket.position.x)
+		if is_zero_approx(side_sign):
+			continue
+		var light := OmniLight3D.new()
+		light.name = "%sGalleryLight" % socket.name
+		light.light_color = Color(0.28, 0.66, 1.0)
+		light.light_energy = 16.0
+		light.light_indirect_energy = 0.0
+		light.light_specular = 0.45
+		light.omni_range = 21.0
+		light.omni_attenuation = 1.35
+		light.shadow_enabled = false
+		light.position = Vector3(-side_sign * 7.8, 3.2, 0.0)
+		socket.add_child(light)
 
 func _bind_authored_blast_doors(dimensions: Vector3) -> void:
 	if authored_visual_root == null:
@@ -218,9 +242,9 @@ func _marker_from_authored_socket(socket: Node3D) -> Marker3D:
 	return marker
 
 func _add_authored_engine_trail(socket: Node3D, dimensions: Vector3) -> void:
-	var outer := _engine_plume_layer("CarrierEngineOuterPlume", Vector3(0.0, 0.0, dimensions.z * 0.14), Vector3(dimensions.x * 0.065, dimensions.x * 0.065, dimensions.z * 0.28), Color(0.08, 0.3, 1.0, 0.16), 2.1, socket)
-	var inner := _engine_plume_layer("CarrierEngineInnerPlume", Vector3(0.0, 0.0, dimensions.z * 0.1), Vector3(dimensions.x * 0.038, dimensions.x * 0.038, dimensions.z * 0.2), Color(0.08, 0.76, 1.0, 0.36), 3.8, socket)
-	var core := _engine_plume_layer("CarrierEngineCorePlume", Vector3(0.0, 0.0, dimensions.z * 0.065), Vector3(dimensions.x * 0.016, dimensions.x * 0.016, dimensions.z * 0.13), Color(0.82, 0.97, 1.0, 0.82), 5.6, socket)
+	var outer := _engine_plume_layer("CarrierEngineOuterPlume", Vector3(0.0, 0.0, dimensions.z * 0.075), Vector3(dimensions.x * 0.12, dimensions.x * 0.12, dimensions.z * 0.15), Color(0.08, 0.3, 1.0, 0.16), 2.1, socket)
+	var inner := _engine_plume_layer("CarrierEngineInnerPlume", Vector3(0.0, 0.0, dimensions.z * 0.055), Vector3(dimensions.x * 0.075, dimensions.x * 0.075, dimensions.z * 0.11), Color(0.08, 0.76, 1.0, 0.36), 3.8, socket)
+	var core := _engine_plume_layer("CarrierEngineCorePlume", Vector3(0.0, 0.0, dimensions.z * 0.035), Vector3(dimensions.x * 0.038, dimensions.x * 0.038, dimensions.z * 0.07), Color(0.82, 0.97, 1.0, 0.82), 5.6, socket)
 	engine_trails.append({"outer": outer, "inner": inner, "core": core, "phase": float(engine_trails.size()) * 1.73})
 
 func _add_chase_camera(dimensions: Vector3) -> void:
@@ -348,25 +372,33 @@ func _add_engine_banks(dimensions: Vector3) -> void:
 			engine.material_override = _make_material(Color(0.035, 0.34, 0.68), 2.15)
 			add_child(engine)
 			var origin := Vector3(side * dimensions.x * 0.2, height, dimensions.z * 0.58)
-			var outer := _engine_plume_layer("CarrierEngineOuterPlume", origin + Vector3(0.0, 0.0, dimensions.z * 0.08), Vector3(dimensions.x * 0.065, dimensions.x * 0.065, dimensions.z * 0.28), Color(0.08, 0.3, 1.0, 0.16), 2.1)
-			var inner := _engine_plume_layer("CarrierEngineInnerPlume", origin + Vector3(0.0, 0.0, dimensions.z * 0.055), Vector3(dimensions.x * 0.038, dimensions.x * 0.038, dimensions.z * 0.2), Color(0.08, 0.76, 1.0, 0.36), 3.8)
-			var core := _engine_plume_layer("CarrierEngineCorePlume", origin + Vector3(0.0, 0.0, dimensions.z * 0.04), Vector3(dimensions.x * 0.016, dimensions.x * 0.016, dimensions.z * 0.13), Color(0.82, 0.97, 1.0, 0.82), 5.6)
+			var outer := _engine_plume_layer("CarrierEngineOuterPlume", origin + Vector3(0.0, 0.0, dimensions.z * 0.075), Vector3(dimensions.x * 0.12, dimensions.x * 0.12, dimensions.z * 0.15), Color(0.08, 0.3, 1.0, 0.16), 2.1)
+			var inner := _engine_plume_layer("CarrierEngineInnerPlume", origin + Vector3(0.0, 0.0, dimensions.z * 0.055), Vector3(dimensions.x * 0.075, dimensions.x * 0.075, dimensions.z * 0.11), Color(0.08, 0.76, 1.0, 0.36), 3.8)
+			var core := _engine_plume_layer("CarrierEngineCorePlume", origin + Vector3(0.0, 0.0, dimensions.z * 0.035), Vector3(dimensions.x * 0.038, dimensions.x * 0.038, dimensions.z * 0.07), Color(0.82, 0.97, 1.0, 0.82), 5.6)
 			engine_trails.append({"outer": outer, "inner": inner, "core": core, "phase": float(engine_trails.size()) * 1.73})
 
 func _engine_plume_layer(node_name: String, position_value: Vector3, size_value: Vector3, color: Color, emission: float, parent: Node3D = self) -> MeshInstance3D:
 	var plume := MeshInstance3D.new()
 	plume.name = node_name
-	var mesh := PrismMesh.new()
-	mesh.size = size_value
+	var mesh := CylinderMesh.new()
+	var plume_radius := maxf(size_value.x, size_value.y) * 0.5
+	mesh.bottom_radius = plume_radius
+	mesh.top_radius = plume_radius * 0.06
+	mesh.height = size_value.z
+	mesh.radial_segments = 32
+	mesh.rings = 1
 	plume.mesh = mesh
 	plume.position = position_value
-	plume.rotation.y = PI
+	plume.rotation_degrees.x = 90.0
 	var material := _make_material(color, emission)
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 	plume.material_override = material
 	plume.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	plume.set_meta(&"base_length", size_value.z)
+	plume.set_meta(&"nozzle_origin_z", position_value.z - size_value.z * 0.5)
 	parent.add_child(plume)
 	return plume
 
@@ -810,14 +842,22 @@ func _update_engine_trails() -> void:
 		var inner: MeshInstance3D = trail_data.inner
 		var core: MeshInstance3D = trail_data.core
 		if is_instance_valid(outer):
-			outer.scale = Vector3(0.82 + output * 0.2, 0.82 + output * 0.2, lerpf(0.08, 1.42, output) * flicker)
+			_scale_engine_plume(outer, 0.82 + output * 0.2, lerpf(0.08, 1.42, output) * flicker)
 			outer.transparency = lerpf(0.88, 0.34, clampf(output, 0.0, 1.0))
 		if is_instance_valid(inner):
-			inner.scale = Vector3(0.9 + output * 0.14, 0.9 + output * 0.14, lerpf(0.1, 1.24, output) * (2.0 - flicker))
+			_scale_engine_plume(inner, 0.9 + output * 0.14, lerpf(0.1, 1.24, output) * (2.0 - flicker))
 			inner.transparency = lerpf(0.76, 0.18, clampf(output, 0.0, 1.0))
 		if is_instance_valid(core):
-			core.scale = Vector3(0.94, 0.94, lerpf(0.12, 1.05, output) * flicker)
+			_scale_engine_plume(core, 0.94, lerpf(0.12, 1.05, output) * flicker)
 			core.transparency = lerpf(0.62, 0.04, clampf(output, 0.0, 1.0))
+
+func _scale_engine_plume(plume: MeshInstance3D, radial_scale: float, length_scale: float) -> void:
+	# CylinderMesh length is local Y before the 90-degree rotation. Keep the near end
+	# locked to the nozzle while engine output expands the trail aft.
+	plume.scale = Vector3(radial_scale, length_scale, 1.0)
+	var base_length := float(plume.get_meta(&"base_length", 0.0))
+	var nozzle_origin_z := float(plume.get_meta(&"nozzle_origin_z", plume.position.z))
+	plume.position.z = nozzle_origin_z + base_length * length_scale * 0.5
 
 func _process_point_defense() -> void:
 	if point_defense_cooldown > 0.0:

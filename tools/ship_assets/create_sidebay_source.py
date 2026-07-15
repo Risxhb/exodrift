@@ -1,11 +1,12 @@
-"""Create the production Sidebay Blender source and exportable GLB foundation.
+"""Create the production Sidebay Blender source and exportable GLB.
 
 Run with Blender, not regular Python:
   blender --background --python tools/ship_assets/create_sidebay_source.py
 
-The generated model is deliberately disabled in its Godot manifest until an art
-review approves it. Re-running this script deterministically rebuilds the source
-scene, socket contract, UVs, material slots, GLB, and geometry report.
+Re-running this script deterministically rebuilds the source scene, socket
+contract, UVs, material slots, GLB, and geometry report. Primary forms and
+hangar structure are deliberately sized for the in-game chase camera rather
+than relying on studio lighting or sub-pixel surface noise.
 """
 
 from __future__ import annotations
@@ -137,7 +138,9 @@ def box(name: str, size, location, material, geometry_collection, bevel: float =
     obj.dimensions = size
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     assign_material(obj, material)
-    apply_bevel(obj, min(bevel, min(size) * 0.22))
+    # One broad chamfer reads better at gameplay distance and leaves the triangle
+    # budget for silhouette-defining armor instead of invisible roundovers.
+    apply_bevel(obj, min(bevel, min(size) * 0.22), 1)
     for parent_collection in list(obj.users_collection):
         parent_collection.objects.unlink(obj)
     geometry_collection.objects.link(obj)
@@ -323,7 +326,7 @@ def place_pdw_mounts(material: bpy.types.Material, geometry_collection, sockets:
 
 def build_armored_engines(materials, geometry_collection) -> list[bpy.types.Object]:
     """Build six recessed drives inside a compartmentalized armored stern wall."""
-    hull, accent, _marking, emission = materials
+    hull, accent, _marking, emission = materials[:4]
     objects: list[bpy.types.Object] = []
     # A broad, deep stern citadel reproduces the reference wall while retaining
     # Sidebay's six-drive gameplay contract instead of inventing two new drives.
@@ -372,7 +375,7 @@ def build_armored_engines(materials, geometry_collection) -> list[bpy.types.Obje
 
 def build_hangar_blast_doors(materials, geometry_collection) -> list[bpy.types.Object]:
     """Create twelve animation-ready shutter halves across two large galleries."""
-    hull, accent, marking, _emission = materials
+    hull, accent, marking, _emission = materials[:4]
     doors: list[bpy.types.Object] = []
     for bay_index, (y, door_length) in enumerate(zip(HANGAR_Y_POSITIONS, HANGAR_DOOR_LENGTHS), start=1):
         prototype_parts: list[bpy.types.Object] = []
@@ -435,31 +438,57 @@ def build_hangar_blast_doors(materials, geometry_collection) -> list[bpy.types.O
 
 
 def build_parked_fighter(name: str, side: float, x: float, y: float, z: float, materials, geometry_collection) -> list[bpy.types.Object]:
-    """Create a restrained carrier-craft silhouette for a hangar parking spot."""
-    hull, accent, marking, emission = materials
+    """Create a dark, readable carrier-craft silhouette for a hangar parking spot."""
+    hull, accent, marking, emission = materials[:4]
     objects: list[bpy.types.Object] = []
     rotation_z = math.radians(-90.0 if side > 0.0 else 90.0)
-    body = tapered_box(f"{name}_Fuselage", 6.2, 0.82, 2.15, 0.54, (x, y, z), marking, geometry_collection, 0.1)
+    body = tapered_box(f"{name}_Fuselage", 8.6, 0.72, 2.35, 0.72, (x, y, z), accent, geometry_collection, 0.12)
     body.rotation_euler.z = rotation_z
     objects.append(body)
-    objects.append(box(f"{name}_Wing", (4.8, 1.9, 0.22), (x, y, z + 0.02), hull, geometry_collection, 0.06, rotation=(0.0, 0.0, rotation_z)))
-    objects.append(box(f"{name}_Canopy", (0.72, 0.82, 0.18), (x + side * 0.45, y, z + 0.38), emission, geometry_collection, 0.05, rotation=(0.0, 0.0, rotation_z)))
+    # Craft point outboard toward the launch aperture. Broad swept wings and a
+    # tailplane are dark; only a narrow spine marking and canopy catch the eye.
+    objects.append(box(f"{name}_MainWing", (3.8, 6.2, 0.28), (x - side * 0.55, y, z - 0.03), hull, geometry_collection, 0.07))
+    objects.append(box(f"{name}_Tailplane", (1.65, 3.5, 0.22), (x - side * 3.0, y, z + 0.02), accent, geometry_collection, 0.06))
+    objects.append(box(f"{name}_DorsalFin", (1.2, 0.22, 0.86), (x - side * 3.15, y, z + 0.5), hull, geometry_collection, 0.055))
+    objects.append(box(f"{name}_Canopy", (1.25, 0.76, 0.3), (x + side * 1.45, y, z + 0.48), emission, geometry_collection, 0.05))
     return objects
 
 
 def build_hangar_galleries(materials, geometry_collection) -> list[bpy.types.Object]:
-    hull, accent, marking, emission = materials
+    hull, accent, marking, emission = materials[:4]
+    interior = materials[4]
     objects: list[bpy.types.Object] = []
     for side_name, side in (("Port", -1.0), ("Starboard", 1.0)):
         for gallery_index, (gallery_name, center_y, gallery_length) in enumerate(HANGAR_GALLERIES, start=1):
             prefix = f"{side_name}{gallery_name}Gallery"
-            # The backing wall is 12 m inboard of the armor lip, creating real
-            # gallery depth rather than a luminous plate on the hull surface.
-            objects.append(box(f"{prefix}InnerBulkhead", (0.9, gallery_length, 11.0), (side * 24.4, center_y, 0.0), accent, geometry_collection, 0.16))
-            objects.append(box(f"{prefix}FlightDeck", (13.5, gallery_length, 1.0), (side * 30.6, center_y, -5.6), hull, geometry_collection, 0.2))
-            objects.append(box(f"{prefix}OverheadArmor", (13.5, gallery_length, 1.1), (side * 30.6, center_y, 5.9), hull, geometry_collection, 0.2))
+            # Deep galleries are framed as armored voids. Their large beams and
+            # chamfered shoulders remain legible from the normal chase camera.
+            objects.append(box(f"{prefix}InnerBulkhead", (1.15, gallery_length, 11.5), (side * 22.8, center_y, 0.0), interior, geometry_collection, 0.2))
+            objects.append(box(f"{prefix}FlightDeck", (15.8, gallery_length, 1.25), (side * 30.0, center_y, -5.75), interior, geometry_collection, 0.28))
+            objects.append(box(f"{prefix}OverheadArmor", (15.8, gallery_length, 1.3), (side * 30.0, center_y, 6.0), interior, geometry_collection, 0.28))
             for end_index, end_y in enumerate((center_y - gallery_length * 0.5, center_y + gallery_length * 0.5), start=1):
-                objects.append(box(f"{prefix}EndBulkhead{end_index:02d}", (13.7, 1.25, 12.4), (side * 30.6, end_y, 0.0), hull, geometry_collection, 0.24))
+                objects.append(box(f"{prefix}EndBulkhead{end_index:02d}", (15.9, 1.6, 13.2), (side * 30.0, end_y, 0.0), hull, geometry_collection, 0.36))
+                objects.append(box(f"{prefix}OuterPillar{end_index:02d}", (2.8, 2.6, 15.2), (side * 36.4, end_y, 0.0), accent, geometry_collection, 0.34))
+            objects.append(box(f"{prefix}OuterUpperBeam", (3.0, gallery_length + 2.2, 2.6), (side * 36.2, center_y, 6.9), accent, geometry_collection, 0.38))
+            objects.append(box(f"{prefix}OuterLowerBeam", (3.0, gallery_length + 2.2, 2.6), (side * 36.2, center_y, -6.8), accent, geometry_collection, 0.38))
+            objects.append(box(
+                f"{prefix}SlopedArmorBrow",
+                (5.4, gallery_length + 1.4, 2.2),
+                (side * 34.5, center_y, 8.2),
+                hull,
+                geometry_collection,
+                0.3,
+                rotation=(0.0, math.radians(side * 18.0), 0.0),
+            ))
+            objects.append(box(
+                f"{prefix}SlopedArmorSill",
+                (5.4, gallery_length + 1.4, 2.2),
+                (side * 34.5, center_y, -8.1),
+                hull,
+                geometry_collection,
+                0.3,
+                rotation=(0.0, math.radians(side * -18.0), 0.0),
+            ))
             # Deep door coffers and guide rails carry the heavy shutters clear of
             # the opening during flight operations.
             objects.append(box(f"{prefix}UpperDoorCoffer", (2.0, gallery_length + 1.0, 4.7), (side * 37.0, center_y, 8.0), hull, geometry_collection, 0.28))
@@ -467,16 +496,16 @@ def build_hangar_galleries(materials, geometry_collection) -> list[bpy.types.Obj
             objects.append(box(f"{prefix}UpperGuide", (1.2, gallery_length, 0.5), (side * 37.3, center_y, 5.75), accent, geometry_collection, 0.09))
             objects.append(box(f"{prefix}LowerGuide", (1.2, gallery_length, 0.5), (side * 37.3, center_y, -5.55), accent, geometry_collection, 0.09))
 
-            for light_lane, lane_x in enumerate((27.0, 30.5, 34.0), start=1):
+            for light_lane, lane_x in enumerate((25.8, 30.0, 34.2), start=1):
                 objects.append(box(
                     f"{prefix}CeilingLight{light_lane:02d}",
                     (0.16, gallery_length - 4.0, 0.16),
-                    (side * lane_x, center_y, 5.28),
+                    (side * lane_x, center_y, 5.2),
                     emission,
                     geometry_collection,
                     0.025,
                 ))
-            for rail_lane, lane_x in enumerate((27.0, 31.0, 35.0), start=1):
+            for rail_lane, lane_x in enumerate((25.6, 30.0, 34.4), start=1):
                 objects.append(box(
                     f"{prefix}DeckRail{rail_lane:02d}",
                     (0.18, gallery_length - 4.0, 0.12),
@@ -485,16 +514,16 @@ def build_hangar_galleries(materials, geometry_collection) -> list[bpy.types.Obj
                     geometry_collection,
                     0.02,
                 ))
-            # Fighters remain well inside the armor lip and make the carrier role
-            # legible from the reference side and three-quarter views.
-            fighter_count = 6 if gallery_index == 1 else 7
+            # Large parked craft and gantries establish scale; fewer, stronger
+            # silhouettes read better than rows of sub-pixel miniatures.
+            fighter_count = 2
             for fighter_index in range(fighter_count):
                 fighter_y = center_y - gallery_length * 0.38 + gallery_length * 0.76 * fighter_index / max(1, fighter_count - 1)
-                fighter_x = side * (29.0 + (fighter_index % 2) * 3.0)
+                fighter_x = side * (27.8 + (fighter_index % 2) * 4.2)
                 objects.append(box(
                     f"{prefix}OverheadPanel{fighter_index + 1:02d}",
                     (2.3, 1.35, 0.18),
-                    (side * 30.5, fighter_y, 5.24),
+                    (side * 30.0, fighter_y, 5.16),
                     emission,
                     geometry_collection,
                     0.03,
@@ -502,7 +531,7 @@ def build_hangar_galleries(materials, geometry_collection) -> list[bpy.types.Obj
                 objects.append(box(
                     f"{prefix}BulkheadLight{fighter_index + 1:02d}",
                     (0.18, 2.0, 0.5),
-                    (side * 24.92, fighter_y, 2.3),
+                    (side * 23.48, fighter_y, 2.4),
                     emission,
                     geometry_collection,
                     0.035,
@@ -516,18 +545,47 @@ def build_hangar_galleries(materials, geometry_collection) -> list[bpy.types.Obj
                     materials,
                     geometry_collection,
                 ))
+            gantry_count = 4
+            for gantry_index in range(gantry_count):
+                gantry_y = center_y - gallery_length * 0.36 + gallery_length * 0.72 * gantry_index / max(1, gantry_count - 1)
+                objects.append(box(
+                    f"{prefix}CeilingGantry{gantry_index + 1:02d}",
+                    (12.2, 0.48, 0.58),
+                    (side * 29.6, gantry_y, 4.72),
+                    accent,
+                    geometry_collection,
+                    0.08,
+                ))
+            for stripe_index, lane_x in enumerate((25.0, 35.0), start=1):
+                objects.append(box(
+                    f"{prefix}DeckEdgeMarking{stripe_index:02d}",
+                    (0.32, gallery_length - 3.0, 0.12),
+                    (side * lane_x, center_y, -5.02),
+                    marking,
+                    geometry_collection,
+                    0.025,
+                ))
     return objects
 
 
 def build_command_citadel(materials, geometry_collection) -> list[bpy.types.Object]:
-    hull, accent, _marking, emission = materials
+    hull, accent, _marking, emission = materials[:4]
     objects: list[bpy.types.Object] = []
-    objects.append(tapered_box("CitadelLowerTerrace", 42.0, 24.0, 31.0, 2.2, (0.0, -23.0, 11.55), hull, geometry_collection, 0.38))
-    objects.append(tapered_box("CitadelMiddleTerrace", 29.0, 18.0, 23.0, 2.0, (0.0, -24.5, 13.25), hull, geometry_collection, 0.34))
-    objects.append(tapered_box("CitadelBridgeBlock", 16.0, 11.5, 15.0, 1.8, (0.0, -22.0, 14.55), accent, geometry_collection, 0.26))
-    objects.append(box("CitadelForwardBridgeWindows", (11.4, 0.34, 0.48), (0.0, -13.9, 14.55), emission, geometry_collection, 0.055))
+    objects.append(tapered_box("CitadelLowerTerrace", 46.0, 25.0, 33.0, 2.8, (0.0, -23.0, 11.65), hull, geometry_collection, 0.46))
+    objects.append(tapered_box("CitadelMiddleTerrace", 31.0, 18.5, 24.5, 2.4, (0.0, -24.5, 13.35), accent, geometry_collection, 0.4))
+    objects.append(tapered_box("CitadelBridgeBlock", 17.0, 11.5, 15.5, 2.0, (0.0, -22.0, 14.65), hull, geometry_collection, 0.3))
+    objects.append(box("CitadelForwardBridgeWindows", (11.6, 0.4, 0.58), (0.0, -13.45, 14.72), emission, geometry_collection, 0.06))
     for side_index, side in enumerate((-1.0, 1.0), start=1):
-        objects.append(box(f"CitadelSideBridgeWindows{side_index:02d}", (0.34, 9.5, 0.44), (side * 6.9, -22.0, 14.55), emission, geometry_collection, 0.05))
+        objects.append(box(f"CitadelSideBridgeWindows{side_index:02d}", (0.38, 10.5, 0.54), (side * 7.1, -22.0, 14.72), emission, geometry_collection, 0.05))
+        objects.append(box(
+            f"CitadelArmoredCheek{side_index:02d}",
+            (3.2, 22.0, 1.8),
+            (side * 11.0, -24.0, 12.9),
+            hull,
+            geometry_collection,
+            0.22,
+            rotation=(0.0, math.radians(side * 12.0), 0.0),
+        ))
         objects.append(vertical_cylinder(f"CitadelSensorDome{side_index:02d}", 0.95, 0.52, (side * 7.8, -31.0, 14.1), accent, geometry_collection, 24))
     objects.append(vertical_cylinder("CitadelMainMast", 0.42, 2.0, (0.0, -24.0, 14.9), hull, geometry_collection, 20))
     objects.append(vertical_cylinder("CitadelRadarCrown", 1.35, 0.42, (0.0, -24.0, 15.55), accent, geometry_collection, 28))
@@ -538,7 +596,7 @@ def build_command_citadel(materials, geometry_collection) -> list[bpy.types.Obje
 
 
 def build_armor_panel_language(materials, geometry_collection) -> list[bpy.types.Object]:
-    hull, accent, _marking, emission = materials
+    hull, accent, _marking, emission = materials[:4]
     objects: list[bpy.types.Object] = []
     top_rows = (-91.0, -77.0, -63.0, -49.0, -35.0, -21.0, -7.0, 7.0, 28.0, 43.0, 58.0, 73.0, 86.0, 98.0)
     for row_index, y in enumerate(top_rows):
@@ -579,7 +637,7 @@ def build_armor_panel_language(materials, geometry_collection) -> list[bpy.types
 
     # Secondary hatches and vent clusters break the large armor fields into the
     # dense serviceable plate language visible throughout the reference sheet.
-    for detail_index in range(36):
+    for detail_index in range(20):
         y = -91.0 + (detail_index % 16) * 10.2
         row = detail_index // 16
         if y < -55.0:
@@ -615,7 +673,7 @@ def build_armor_panel_language(materials, geometry_collection) -> list[bpy.types
                     0.025,
                 ))
 
-    for region_name, centers in (("Bow", (80.0, 92.0, 103.0)), ("Stern", (-63.0, -76.0, -90.0, -102.0))):
+    for region_name, centers in (("Bow", (80.0, 92.0, 103.0)), ("Stern", (-69.0, -91.5))):
         for center_index, y in enumerate(centers, start=1):
             if region_name == "Bow":
                 progress = min(1.0, max(0.0, (y - 72.0) / 38.0))
@@ -623,14 +681,17 @@ def build_armor_panel_language(materials, geometry_collection) -> list[bpy.types
             else:
                 half_width = 35.7
             for side_name, side in (("Port", -1.0), ("Starboard", 1.0)):
-                for level_index, z in enumerate((-5.0, 0.0, 5.0), start=1):
+                levels = (-5.0, 0.0, 5.0) if region_name == "Bow" else (-4.25, 4.25)
+                for level_index, z in enumerate(levels, start=1):
+                    panel_length = 10.2 if region_name == "Bow" else 21.8
+                    panel_height = 3.7 if region_name == "Bow" else 8.0
                     objects.append(box(
                         f"{region_name}{side_name}ArmorPanel_{center_index:02d}_{level_index:02d}",
-                        (0.28, 10.2, 3.7),
+                        (0.48, panel_length, panel_height),
                         (side * (half_width + 0.08), y, z),
                         hull if (center_index + level_index) % 3 else accent,
                         geometry_collection,
-                        0.07,
+                        0.12,
                     ))
 
     for light_index, y in enumerate((-88.0, -66.0, -44.0, -18.0, 3.0, 25.0, 47.0, 67.0, 83.0), start=1):
@@ -647,18 +708,39 @@ def build_armor_panel_language(materials, geometry_collection) -> list[bpy.types
 
 
 def build_geometry(materials, geometry_collection) -> list[bpy.types.Object]:
-    hull, accent, marking, emission = materials
+    hull, accent, marking, emission = materials[:4]
     objects: list[bpy.types.Object] = []
     objects.append(faceted_hull("ArmoredInnerHull", ((-57.0, 27.0, 9.6), (10.0, 24.0, 9.2), (72.0, 27.0, 10.1)), hull, geometry_collection, 0.72))
     objects.append(faceted_hull("FacetedArmoredBow", ((70.0, 36.0, 10.4), (84.0, 32.0, 10.0), (99.0, 22.0, 8.2), (110.0, 8.5, 5.5)), hull, geometry_collection, 0.68))
     objects.append(faceted_hull("ArmoredSternCitadel", ((-110.0, 33.0, 13.0), (-94.0, 36.0, 13.0), (-55.0, 36.0, 11.2)), hull, geometry_collection, 0.74))
-    objects.append(box("ContinuousDorsalArmor", (72.0, 127.0, 4.0), (0.0, 7.5, 8.5), hull, geometry_collection, 0.7))
-    objects.append(box("ContinuousVentralArmor", (72.0, 127.0, 4.0), (0.0, 7.5, -8.5), hull, geometry_collection, 0.7))
+    # A narrower central roof and floor plus sloped shoulders replace the old
+    # single rectangular slab. The silhouette now carries an armored chamfer
+    # that survives the dark gameplay renderer.
+    objects.append(box("ContinuousDorsalArmor", (63.5, 127.0, 3.6), (0.0, 7.5, 8.65), hull, geometry_collection, 0.82))
+    objects.append(box("ContinuousVentralArmor", (63.5, 127.0, 3.6), (0.0, 7.5, -8.65), hull, geometry_collection, 0.82))
     objects.append(box("ArmoredMidshipPier", (74.0, 10.5, 21.0), (0.0, 15.0, 0.0), hull, geometry_collection, 0.72))
     objects.append(tapered_box("VentralKeel", 178.0, 9.0, 15.0, 4.6, (0.0, -7.0, -13.55), accent, geometry_collection, 0.48))
     for side_name, side in (("Port", -1.0), ("Starboard", 1.0)):
-        objects.append(box(f"{side_name}DorsalEdgeBand", (4.0, 127.0, 2.1), (side * 34.4, 7.5, 10.3), hull, geometry_collection, 0.28))
-        objects.append(box(f"{side_name}VentralEdgeBand", (4.0, 127.0, 2.1), (side * 34.4, 7.5, -10.3), hull, geometry_collection, 0.28))
+        objects.append(box(
+            f"{side_name}DorsalShoulderArmor",
+            (7.4, 127.0, 3.0),
+            (side * 34.1, 7.5, 9.15),
+            hull,
+            geometry_collection,
+            0.42,
+            rotation=(0.0, math.radians(side * 20.0), 0.0),
+        ))
+        objects.append(box(
+            f"{side_name}VentralShoulderArmor",
+            (7.4, 127.0, 3.0),
+            (side * 34.1, 7.5, -9.15),
+            hull,
+            geometry_collection,
+            0.42,
+            rotation=(0.0, math.radians(side * -20.0), 0.0),
+        ))
+        objects.append(box(f"{side_name}UpperSponsonRail", (2.4, 127.0, 2.2), (side * 36.7, 7.5, 6.4), accent, geometry_collection, 0.3))
+        objects.append(box(f"{side_name}LowerSponsonRail", (2.4, 127.0, 2.2), (side * 36.7, 7.5, -6.4), accent, geometry_collection, 0.3))
     objects.extend(build_hangar_galleries(materials, geometry_collection))
     objects.extend(build_command_citadel(materials, geometry_collection))
     objects.extend(build_armor_panel_language(materials, geometry_collection))
@@ -702,7 +784,7 @@ def consolidate_geometry(objects: list[bpy.types.Object]) -> bpy.types.Object:
     hull.data.validate()
     hull.data.update()
     hull["lod"] = 0
-    hull["design_status"] = "authoring_foundation"
+    hull["design_status"] = "runtime_refined"
     return hull
 
 
@@ -832,9 +914,10 @@ def main() -> None:
     studio_collection = collection("Studio")
     materials = (
         textured_hull_material(),
-        simple_material("Accent", (0.035, 0.075, 0.095), 0.72, 0.4),
-        simple_material("Marking", (0.72, 0.9, 0.94), 0.28, 0.4),
+        simple_material("Accent", (0.12, 0.19, 0.24), 0.56, 0.52),
+        simple_material("Marking", (0.54, 0.7, 0.76), 0.24, 0.48),
         simple_material("Emission", (0.05, 0.72, 1.0), 0.08, 0.2, 5.0),
+        simple_material("Interior", (0.08, 0.2, 0.3), 0.18, 0.66, 0.7),
     )
     sockets = build_sockets(socket_collection)
     hull = consolidate_geometry(build_geometry(materials, geometry_collection))

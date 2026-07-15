@@ -38,7 +38,7 @@ func _run() -> void:
 	var sidebay_material := authored_hull.get_surface_override_material(0) as StandardMaterial3D if authored_hull != null else null
 	_assert_true(sidebay_material != null and sidebay_material.albedo_texture != null, "menu flagship renders the current textured hull surface")
 	var sidebay_metrics := sidebay.visual_asset.model_metrics(sidebay.authored_visual_root) if sidebay.visual_asset != null else {}
-	_assert_true(int(sidebay_metrics.get("triangles", 0)) >= 99016 and sidebay.find_child("CarrierEngineCorePlume", true, false) != null, "menu flagship uses the dense reference-sheet armor model and layered engine plume")
+	_assert_true(int(sidebay_metrics.get("triangles", 0)) >= 61000 and sidebay.find_child("CarrierEngineCorePlume", true, false) != null, "menu flagship uses the runtime-refined reference-sheet armor model and layered engine plume")
 	var friendly_air_group := fighter_models.filter(func(ship_data: Dictionary) -> bool: return bool(ship_data.friendly))
 	_assert_true(friendly_air_group.size() == 7 and friendly_air_group.filter(func(ship_data: Dictionary) -> bool: return ship_data.model_id == &"raptor_interceptor").size() == 6 and friendly_air_group.filter(func(ship_data: Dictionary) -> bool: return ship_data.model_id == &"watcher_drone").size() == 1, "menu air group presents six Raptor squadron leaders and the dedicated Watcher EW wing")
 	_assert_true(get_nodes_in_group("menu_missile_trail").size() == 6 and get_nodes_in_group("menu_flak_tracer").size() == 28 and get_nodes_in_group("menu_flak_airburst").size() == 14, "menu battle layers guided salvos, three seven-round friendly flak curtains, reciprocal fire, and a dense airburst wall")

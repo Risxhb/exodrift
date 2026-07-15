@@ -68,13 +68,14 @@ func _run() -> void:
 		_assert_true(sidebay_errors.is_empty(), "Sidebay GLB passes geometry, material, bounds, and carrier socket contracts")
 		if sidebay_model != null:
 			var sidebay_metrics := sidebay.model_metrics(sidebay_model)
-			_assert_true(int(sidebay_metrics.get("triangles", 0)) == 99016 and int(sidebay_metrics.get("material_slots", 0)) == 50, "Sidebay source exports the recorded 99,016-triangle reference model with ten linked PDWs, six armored drives, and twelve blast-door halves")
+			_assert_true(int(sidebay_metrics.get("triangles", 0)) == 61840 and int(sidebay_metrics.get("material_slots", 0)) == 51, "Sidebay source exports the recorded runtime-refined model with ten linked PDWs, six armored drives, five material classes, and twelve blast-door halves")
 			sidebay_model.free()
 		var authored_carrier := PlayerCarrier.new()
 		root.add_child(authored_carrier)
 		authored_carrier.configure(_sidebay_definition(), &"test_authored_sidebay", &"friendly", Color(0.35, 0.55, 0.7))
 		_assert_true(authored_carrier.authored_visual_root != null, "review-approved manifest can replace the PlayerCarrier visual root")
 		_assert_true(authored_carrier.flak_mounts.size() == 10 and authored_carrier.engine_trails.size() == 6, "authored Sidebay binds all flak and engine sockets")
+		_assert_true(authored_carrier.find_children("*GalleryLight", "OmniLight3D", true, false).size() == 6, "authored Sidebay adds six runtime gallery lights that survive the Web renderer")
 		var shared_pdw_mesh: Mesh
 		var all_pdw_models_bound := true
 		var all_pdw_models_linked := true
