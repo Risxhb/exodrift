@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ShipVisualAsset" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="ShipVisualAsset" load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/data/ship_visual_asset.gd" id="1_asset"]
 [ext_resource type="PackedScene" path="res://assets/ships/cvn_sidebay/cvn_sidebay.glb" id="2_model"]
@@ -8,25 +8,36 @@
 [sub_resource type="Resource" id="Resource_accent"]
 script = ExtResource("4_material")
 material_name = &"Accent"
-color_tint = Color(0.035, 0.1, 0.13, 1)
-fallback_metallic = 0.68
-fallback_roughness = 0.4
+color_tint = Color(0.14, 0.22, 0.27, 1)
+fallback_metallic = 0.5
+fallback_roughness = 0.56
 
 [sub_resource type="Resource" id="Resource_marking"]
 script = ExtResource("4_material")
 material_name = &"Marking"
-color_tint = Color(0.72, 0.9, 0.94, 1)
-fallback_metallic = 0.28
-fallback_roughness = 0.4
+color_tint = Color(0.54, 0.7, 0.76, 1)
+fallback_metallic = 0.24
+fallback_roughness = 0.48
+emission_color = Color(0.18, 0.48, 0.7, 1)
+emission_energy = 0.42
 
 [sub_resource type="Resource" id="Resource_emission"]
 script = ExtResource("4_material")
 material_name = &"Emission"
-color_tint = Color(0.025, 0.14, 0.2, 1)
+color_tint = Color(0.035, 0.22, 0.29, 1)
 fallback_metallic = 0.08
 fallback_roughness = 0.2
 emission_color = Color(0.05, 0.72, 1, 1)
-emission_energy = 5.0
+emission_energy = 7.0
+
+[sub_resource type="Resource" id="Resource_interior"]
+script = ExtResource("4_material")
+material_name = &"Interior"
+color_tint = Color(0.08, 0.2, 0.3, 1)
+fallback_metallic = 0.18
+fallback_roughness = 0.66
+emission_color = Color(0.06, 0.34, 0.58, 1)
+emission_energy = 1.05
 
 [resource]
 script = ExtResource("1_asset")
@@ -42,6 +53,7 @@ hull_material = ExtResource("3_hull")
 accent_material = SubResource("Resource_accent")
 marking_material = SubResource("Resource_marking")
 emission_material = SubResource("Resource_emission")
+interior_material = SubResource("Resource_interior")
 required_sockets = Array[StringName]([&"socket_engine_01", &"socket_engine_02", &"socket_engine_03", &"socket_engine_04", &"socket_engine_05", &"socket_engine_06", &"socket_flak_01", &"socket_flak_02", &"socket_flak_03", &"socket_flak_04", &"socket_flak_05", &"socket_flak_06", &"socket_flak_07", &"socket_flak_08", &"socket_flak_09", &"socket_flak_10", &"socket_bay_port_01", &"socket_bay_port_02", &"socket_bay_port_03", &"socket_bay_starboard_01", &"socket_bay_starboard_02", &"socket_bay_starboard_03", &"socket_bay_scout_01", &"socket_missile_01", &"socket_missile_02", &"socket_missile_03", &"socket_missile_04", &"socket_damage_01", &"socket_damage_02", &"socket_damage_03", &"socket_damage_04"])
 maximum_lod0_triangles = 100000
 maximum_material_slots = 64

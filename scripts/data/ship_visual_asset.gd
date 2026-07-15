@@ -20,6 +20,7 @@ extends Resource
 @export var accent_material: ShipPbrMaterial
 @export var marking_material: ShipPbrMaterial
 @export var emission_material: ShipPbrMaterial
+@export var interior_material: ShipPbrMaterial
 
 @export_group("Runtime Contract")
 @export var required_sockets: Array[StringName] = []
@@ -187,6 +188,8 @@ func _relative_transform(node: Node3D, ancestor: Node3D) -> Transform3D:
 func _material_for_slot(slot_name: String) -> ShipPbrMaterial:
 	if ("emission" in slot_name or "engine" in slot_name or "light" in slot_name) and emission_material != null:
 		return emission_material
+	if ("interior" in slot_name or "hangar" in slot_name or "refractory" in slot_name) and interior_material != null:
+		return interior_material
 	if ("mark" in slot_name or "decal" in slot_name) and marking_material != null:
 		return marking_material
 	if "accent" in slot_name and accent_material != null:
