@@ -27,9 +27,23 @@ extends Resource
 @export_range(0.3, 1.0) var dorsal_fore_taper: float = 0.52
 @export_range(0.3, 1.0) var dorsal_aft_taper: float = 0.86
 @export_range(0.0, 1.0) var rim_strength: float = 0.18
+@export_file("*.tres", "*.res") var visual_asset_path: String = ""
+
+func resolved_visual_asset_path() -> String:
+	if not visual_asset_path.is_empty():
+		return visual_asset_path
+	return "res://assets/ships/%s/%s_visual_asset.tres" % [String(faction_style), String(faction_style)]
+
+func load_visual_asset() -> ShipVisualAsset:
+	var path := resolved_visual_asset_path()
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return null
+	return load(path) as ShipVisualAsset
 
 static func for_ship(role: StringName, faction: StringName, identity: StringName = &"") -> ShipVisualProfile:
 	var profile := ShipVisualProfile.new()
+	if identity != &"":
+		profile.visual_asset_path = "res://assets/ships/%s/%s_visual_asset.tres" % [String(identity), String(identity)]
 	if faction == &"hostile":
 		profile.faction_style = &"acheron"
 		profile.hull_texture_path = "res://assets/textures/acheron_forged_hull.svg"

@@ -1,0 +1,20 @@
+[gd_scene load_steps=3 format=3]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_fixture"]
+resource_name = "Hull"
+albedo_color = Color(0.2, 0.3, 0.4, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_fixture"]
+material = SubResource("StandardMaterial3D_fixture")
+size = Vector3(42, 20, 120)
+
+[node name="AuthoredShipFixture" type="Node3D"]
+
+[node name="HullLOD0" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_fixture")
+
+[node name="socket_engine_01" type="Marker3D" parent="."]
+position = Vector3(0, 0, 60)
+
+[node name="socket_weapon_primary_01" type="Marker3D" parent="."]
+position = Vector3(0, 6, -40)

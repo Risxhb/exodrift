@@ -71,7 +71,7 @@ func _carrier_definition() -> ShipDefinition:
 	definition.ship_id = &"cvn_sidebay"
 	definition.display_name = "Test Sidebay"
 	definition.role = "carrier"
-	definition.dimensions_m = Vector3(42.0, 20.0, 120.0)
+	definition.dimensions_m = Vector3(76.0, 32.0, 220.0)
 	definition.maximum_speed_mps = 100.0
 	definition.acceleration_mps2 = 20.0
 	definition.rotation_speed_radians = 0.5

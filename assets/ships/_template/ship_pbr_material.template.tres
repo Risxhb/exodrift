@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ShipPbrMaterial" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ship_pbr_material.gd" id="1_material"]
+
+[resource]
+script = ExtResource("1_material")
+material_name = &"Hull"
+color_tint = Color(1, 1, 1, 1)
+fallback_metallic = 0.72
+fallback_roughness = 0.42
+normal_scale = 1.0
+emission_color = Color(1, 1, 1, 1)
+emission_energy = 0.0
+uv_scale = Vector3(1, 1, 1)
+use_triplanar_projection = false

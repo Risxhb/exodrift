@@ -1,0 +1,12 @@
+{
+  "source": "assets\\ships\\materials\\navy\\source\\navy_gunmetal_source.png",
+  "size": 1024,
+  "roughness": 0.44,
+  "metallic": 0.66,
+  "normal_strength": 1.7,
+  "seamless_blend": 48,
+  "seam_score": 0.0,
+  "base_color": "assets\\ships\\materials\\navy\\runtime\\navy_gunmetal_base_color.png",
+  "normal": "assets\\ships\\materials\\navy\\runtime\\navy_gunmetal_normal.png",
+  "orm": "assets\\ships\\materials\\navy\\runtime\\navy_gunmetal_orm.png"
+}

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ShipVisualAsset" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ship_visual_asset.gd" id="1_asset"]
+
+[resource]
+script = ExtResource("1_asset")
+enabled = false
+ship_id = &"replace_with_ship_id"
+authored_dimensions_m = Vector3(1, 1, 1)
+model_scale = Vector3(1, 1, 1)
+model_rotation_degrees = Vector3(0, 0, 0)
+replace_imported_materials = false
+required_sockets = Array[StringName]([])
+maximum_lod0_triangles = 100000
+maximum_material_slots = 4
+authoring_notes = "Copy beside the model, rename to <ship_id>_visual_asset.tres, assign the imported GLB scene and PBR materials, then run the validator."

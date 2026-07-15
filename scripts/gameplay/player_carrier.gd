@@ -47,8 +47,10 @@ var flak_aim_uses_pointer: bool = false
 var flak_mounts: Array[Node3D] = []
 var bay_closure: float = 0.0
 var bay_target_closure: float = 0.0
-var bay_transition_seconds: float = 2.2
+var bay_transition_seconds: float = 2.8
 var bay_assemblies: Array[Dictionary] = []
+var active_flight_launches: Dictionary = {}
+var active_flight_recoveries: Dictionary = {}
 var flak_sequence: int = 0
 var flak_burst_count: int = 7
 var missile_salvo_count: int = 4
@@ -107,6 +109,11 @@ func _on_store_rejected(_store_id: StringName, message: String) -> void:
 
 func _build_visual() -> void:
 	var dimensions := definition.dimensions_m
+	if _try_build_authored_visual():
+		_bind_authored_carrier_sockets(dimensions)
+		_add_default_collision()
+		_add_chase_camera(dimensions)
+		return
 	_add_tapered_visual_block("ArmoredCore", Vector3(0.0, 0.0, dimensions.z * 0.03), Vector3(dimensions.x * 0.6, dimensions.y * 0.72, dimensions.z * 0.75), 0.58, 0.98, visual_color.darkened(0.12), visual_profile.hull_texture_path)
 	_add_tapered_visual_block("RecessedWaist", Vector3(0.0, -dimensions.y * 0.05, dimensions.z * 0.08), Vector3(dimensions.x * 0.4, dimensions.y * 0.48, dimensions.z * 0.58), 0.66, 0.94, visual_color.darkened(0.3), visual_profile.hull_texture_path)
 	_add_tapered_visual_block("DorsalSpine", Vector3(0.0, dimensions.y * 0.4, dimensions.z * 0.03), Vector3(dimensions.x * 0.32, dimensions.y * 0.22, dimensions.z * 0.72), 0.44, 0.92, visual_color.lightened(0.02), visual_profile.hull_texture_path)
@@ -145,11 +152,78 @@ func _build_visual() -> void:
 			var barrel := _mesh_block(Vector3(dimensions.x * 0.025, dimensions.y * 0.045, dimensions.z * 0.055), Color(0.12, 0.18, 0.23))
 			barrel.position = Vector3(0.0, dimensions.y * 0.09, -dimensions.z * 0.025)
 			turret.add_child(barrel)
-	var collision := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
-	shape.size = definition.dimensions_m
-	collision.shape = shape
-	add_child(collision)
+	_add_default_collision()
+	_add_chase_camera(dimensions)
+
+func _authored_socket_requirements() -> Dictionary:
+	return {
+		"socket_flak_": 10,
+		"socket_engine_": 6,
+		"socket_bay_port_": 3,
+		"socket_bay_starboard_": 3,
+		"socket_bay_scout_": 1,
+	}
+
+func _bind_authored_carrier_sockets(dimensions: Vector3) -> void:
+	flak_mounts.assign(_authored_socket_nodes("socket_flak_"))
+	for socket in _authored_socket_nodes("socket_bay_port_"):
+		port_bay_markers.append(_marker_from_authored_socket(socket))
+	for socket in _authored_socket_nodes("socket_bay_starboard_"):
+		starboard_bay_markers.append(_marker_from_authored_socket(socket))
+	var scout_sockets := _authored_socket_nodes("socket_bay_scout_")
+	if not scout_sockets.is_empty():
+		scout_bay_marker = _marker_from_authored_socket(scout_sockets[0])
+	if not port_bay_markers.is_empty():
+		port_bay_marker = port_bay_markers[0]
+	if not starboard_bay_markers.is_empty():
+		starboard_bay_marker = starboard_bay_markers[0]
+	for socket in _authored_socket_nodes("socket_engine_"):
+		_add_authored_engine_trail(socket, dimensions)
+	_bind_authored_blast_doors(dimensions)
+
+func _bind_authored_blast_doors(dimensions: Vector3) -> void:
+	if authored_visual_root == null:
+		return
+	var closed_panel_offset := maxf(0.35, dimensions.y * 0.075)
+	for side_name in ["port", "starboard"]:
+		for bay_index in 3:
+			var prefix := "blastdoor_%s_%02d" % [side_name, bay_index + 1]
+			var upper := authored_visual_root.find_child("%s_upper" % prefix, true, false) as Node3D
+			var lower := authored_visual_root.find_child("%s_lower" % prefix, true, false) as Node3D
+			if upper == null or lower == null:
+				continue
+			var upper_open := upper.position
+			var lower_open := lower.position
+			var center_y := (upper_open.y + lower_open.y) * 0.5
+			var upper_closed := upper_open
+			var lower_closed := lower_open
+			upper_closed.y = center_y + closed_panel_offset
+			lower_closed.y = center_y - closed_panel_offset
+			bay_assemblies.append({
+				"authored": true,
+				"node": upper,
+				"door_a": upper,
+				"door_b": lower,
+				"door_a_open_position": upper_open,
+				"door_b_open_position": lower_open,
+				"door_a_closed_position": upper_closed,
+				"door_b_closed_position": lower_closed,
+			})
+
+func _marker_from_authored_socket(socket: Node3D) -> Marker3D:
+	var marker := Marker3D.new()
+	marker.name = "%sRuntimeMarker" % socket.name
+	add_child(marker)
+	marker.global_transform = socket.global_transform
+	return marker
+
+func _add_authored_engine_trail(socket: Node3D, dimensions: Vector3) -> void:
+	var outer := _engine_plume_layer("CarrierEngineOuterPlume", Vector3(0.0, 0.0, dimensions.z * 0.14), Vector3(dimensions.x * 0.065, dimensions.x * 0.065, dimensions.z * 0.28), Color(0.08, 0.3, 1.0, 0.16), 2.1, socket)
+	var inner := _engine_plume_layer("CarrierEngineInnerPlume", Vector3(0.0, 0.0, dimensions.z * 0.1), Vector3(dimensions.x * 0.038, dimensions.x * 0.038, dimensions.z * 0.2), Color(0.08, 0.76, 1.0, 0.36), 3.8, socket)
+	var core := _engine_plume_layer("CarrierEngineCorePlume", Vector3(0.0, 0.0, dimensions.z * 0.065), Vector3(dimensions.x * 0.016, dimensions.x * 0.016, dimensions.z * 0.13), Color(0.82, 0.97, 1.0, 0.82), 5.6, socket)
+	engine_trails.append({"outer": outer, "inner": inner, "core": core, "phase": float(engine_trails.size()) * 1.73})
+
+func _add_chase_camera(dimensions: Vector3) -> void:
 	chase_camera = Camera3D.new()
 	chase_camera.name = "ChaseCamera"
 	chase_camera.position = Vector3(0.0, dimensions.y * 2.15, dimensions.z * 1.02)
@@ -279,7 +353,7 @@ func _add_engine_banks(dimensions: Vector3) -> void:
 			var core := _engine_plume_layer("CarrierEngineCorePlume", origin + Vector3(0.0, 0.0, dimensions.z * 0.04), Vector3(dimensions.x * 0.016, dimensions.x * 0.016, dimensions.z * 0.13), Color(0.82, 0.97, 1.0, 0.82), 5.6)
 			engine_trails.append({"outer": outer, "inner": inner, "core": core, "phase": float(engine_trails.size()) * 1.73})
 
-func _engine_plume_layer(node_name: String, position_value: Vector3, size_value: Vector3, color: Color, emission: float) -> MeshInstance3D:
+func _engine_plume_layer(node_name: String, position_value: Vector3, size_value: Vector3, color: Color, emission: float, parent: Node3D = self) -> MeshInstance3D:
 	var plume := MeshInstance3D.new()
 	plume.name = node_name
 	var mesh := PrismMesh.new()
@@ -293,7 +367,7 @@ func _engine_plume_layer(node_name: String, position_value: Vector3, size_value:
 	material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 	plume.material_override = material
 	plume.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(plume)
+	parent.add_child(plume)
 	return plume
 
 func _add_missile_cells(dimensions: Vector3) -> void:
@@ -876,6 +950,26 @@ func request_bays_open() -> void:
 	bay_target_closure = 0.0
 	bay_state_changed.emit("OPENING")
 
+func notify_flight_launch_started(squadron_id: StringName) -> void:
+	active_flight_launches[squadron_id] = true
+	request_bays_open()
+
+func notify_flight_launch_finished(squadron_id: StringName) -> void:
+	active_flight_launches.erase(squadron_id)
+	_seal_bays_if_flight_ops_idle()
+
+func notify_flight_recovery_started(squadron_id: StringName) -> void:
+	active_flight_recoveries[squadron_id] = true
+	request_bays_open()
+
+func notify_flight_recovery_finished(squadron_id: StringName) -> void:
+	active_flight_recoveries.erase(squadron_id)
+	_seal_bays_if_flight_ops_idle()
+
+func _seal_bays_if_flight_ops_idle() -> void:
+	if active_flight_launches.is_empty() and active_flight_recoveries.is_empty():
+		request_bays_closed()
+
 func are_bays_closed() -> bool:
 	return bay_closure >= 0.995 and bay_target_closure >= 0.995
 
@@ -895,6 +989,16 @@ func _update_bay_retraction(delta: float) -> void:
 	if is_equal_approx(previous, bay_closure):
 		return
 	for bay_data in bay_assemblies:
+		if bool(bay_data.get("authored", false)):
+			var authored_door_a := bay_data.door_a as Node3D
+			var authored_door_b := bay_data.door_b as Node3D
+			var door_a_open: Vector3 = bay_data.door_a_open_position
+			var door_b_open: Vector3 = bay_data.door_b_open_position
+			var door_a_closed: Vector3 = bay_data.door_a_closed_position
+			var door_b_closed: Vector3 = bay_data.door_b_closed_position
+			authored_door_a.position = door_a_open.lerp(door_a_closed, bay_closure)
+			authored_door_b.position = door_b_open.lerp(door_b_closed, bay_closure)
+			continue
 		var assembly: Node3D = bay_data.node
 		assembly.position.x = lerpf(float(bay_data.open_x), float(bay_data.closed_x), bay_closure)
 		var door_a: MeshInstance3D = bay_data.door_a

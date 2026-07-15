@@ -67,6 +67,9 @@ var damage_visual_stage: int = 0
 var damage_indicator_nodes: Array[MeshInstance3D] = []
 var damage_effect_cooldown: float = 0.0
 var visual_profile: ShipVisualProfile
+var visual_asset: ShipVisualAsset
+var authored_visual_root: Node3D
+var authored_sockets: Dictionary = {}
 var target_state_provider: Callable
 var _track_lost_order_id: StringName = &""
 var missile_launch_points: Array[Node3D] = []
@@ -136,6 +139,10 @@ func _configure_resolute_weapons() -> void:
 	definition.weapons.append(resolute_flak_weapon)
 
 func _build_visual() -> void:
+	if _try_build_authored_visual():
+		_bind_authored_combat_sockets()
+		_add_default_collision()
+		return
 	var hull_dimensions := definition.dimensions_m
 	var profile := visual_profile
 	var body := MeshInstance3D.new()
@@ -158,11 +165,73 @@ func _build_visual() -> void:
 	nose.material_override = _make_material(visual_color.lightened(0.15), 0.0, profile.hull_texture_path)
 	add_child(nose)
 	_build_hull_details(hull_dimensions, profile)
+	_add_default_collision()
+
+func _try_build_authored_visual() -> bool:
+	if visual_profile == null or definition == null:
+		return false
+	var candidate := visual_profile.load_visual_asset()
+	if candidate == null:
+		return false
+	if not candidate.enabled:
+		return false
+	var errors := candidate.manifest_errors(definition.ship_id, definition.dimensions_m)
+	if not errors.is_empty():
+		_warn_authored_asset_fallback(candidate, errors)
+		return false
+	var model := candidate.instantiate_model()
+	if model == null:
+		_warn_authored_asset_fallback(candidate, PackedStringArray(["model scene did not instantiate as Node3D"]))
+		return false
+	errors = candidate.instance_errors(model, _authored_socket_requirements())
+	if not errors.is_empty():
+		model.free()
+		_warn_authored_asset_fallback(candidate, errors)
+		return false
+	candidate.apply_material_contract(model)
+	add_child(model)
+	visual_asset = candidate
+	authored_visual_root = model
+	authored_sockets = candidate.collect_sockets(model)
+	return true
+
+func _authored_socket_requirements() -> Dictionary:
+	if _is_resolute():
+		return {"socket_missile_": RESOLUTE_VLS_COMPARTMENT_COUNT, "socket_flak_": 3}
+	return {}
+
+func _authored_socket_nodes(prefix: String) -> Array[Node3D]:
+	var nodes: Array[Node3D] = []
+	var normalized_prefix := prefix.to_lower()
+	var names: Array[String] = []
+	for socket_name in authored_sockets:
+		if String(socket_name).begins_with(normalized_prefix):
+			names.append(String(socket_name))
+	names.sort()
+	for socket_name in names:
+		var socket := authored_sockets.get(StringName(socket_name)) as Node3D
+		if socket != null:
+			nodes.append(socket)
+	return nodes
+
+func _bind_authored_combat_sockets() -> void:
+	missile_launch_points.assign(_authored_socket_nodes("socket_missile_"))
+	flak_battery_mounts.assign(_authored_socket_nodes("socket_flak_"))
+	flak_battery_cooldowns.resize(flak_battery_mounts.size())
+	flak_battery_fire_counts.resize(flak_battery_mounts.size())
+	flak_battery_cooldowns.fill(0.0)
+	flak_battery_fire_counts.fill(0)
+
+func _add_default_collision() -> void:
 	var collision := CollisionShape3D.new()
+	collision.name = "GameplayCollision"
 	var shape := BoxShape3D.new()
 	shape.size = definition.dimensions_m
 	collision.shape = shape
 	add_child(collision)
+
+func _warn_authored_asset_fallback(candidate: ShipVisualAsset, errors: PackedStringArray) -> void:
+	push_warning("Authored ship asset '%s' rejected; using procedural fallback: %s" % [candidate.ship_id, "; ".join(errors)])
 
 func _build_hull_details(hull_dimensions: Vector3, profile: ShipVisualProfile) -> void:
 	_add_visual_block("AftEngineering", Vector3(0.0, -hull_dimensions.y * 0.05, hull_dimensions.z * 0.39), Vector3(hull_dimensions.x * 0.52, hull_dimensions.y * 0.58, hull_dimensions.z * 0.18), visual_color.darkened(0.18), 0.0, profile.hull_texture_path)
