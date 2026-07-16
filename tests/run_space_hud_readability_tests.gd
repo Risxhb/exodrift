@@ -77,11 +77,11 @@ func _run() -> void:
 	var popup_rect := Rect2(Vector2(hud.target_context_menu.position), Vector2(hud.target_context_menu.size))
 	_assert_true(hud.target_context_menu.visible and Rect2(Vector2.ZERO, Vector2(root.size)).encloses(popup_rect), "target context menu clamps inside the viewport near the lower-right edge")
 	hud.target_context_menu.hide()
-	_assert_true(not hud.crosshair_label.visible and hud.weapon_label.text.contains("LOCK DIRECTED") and hud.weapon_label.text.contains("HAZARD"), "fire-control HUD presents the lock-directed flak wall and friendly-fire hazard")
+	_assert_true(not hud.crosshair_label.visible and hud.weapon_label.text.contains("AUTO FLAK") and hud.weapon_label.text.contains("FLEET SCREEN") and hud.weapon_label.text.contains("IFF"), "fire-control HUD presents the automatic deconflicted fleet-screen role")
 	scene.queue_free()
 	await process_frame
 	if failures.is_empty():
-		print("PASS: 1440p sky, carrier-operations console/HUD, lock-directed flak, and command readability")
+		print("PASS: 1440p sky, carrier-operations console/HUD, automatic flak screening, and command readability")
 		quit(0)
 	else:
 		for failure in failures:

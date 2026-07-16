@@ -80,12 +80,13 @@ func _run() -> void:
 	_assert_true(carrier.are_bays_open() and carrier.bay_assemblies.size() == 6 and is_instance_valid(carrier.scout_bay_marker), "carrier begins combat with six extended fighter galleries and a dedicated scout/EW hive")
 	carrier.flak_cooldown = 0.0
 	var hostile_command_position: Vector3 = game.hostile_command.global_position
+	_assert_true(carrier.global_position.distance_to(hostile_command_position) > 8500.0, "hostile command group opens beyond immediate carrier weapon range to showcase the defensive approach")
 	game.hostile_command.global_position = carrier.global_position + carrier.aim_direction * 1800.0
 	game.hostile_command.velocity = Vector3.ZERO
 	var flak_before := _source_projectile_count(carrier.stable_entity_id)
 	_assert_true(carrier.fire_flak(game.hostile_command), "flak wall fires toward the locked hostile when its cycle is ready")
 	carrier._process_flak_salvo_queue(1.0)
-	_assert_true(_source_projectile_count(carrier.stable_entity_id) - flak_before == carrier.flak_burst_count, "lock-directed flak creates the full seven-round defensive wall")
+	_assert_true(_source_projectile_count(carrier.stable_entity_id) - flak_before == carrier.flak_burst_count, "fleet-screen fire creates the full seven-round defensive wall")
 	var flak_visuals: Array[SidebayProjectile] = []
 	for candidate in get_nodes_in_group("projectiles"):
 		if candidate is SidebayProjectile and candidate.source_entity_id == carrier.stable_entity_id:
@@ -101,12 +102,14 @@ func _run() -> void:
 	await process_frame
 	game.hostile_command.global_position = hostile_command_position
 	carrier.missile_cooldown = 0.0
+	game.hostile_command.global_position = carrier.global_position + carrier.aim_direction * 7800.0
 	var missile_before := _source_projectile_count(carrier.stable_entity_id)
 	_assert_true(carrier.fire_missile(game.hostile_command), "long-range carrier salvo accepts a tracked target beyond the former five-kilometer limit")
 	_assert_true(carrier.missile_weapon.range_m == 8500.0 and _source_projectile_count(carrier.stable_entity_id) - missile_before == carrier.missile_salvo_count, "carrier launches four independently tracked long-range missiles")
 	_clear_source_projectiles(carrier.stable_entity_id)
 	await process_frame
-	_assert_true(game.hud.weapon_label.text.contains("[1] FLAK") and game.hud.weapon_label.text.contains("[2] MISSILES") and game.hud.weapon_label.text.contains("[3] NUCLEAR") and game.hud.weapon_label.text.contains("RELOAD"), "combat HUD exposes the flak hazard, salvo reload, strategic inventory, counts, and weapon ranges")
+	game.hostile_command.global_position = hostile_command_position
+	_assert_true(game.hud.weapon_label.text.contains("[1] AUTO FLAK") and game.hud.weapon_label.text.contains("FLEET SCREEN") and game.hud.weapon_label.text.contains("[2] MISSILES") and game.hud.weapon_label.text.contains("[3] NUCLEAR") and game.hud.weapon_label.text.contains("RELOAD"), "combat HUD exposes automatic fleet screening, salvo reload, strategic inventory, counts, and weapon ranges")
 	# Tactical mode is live and preserves the carrier's current velocity.
 	carrier.velocity = Vector3(0.0, 0.0, -140.0)
 	var before := carrier.global_position
@@ -171,7 +174,7 @@ func _run() -> void:
 	await _wait_for_wing_state(interceptor, BayOperation.State.READY, 900)
 	await _wait_for_wing_state(scout, BayOperation.State.READY, 900)
 	_assert_true(interceptor.operation.state == BayOperation.State.READY, "interceptor wing recovers, services, and becomes ready")
-	_assert_true(scout.operation.state == BayOperation.State.READY, "scout wing recovers, services, and becomes ready")
+	_assert_true(scout.operation.state == BayOperation.State.READY, "scout wing recovers, services, and becomes ready (state=%s deployed=%d living=%d elapsed=%.2f)" % [BayOperation.State.keys()[scout.operation.state], scout.deployed_craft_count(), scout.living_craft_count(), scout.operation.state_elapsed_seconds])
 	_assert_true(_craft_ids(interceptor) == interceptor_ids and _craft_ids(scout) == scout_ids, "bay cycle preserves stable craft identities without duplication")
 	interceptor.request_launch()
 	await _wait_for_wing_state(interceptor, BayOperation.State.DEPLOYED, 360)

@@ -6,6 +6,7 @@ const EncounterDirector := preload("res://scripts/systems/encounter_director.gd"
 const SpaceSky := preload("res://scripts/systems/space_sky.gd")
 const UIStyle := preload("res://scripts/ui/ui_style.gd")
 const MINIMUM_JUMP_PREP_SECONDS := 2.0
+const AUTHORED_SKYBOX_PATH := "res://assets/vfx/skybox/skybox_accents.glb"
 
 signal return_to_campaign(victory: bool, battle_report: Dictionary)
 signal training_trial_finished(completed: bool)
@@ -122,6 +123,7 @@ func _process(delta: float) -> void:
 	_update_flight_operations_effects()
 	_process_aggregate_flight_ops()
 	_update_target_lock()
+	_process_automatic_flak()
 	if training_trial:
 		audio.set_intensity(0.18)
 		return
@@ -165,7 +167,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		audio.play_tone(620.0 if tactical.enabled else 420.0, 0.1)
 		return
 	if event.is_action_pressed("flak_screen"):
-		_fire_flak_barrage()
+		carrier.automatic_flak_enabled = not carrier.automatic_flak_enabled
+		carrier.automatic_flak_cycle_seconds = 0.0
+		hud.notify("AUTO FLAK SCREEN %s%s" % ["ONLINE" if carrier.automatic_flak_enabled else "OFFLINE", " — IFF FIRE LANES ACTIVE" if carrier.automatic_flak_enabled else ""])
 		return
 	if tactical.handle_input(event):
 		return
@@ -253,6 +257,42 @@ func _fire_flak_barrage() -> bool:
 	audio.play_tone(150.0, 0.28, -13.0)
 	return true
 
+func _process_automatic_flak() -> void:
+	if not is_instance_valid(carrier) or not carrier.automatic_flak_enabled or carrier.automatic_flak_cycle_seconds > 0.0:
+		return
+	var firing_target := _automatic_flak_target()
+	if firing_target == null or not carrier.fire_flak(firing_target, true):
+		return
+	carrier.automatic_flak_cycle_seconds = carrier.automatic_flak_interval_seconds
+	var recorder := _playtest_recorder()
+	if recorder != null:
+		recorder.increment(&"flak_barrages")
+
+func _automatic_flak_target() -> CombatShip:
+	if is_instance_valid(target_lock) and not target_lock.is_destroyed and target_lock.team != carrier.team:
+		return target_lock
+	if not is_instance_valid(sensors):
+		return null
+	var best_target: CombatShip
+	var best_score := INF
+	for contact in sensors.targetable_contacts():
+		var candidate := sensors.resolve_combat_target(contact.tracked_entity_id)
+		if not is_instance_valid(candidate) or candidate.is_destroyed or candidate.team == carrier.team:
+			continue
+		var distance := carrier.global_position.distance_to(candidate.global_position)
+		if distance <= carrier.flak_airburst_radius_m * 1.5 or distance > carrier.definition.active_sensor_range_m:
+			continue
+		# Capital tracks anchor a stable fleet-facing screen; strikecraft become the
+		# fallback when they are the only identified threat.
+		var role_bias := -2400.0 if not candidate is FighterCraft else 0.0
+		if candidate.is_command_ship:
+			role_bias -= 1200.0
+		var score := distance + role_bias
+		if score < best_score:
+			best_score = score
+			best_target = candidate
+	return best_target
+
 func _fire_nuclear_torpedo() -> bool:
 	if not carrier.nuclear_available:
 		var store_message := carrier.carrier_operations.last_store_message if carrier.carrier_operations != null else ""
@@ -300,7 +340,7 @@ func _sector_encounter_profile() -> Dictionary:
 				"command_weapon_damage": 76.0,
 				"command_weapon_speed": 620.0,
 				"command_color": Color(0.48, 0.12, 0.66),
-				"command_position": Vector3(-1650.0, 620.0, -5050.0),
+				"command_position": Vector3(-1650.0, 620.0, -6900.0),
 				"corvette_name": "Vesper Needle Corvette",
 				"corvette_ship_id": &"vesper_needle_corvette",
 				"corvette_role": "torpedo corvette",
@@ -316,7 +356,7 @@ func _sector_encounter_profile() -> Dictionary:
 				"corvette_weapon_damage": 17.0,
 				"corvette_weapon_speed": 1120.0,
 				"corvette_color": Color(0.68, 0.16, 0.82),
-				"corvette_position": Vector3(1750.0, -420.0, -3700.0),
+				"corvette_position": Vector3(1750.0, -420.0, -5150.0),
 				"fighter_wing_id": &"vesper_gloam_lances",
 				"fighter_wing_name": "Vesper Gloam Lances",
 				"fighter_craft_id": &"vesper_gloam_fighter",
@@ -325,7 +365,7 @@ func _sector_encounter_profile() -> Dictionary:
 				"fighter_dimensions": Vector3(5.2, 1.8, 10.0),
 				"fighter_speed": 690.0,
 				"fighter_color": Color(0.9, 0.24, 1.0),
-				"fighter_position": Vector3(-620.0, 760.0, -3200.0),
+				"fighter_position": Vector3(-620.0, 760.0, -4750.0),
 				"pursuit_name": "Vesper Needle Pursuit",
 				"pursuit_color": Color(0.86, 0.2, 1.0)
 			}
@@ -359,7 +399,7 @@ func _sector_encounter_profile() -> Dictionary:
 				"command_weapon_damage": 92.0,
 				"command_weapon_speed": 520.0,
 				"command_color": Color(0.62, 0.32, 0.06),
-				"command_position": Vector3(150.0, -120.0, -6100.0),
+				"command_position": Vector3(150.0, -120.0, -7600.0),
 				"corvette_name": "Crucible Breach Destroyer",
 				"corvette_ship_id": &"crucible_breach_destroyer",
 				"corvette_role": "destroyer",
@@ -375,7 +415,7 @@ func _sector_encounter_profile() -> Dictionary:
 				"corvette_weapon_damage": 29.0,
 				"corvette_weapon_speed": 840.0,
 				"corvette_color": Color(0.78, 0.42, 0.08),
-				"corvette_position": Vector3(-420.0, 520.0, -4400.0),
+				"corvette_position": Vector3(-420.0, 520.0, -5800.0),
 				"fighter_wing_id": &"crucible_ember_talons",
 				"fighter_wing_name": "Crucible Ember Talons",
 				"fighter_craft_id": &"crucible_talon_fighter",
@@ -384,7 +424,7 @@ func _sector_encounter_profile() -> Dictionary:
 				"fighter_dimensions": Vector3(7.2, 2.8, 9.0),
 				"fighter_speed": 590.0,
 				"fighter_color": Color(1.0, 0.58, 0.08),
-				"fighter_position": Vector3(1180.0, -260.0, -3900.0),
+				"fighter_position": Vector3(1180.0, -260.0, -5200.0),
 				"pursuit_name": "Crucible Pursuit Destroyer",
 				"pursuit_color": Color(1.0, 0.48, 0.05)
 			}
@@ -418,7 +458,7 @@ func _sector_encounter_profile() -> Dictionary:
 				"command_weapon_damage": 68.0,
 				"command_weapon_speed": 570.0,
 				"command_color": Color(0.62, 0.13, 0.1),
-				"command_position": Vector3(1050.0, 280.0, -5200.0),
+				"command_position": Vector3(1050.0, 280.0, -6800.0),
 				"corvette_name": "Acheron Screen Corvette",
 				"corvette_ship_id": &"hostile_screen_corvette",
 				"corvette_role": "corvette",
@@ -434,7 +474,7 @@ func _sector_encounter_profile() -> Dictionary:
 				"corvette_weapon_damage": 18.0,
 				"corvette_weapon_speed": 950.0,
 				"corvette_color": Color(0.72, 0.18, 0.08),
-				"corvette_position": Vector3(-1300.0, -170.0, -4050.0),
+				"corvette_position": Vector3(-1300.0, -170.0, -5350.0),
 				"fighter_wing_id": &"acheron_fighters",
 				"fighter_wing_name": "Acheron Fighter Wing",
 				"fighter_craft_id": &"acheron_fighter",
@@ -443,7 +483,7 @@ func _sector_encounter_profile() -> Dictionary:
 				"fighter_dimensions": Vector3(6.0, 2.2, 8.0),
 				"fighter_speed": 620.0,
 				"fighter_color": Color(1.0, 0.24, 0.08),
-				"fighter_position": Vector3(100.0, 420.0, -3550.0),
+				"fighter_position": Vector3(100.0, 420.0, -4800.0),
 				"pursuit_name": "Acheron Pursuit Corvette",
 				"pursuit_color": Color(0.92, 0.2, 0.05)
 			}
@@ -548,10 +588,51 @@ func _build_starfield() -> void:
 	_build_dust_field()
 	_add_nebula_card(Vector3(-6200.0, 1900.0, -11500.0), Vector2(6200.0, 3000.0), sector.nebula_primary, 2)
 	_add_nebula_card(Vector3(6900.0, -1700.0, -13200.0), Vector2(4800.0, 2300.0), sector.nebula_secondary, 3)
-	_add_distant_body(Vector3(-7600.0, 2800.0, -11200.0), 760.0, Color(0.08, 0.16, 0.28, 1.0), 0.18, Vector3(1.0, 1.0, 1.0), 1)
-	_add_distant_body(Vector3(9200.0, -2100.0, -13800.0), 240.0, Color(1.0, 0.42, 0.12, 1.0), 2.8, Vector3(1.0, 1.0, 1.0), 2)
-	_add_distant_body(Vector3(5600.0, 1800.0, -9800.0), 520.0, Color(0.18, 0.08, 0.34, 0.12), 0.65, Vector3(3.8, 1.3, 2.2), 3)
+	if not _add_authored_skybox_accents():
+		_add_distant_body(Vector3(-7600.0, 2800.0, -11200.0), 760.0, Color(0.08, 0.16, 0.28, 1.0), 0.18, Vector3(1.0, 1.0, 1.0), 1)
+		_add_distant_body(Vector3(9200.0, -2100.0, -13800.0), 240.0, Color(1.0, 0.42, 0.12, 1.0), 2.8, Vector3(1.0, 1.0, 1.0), 2)
+		_add_distant_body(Vector3(5600.0, 1800.0, -9800.0), 520.0, Color(0.18, 0.08, 0.34, 0.12), 0.65, Vector3(3.8, 1.3, 2.2), 3)
 	_add_distant_body(Vector3(-4200.0, -2600.0, -8600.0), 430.0, Color(0.04, 0.28, 0.34, 0.10), 0.55, Vector3(4.2, 1.1, 2.7), 3)
+
+func _add_authored_skybox_accents() -> bool:
+	if not ResourceLoader.exists(AUTHORED_SKYBOX_PATH):
+		return false
+	var sky_scene := load(AUTHORED_SKYBOX_PATH) as PackedScene
+	if sky_scene == null:
+		return false
+	var sky_root := sky_scene.instantiate() as Node3D
+	if sky_root == null:
+		return false
+	sky_root.name = "AuthoredSkyboxAccents"
+	add_child(sky_root)
+	var configured := 0
+	for candidate in sky_root.find_children("*", "MeshInstance3D", true, false):
+		var accent := candidate as MeshInstance3D
+		accent.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		match accent.name:
+			"SkyDistantMoon":
+				accent.position = Vector3(-7600.0, 2800.0, -11200.0)
+				accent.scale = Vector3.ONE * 760.0
+				accent.set_meta("quality_layer", 1)
+				configured += 1
+			"SkyAsteroidCluster":
+				accent.position = Vector3(8800.0, -1900.0, -13200.0)
+				accent.scale = Vector3.ONE * 210.0
+				accent.rotation_degrees = Vector3(18.0, -32.0, 11.0)
+				accent.set_meta("quality_layer", 2)
+				configured += 1
+			"SkyNebulaRibbon":
+				accent.position = Vector3(5200.0, 1700.0, -14200.0)
+				accent.scale = Vector3(1350.0, 620.0, 900.0)
+				accent.rotation_degrees = Vector3(-8.0, 24.0, -16.0)
+				accent.set_meta("quality_layer", 3)
+				configured += 1
+		if accent.has_meta("quality_layer"):
+			accent.add_to_group("quality_backdrop")
+	if configured == 0:
+		sky_root.queue_free()
+		return false
+	return true
 
 func _build_nebula_star_band() -> void:
 	var sector := _sector_encounter_profile()
@@ -1516,6 +1597,10 @@ func _finish_battle(victory: bool, outcome: String = "victory") -> void:
 	battle_finished = true
 	battle_result_victory = victory
 	battle_outcome = outcome
+	if outcome == "withdrawal" and is_instance_valid(carrier):
+		var vfx := get_node_or_null("/root/CombatVFX")
+		if vfx != null and vfx.has_method("spawn_warp_effect"):
+			vfx.spawn_warp_effect(carrier.global_position, true, 4.2)
 	var recorder := _playtest_recorder()
 	if recorder != null:
 		recorder.finish_battle(_create_battle_report())
@@ -1747,7 +1832,7 @@ func _carrier_definition() -> ShipDefinition:
 	definition.command_range_m *= 1.0 + command_skill * 0.03
 	definition.damage_layers = _damage_layers(600.0 * shield_multiplier * float(frame.shields), 700.0 * armor_multiplier * float(frame.armor), 950.0 * hull_multiplier * float(frame.hull), 12.0 * float(frame.shield_regen), 0.28 * float(frame.armor_mitigation))
 	definition.weapons = [
-		_weapon(&"carrier_flak", "Lock-Directed Flak Wall", "flak", 3200.0, 0.24, 12.0, 1900.0, false, false, true),
+		_weapon(&"carrier_flak", "Automatic Fleet Flak Screen", "flak", 3200.0, 0.24, 12.0, 1900.0, false, false, true),
 		_weapon(&"carrier_missile", "Long-Range Strike Missile", "missile", 8500.0, 6.5, 62.0, 720.0, true, true, false),
 		_weapon(&"carrier_nuclear", "Armed Nuclear Torpedo", "nuclear", 10000.0, 999.0, 520.0, 520.0, true, true, false),
 	]

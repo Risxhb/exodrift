@@ -1,0 +1,16 @@
+{
+  "blender_version": "5.2.0 LTS",
+  "coordinate_contract": "+Y up, -Z forward, meters",
+  "vfx_triangles": 13210,
+  "vfx_objects": 12,
+  "sky_objects": 3,
+  "raptor_triangles": 546,
+  "raptor_objects": 10,
+  "outputs": [
+    "assets\\vfx\\combat\\source\\combat_effects.blend",
+    "assets\\vfx\\combat\\combat_effects_library.glb",
+    "assets\\vfx\\skybox\\skybox_accents.glb",
+    "assets\\ships\\raptor\\source\\raptor.blend",
+    "assets\\ships\\raptor\\raptor.glb"
+  ]
+}

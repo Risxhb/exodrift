@@ -76,6 +76,9 @@ var carrier_operations: CarrierOperationsState
 var last_missile_salvo_count: int = 0
 var point_defense_target: SidebayProjectile
 var point_defense_last_tti: float = INF
+var automatic_flak_enabled: bool = true
+var automatic_flak_interval_seconds: float = 1.25
+var automatic_flak_cycle_seconds: float = 0.0
 
 func configure(ship_definition: ShipDefinition, entity_id: StringName, faction: StringName, color: Color) -> void:
 	super.configure(ship_definition, entity_id, faction, color)
@@ -488,6 +491,7 @@ func _physics_process(delta: float) -> void:
 	flak_mount_lock_seconds = maxf(0.0, flak_mount_lock_seconds - delta)
 	missile_cooldown = maxf(0.0, missile_cooldown - weapon_delta)
 	point_defense_cooldown = maxf(0.0, point_defense_cooldown - defense_delta)
+	automatic_flak_cycle_seconds = maxf(0.0, automatic_flak_cycle_seconds - weapon_delta)
 	_process_flak_salvo_queue(delta)
 	_update_bay_retraction(delta)
 	if target_navigation_mode != TargetNavigationMode.NONE:
@@ -723,13 +727,13 @@ func chase_zoom_percent() -> int:
 		return int(round(inverse_lerp(CHASE_DEFAULT_DISTANCE_M, CHASE_MIN_DISTANCE_M, chase_target_distance_m) * 100.0))
 	return -int(round(inverse_lerp(CHASE_DEFAULT_DISTANCE_M, CHASE_MAX_DISTANCE_M, chase_target_distance_m) * 100.0))
 
-func fire_flak(target_ship: CombatShip) -> bool:
+func fire_flak(target_ship: CombatShip, deconflict_friendlies: bool = false) -> bool:
 	if flak_weapon == null or flak_cooldown > 0.0 or not is_instance_valid(target_ship):
 		return false
 	if target_ship.is_destroyed or target_ship.team == team:
 		return false
 	var target_distance := global_position.distance_to(target_ship.global_position)
-	if target_distance > flak_weapon.range_m:
+	if target_distance <= flak_airburst_radius_m * 1.5:
 		return false
 	var rounds_to_fire := mini(flak_burst_count, _available_store(&"flak_rounds", flak_burst_count))
 	if rounds_to_fire <= 0:
@@ -740,10 +744,12 @@ func fire_flak(target_ship: CombatShip) -> bool:
 	var intercept_seconds := CombatShip.intercept_time_seconds(global_position, target_ship.global_position, target_ship.velocity, flak_weapon.projectile_speed_mps)
 	var target_point := target_ship.global_position + target_ship.velocity * clampf(intercept_seconds, 0.0, 8.0)
 	var shot_direction := global_position.direction_to(target_point)
-	var shot_distance := minf(flak_weapon.range_m, global_position.distance_to(target_point))
+	# The target supplies the bearing; the rounds burst before it to maintain a
+	# defensive curtain between the two fleets instead of detonating on its hull.
+	var shot_distance := clampf(global_position.distance_to(target_point) * 0.52, flak_airburst_radius_m * 2.0, flak_weapon.range_m)
 	flak_mount_direction = shot_direction
 	flak_mount_lock_seconds = maxf(0.35, flak_weapon.cooldown_seconds)
-	_queue_flak_barrage(shot_direction, rounds_to_fire, 0.52, shot_distance, flak_airburst_radius_m)
+	_queue_flak_barrage(shot_direction, rounds_to_fire, 0.52, shot_distance, flak_airburst_radius_m, not deconflict_friendlies)
 	flak_cooldown = flak_weapon.cooldown_seconds
 	return true
 
@@ -796,10 +802,10 @@ func _spawn_flak_barrage(direction_value: Vector3, count: int, damage_scale: flo
 		_spawn_flak_round(direction_value, flak_sequence + index, damage_scale, airburst_distance_m, airburst_radius_m)
 	flak_sequence += count
 
-func _queue_flak_barrage(direction_value: Vector3, count: int, damage_scale: float, airburst_distance_m: float, airburst_radius_m: float) -> void:
+func _queue_flak_barrage(direction_value: Vector3, count: int, damage_scale: float, airburst_distance_m: float, airburst_radius_m: float, harms_friendlies: bool = true) -> void:
 	if flak_weapon == null or count <= 0:
 		return
-	_spawn_flak_round(direction_value, flak_sequence, damage_scale, airburst_distance_m, airburst_radius_m)
+	_spawn_flak_round(direction_value, flak_sequence, damage_scale, airburst_distance_m, airburst_radius_m, harms_friendlies)
 	for index in range(1, count):
 		pending_flak_shots.append({
 			"delay": float(index) * flak_round_interval_seconds,
@@ -808,6 +814,7 @@ func _queue_flak_barrage(direction_value: Vector3, count: int, damage_scale: flo
 			"damage_scale": damage_scale,
 			"airburst_distance": airburst_distance_m,
 			"airburst_radius": airburst_radius_m,
+			"harms_friendlies": harms_friendlies,
 		})
 	flak_sequence += count
 
@@ -818,10 +825,10 @@ func _process_flak_salvo_queue(delta: float) -> void:
 		if float(shot.delay) > 0.0:
 			pending_flak_shots[index] = shot
 			continue
-		_spawn_flak_round(Vector3(shot.direction), int(shot.pattern), float(shot.damage_scale), float(shot.airburst_distance), float(shot.airburst_radius))
+		_spawn_flak_round(Vector3(shot.direction), int(shot.pattern), float(shot.damage_scale), float(shot.airburst_distance), float(shot.airburst_radius), bool(shot.get("harms_friendlies", true)))
 		pending_flak_shots.remove_at(index)
 
-func _spawn_flak_round(direction_value: Vector3, pattern_index: int, damage_scale: float, airburst_distance_m: float, airburst_radius_m: float) -> void:
+func _spawn_flak_round(direction_value: Vector3, pattern_index: int, damage_scale: float, airburst_distance_m: float, airburst_radius_m: float, harms_friendlies: bool = true) -> void:
 	var base_direction := direction_value.normalized()
 	var yaw := (float(pattern_index % 5) - 2.0) * 0.018
 	var pitch := (float((pattern_index * 3) % 5) - 2.0) * 0.014
@@ -838,7 +845,7 @@ func _spawn_flak_round(direction_value: Vector3, pattern_index: int, damage_scal
 	var projectile := spawn_projectile(flak_weapon, start, shot_direction)
 	projectile.damage *= damage_scale
 	if airburst_distance_m > 0.0:
-		projectile.configure_airburst(airburst_distance_m, airburst_radius_m, 1.0, flak_capital_damage_multiplier, true, true)
+		projectile.configure_airburst(airburst_distance_m, airburst_radius_m, 1.0, flak_capital_damage_multiplier, harms_friendlies, harms_friendlies)
 
 func _update_engine_trails() -> void:
 	var speed_ratio := clampf(velocity.length() / maxf(1.0, definition.maximum_speed_mps), 0.0, 1.6)
