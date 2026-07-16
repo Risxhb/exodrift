@@ -10,6 +10,12 @@ const SETTINGS_PATH := "user://exodrift_settings.cfg"
 const UIStyle := preload("res://scripts/ui/ui_style.gd")
 const SpaceSky := preload("res://scripts/systems/space_sky.gd")
 const TutorialScreen := preload("res://scripts/ui/tutorial_screen.gd")
+const MENU_BATTLE_CYCLE_SECONDS := 15.5
+const HOSTILE_WARP_START_SECONDS := 0.8
+const HOSTILE_LAUNCH_START_SECONDS := 2.25
+const AUTO_FLAK_START_SECONDS := 3.35
+const FRIENDLY_LAUNCH_START_SECONDS := 3.75
+const FRIENDLY_SALVO_START_SECONDS := 4.85
 
 var world_root: Node3D
 var camera: Camera3D
@@ -34,6 +40,8 @@ var ships: Array[Dictionary] = []
 var tracers: Array[Dictionary] = []
 var flak_airbursts: Array[Dictionary] = []
 var explosions: Array[Dictionary] = []
+var warp_effects: Array[Dictionary] = []
+var launch_flares: Array[Dictionary] = []
 var elapsed: float = 0.0
 var reduced_flashes: bool = false
 var departing: bool = false
@@ -95,7 +103,7 @@ func _build_world() -> void:
 	var hostile_light := DirectionalLight3D.new()
 	hostile_light.rotation_degrees = Vector3(22.0, 138.0, 0.0)
 	hostile_light.light_color = Color(1.0, 0.18, 0.06)
-	hostile_light.light_energy = 1.25
+	hostile_light.light_energy = 1.75
 	world_root.add_child(hostile_light)
 	var camera_fill := DirectionalLight3D.new()
 	camera_fill.name = "FleetReadabilityFill"
@@ -109,20 +117,22 @@ func _build_world() -> void:
 	camera = Camera3D.new()
 	camera.fov = 51.0
 	camera.far = 30000.0
-	camera.position = Vector3(35.0, 145.0, 980.0)
+	camera.position = Vector3(35.0, 165.0, 1120.0)
 	camera.current = true
 	world_root.add_child(camera)
-	camera.look_at(Vector3(0.0, -25.0, -710.0))
+	camera.look_at(Vector3(0.0, -25.0, -920.0))
 	# The menu battle is composed as two readable formations instead of a loose
 	# collection of ships. Sidebay owns the near-left foreground while the enemy
 	# command group holds the high-right distance, leaving the center as a firing lane.
-	_add_ship(&"cvn_sidebay", "Sidebay Carrier", "carrier", Vector3(-395.0, -82.0, -470.0), Color(0.26, 0.5, 0.66), Vector3(76.0, 32.0, 220.0), &"friendly", 3.2, 0.0)
-	_add_ship(&"iss_resolute", "Resolute", "frigate", Vector3(-665.0, 105.0, -810.0), Color(0.28, 0.52, 0.67), Vector3(24.0, 12.0, 65.0), &"friendly", 2.5, 1.8)
-	_add_ship(&"iss_harrier", "Harrier", "corvette", Vector3(-175.0, 145.0, -1010.0), Color(0.26, 0.54, 0.68), Vector3(16.0, 8.0, 42.0), &"friendly", 2.7, 2.5)
-	_add_ship(&"iss_bulwark", "Bulwark", "frigate", Vector3(-720.0, -180.0, -1140.0), Color(0.3, 0.48, 0.62), Vector3(28.0, 15.0, 70.0), &"friendly", 2.6, 4.0)
-	_add_ship(&"acheron_command_frigate", "Acheron Command", "command", Vector3(455.0, 48.0, -735.0), Color(0.55, 0.2, 0.08), Vector3(34.0, 18.0, 86.0), &"hostile", 2.9, 3.1)
-	_add_ship(&"vesper_lance_cruiser", "Vesper Spear", "cruiser", Vector3(725.0, -120.0, -960.0), Color(0.42, 0.16, 0.58), Vector3(30.0, 15.0, 80.0), &"hostile", 2.35, 4.7)
-	_add_ship(&"crucible_war_regent", "Crucible Guard", "cruiser", Vector3(220.0, -205.0, -1190.0), Color(0.29, 0.17, 0.4), Vector3(32.0, 17.0, 86.0), &"hostile", 2.35, 5.4)
+	_add_ship(&"cvn_sidebay", "Sidebay Carrier", "carrier", Vector3(-420.0, -82.0, -430.0), Color(0.26, 0.5, 0.66), Vector3(96.0, 40.0, 360.0), &"friendly", 2.65, 0.0)
+	_add_ship(&"iss_resolute", "Resolute", "frigate", Vector3(-705.0, 105.0, -790.0), Color(0.28, 0.52, 0.67), Vector3(24.0, 12.0, 65.0), &"friendly", 2.5, 1.8)
+	_add_ship(&"iss_harrier", "Harrier", "corvette", Vector3(-185.0, 145.0, -980.0), Color(0.26, 0.54, 0.68), Vector3(16.0, 8.0, 42.0), &"friendly", 2.7, 2.5)
+	_add_ship(&"iss_bulwark", "Bulwark", "frigate", Vector3(-755.0, -180.0, -1130.0), Color(0.3, 0.48, 0.62), Vector3(28.0, 15.0, 70.0), &"friendly", 2.6, 4.0)
+	# The hostile group holds a much deeper plane so the warp arrival, long-range
+	# salvos, and the defensive flak curtain read as separate layers.
+	_add_ship(&"acheron_command_frigate", "Acheron Command", "command", Vector3(650.0, 48.0, -1510.0), Color(0.55, 0.2, 0.08), Vector3(34.0, 18.0, 86.0), &"hostile", 2.9, 3.1)
+	_add_ship(&"vesper_lance_cruiser", "Vesper Spear", "cruiser", Vector3(1050.0, -120.0, -1740.0), Color(0.42, 0.16, 0.58), Vector3(30.0, 15.0, 80.0), &"hostile", 2.35, 4.7)
+	_add_ship(&"crucible_war_regent", "Crucible Guard", "cruiser", Vector3(350.0, -205.0, -1960.0), Color(0.29, 0.17, 0.4), Vector3(32.0, 17.0, 86.0), &"hostile", 2.35, 5.4)
 	# Each friendly silhouette is a flight leader for one of the six fighter
 	# squadrons or the dedicated Watcher EW wing. They launch from the matching
 	# physical gallery/hive below instead of orbiting an arbitrary world origin.
@@ -153,6 +163,8 @@ func _build_world() -> void:
 	_build_tracers()
 	_build_flak_wall_airbursts()
 	_build_explosions()
+	_build_warp_effects()
+	_build_launch_flares()
 
 func _build_stars() -> void:
 	var mesh := SphereMesh.new()
@@ -213,7 +225,7 @@ func _add_ship(ship_id: StringName, ship_name: String, role: String, base_positi
 	ship.position = base_position
 	ship.scale = Vector3.ONE * cinematic_scale
 	ship.add_to_group("menu_runtime_ship")
-	ships.append({"node": ship, "base": base_position, "phase": phase, "fighter": false, "friendly": faction == &"friendly", "model_id": ship_id})
+	ships.append({"node": ship, "base": base_position, "base_scale": ship.scale, "phase": phase, "fighter": false, "friendly": faction == &"friendly", "model_id": ship_id})
 
 func _add_fighter(ship_id: StringName, role: String, origin: Vector3, color: Color, phase: float, friendly: bool, unit_name: String = "", formation_slot: int = 0) -> void:
 	var fighter := FighterCraft.new()
@@ -224,7 +236,7 @@ func _add_fighter(ship_id: StringName, role: String, origin: Vector3, color: Col
 	fighter.set_physics_process(false)
 	fighter.scale = Vector3.ONE * 1.45
 	fighter.add_to_group("menu_runtime_fighter")
-	ships.append({"node": fighter, "base": origin, "phase": phase, "fighter": true, "friendly": friendly, "model_id": ship_id, "role": role, "formation_slot": formation_slot})
+	ships.append({"node": fighter, "base": origin, "base_scale": fighter.scale, "phase": phase, "fighter": true, "friendly": friendly, "model_id": ship_id, "role": role, "formation_slot": formation_slot})
 
 func _menu_ship_definition(ship_id: StringName, display_name: String, role: String, dimensions: Vector3) -> ShipDefinition:
 	var definition := ShipDefinition.new()
@@ -236,15 +248,15 @@ func _menu_ship_definition(ship_id: StringName, display_name: String, role: Stri
 	return definition
 
 func _build_tracers() -> void:
-	# Six guided weapons cross the engagement while three seven-round friendly
-	# curtains establish the lock-directed wall. A final hostile seven-round
-	# battery makes the exchange feel reciprocal without obscuring the carrier.
-	for index in 34:
+	# Both secondary groups fire six-weapon salvos. Three seven-round automatic
+	# curtains then build the friendly screen, with one hostile battery returning
+	# fire later in the sequence.
+	for index in 40:
 		var tracer := Node3D.new()
-		var is_missile := index < 6
-		var ordnance_index := index if is_missile else index - 6
-		var friendly := ordnance_index < 3 if is_missile else ordnance_index < 21
-		var lane := ordnance_index % (3 if is_missile else 7)
+		var is_missile := index < 12
+		var ordnance_index := index if is_missile else index - 12
+		var friendly := ordnance_index >= 6 if is_missile else ordnance_index < 21
+		var lane := ordnance_index % (6 if is_missile else 7)
 		var salvo := 0 if is_missile else int(ordnance_index / 7)
 		tracer.name = "MenuMissileTrail" if is_missile else "MenuFlakTracer"
 		var shot_color := Color(0.1, 0.78, 1.0) if friendly else Color(1.0, 0.18, 0.025)
@@ -288,8 +300,59 @@ func _build_tracers() -> void:
 		else:
 			tracer.add_to_group("menu_flak_tracer")
 		world_root.add_child(tracer)
-		var phase := float(ordnance_index) / (6.0 if is_missile else 28.0)
+		var phase := float(lane % 3) * 0.075 + float(lane / 3) * 0.16 if is_missile else float(lane) * 0.035
 		tracers.append({"node": tracer, "phase": phase, "friendly": friendly, "lane": lane, "salvo": salvo, "missile": is_missile})
+
+func _build_warp_effects() -> void:
+	var authored_vfx = get_node_or_null("/root/CombatVFX")
+	var use_authored := authored_vfx != null and authored_vfx.warp_ring_mesh != null and authored_vfx.warp_core_mesh != null and authored_vfx.warp_wake_mesh != null
+	for hostile_index in range(4, 7):
+		var warp := Node3D.new()
+		warp.name = "HostileWarpRift%02d" % (hostile_index - 3)
+		warp.add_to_group("menu_warp_effect")
+		world_root.add_child(warp)
+		var ring := MeshInstance3D.new()
+		var ring_mesh := TorusMesh.new()
+		ring_mesh.inner_radius = 52.0
+		ring_mesh.outer_radius = 62.0
+		ring_mesh.rings = 24
+		ring_mesh.ring_segments = 10
+		ring.mesh = authored_vfx.warp_ring_mesh if use_authored else ring_mesh
+		ring.rotation_degrees.x = 0.0 if use_authored else 90.0
+		var ring_material := _material(Color(1.0, 0.22, 0.055, 0.76), 6.4)
+		ring_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		ring.material_override = ring_material
+		warp.add_child(ring)
+		var core := _explosion_sphere(warp, "WarpCore", 24.0, Color(1.0, 0.48, 0.12, 0.86), 8.0)
+		if use_authored:
+			core.mesh = authored_vfx.warp_core_mesh
+		var wake := MeshInstance3D.new()
+		var wake_mesh := BoxMesh.new()
+		wake_mesh.size = Vector3(7.0, 7.0, 640.0)
+		wake.mesh = authored_vfx.warp_wake_mesh if use_authored else wake_mesh
+		wake.position.z = 320.0
+		var wake_material := _material(Color(0.82, 0.12, 0.035, 0.42), 5.2)
+		wake_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		wake.material_override = wake_material
+		warp.add_child(wake)
+		warp_effects.append({"node": warp, "ring": ring, "core": core, "wake": wake, "ship_index": hostile_index, "delay": float(hostile_index - 4) * 0.24, "authored": use_authored})
+
+func _build_launch_flares() -> void:
+	# One flare marks Sidebay's gallery launch and one marks each hostile carrier
+	# lane, making the opposing strike-craft commitments readable at menu scale.
+	for flare_index in 4:
+		var flare := Node3D.new()
+		flare.name = "FriendlyLaunchFlare" if flare_index == 0 else "HostileLaunchFlare%02d" % flare_index
+		flare.add_to_group("menu_launch_flare")
+		world_root.add_child(flare)
+		var color := Color(0.12, 0.78, 1.0, 0.88) if flare_index == 0 else Color(1.0, 0.24, 0.045, 0.84)
+		var core := _explosion_sphere(flare, "LaunchCore", 8.0, color, 6.0)
+		var light := OmniLight3D.new()
+		light.light_color = Color(color.r, color.g, color.b)
+		light.light_energy = 0.0
+		light.omni_range = 90.0
+		flare.add_child(light)
+		launch_flares.append({"node": flare, "core": core, "light": light, "friendly": flare_index == 0, "ship_index": 0 if flare_index == 0 else flare_index + 3, "delay": float(maxi(0, flare_index - 1)) * 0.12})
 
 func _build_flak_wall_airbursts() -> void:
 	for index in 14:
@@ -297,12 +360,12 @@ func _build_flak_wall_airbursts() -> void:
 		burst.name = "MenuFlakAirburst%02d" % (index + 1)
 		burst.add_to_group("menu_flak_airburst")
 		world_root.add_child(burst)
-		var core := _explosion_sphere(burst, "FlakCore", 6.5, Color(1.0, 0.78, 0.34, 0.92), 7.2)
+		var core := _explosion_sphere(burst, "FlakCore", 9.0, Color(1.0, 0.78, 0.34, 0.92), 7.2)
 		var pressure_ring := MeshInstance3D.new()
 		pressure_ring.name = "FlakPressureRing"
 		var ring_mesh := TorusMesh.new()
-		ring_mesh.inner_radius = 8.0
-		ring_mesh.outer_radius = 11.0
+		ring_mesh.inner_radius = 12.0
+		ring_mesh.outer_radius = 16.0
 		ring_mesh.rings = 12
 		ring_mesh.ring_segments = 6
 		pressure_ring.mesh = ring_mesh
@@ -384,17 +447,28 @@ func _explosion_sphere(parent: Node3D, node_name: String, radius: float, color: 
 func _update_battle(_delta: float) -> void:
 	if camera == null:
 		return
+	var cycle_time := fposmod(elapsed, MENU_BATTLE_CYCLE_SECONDS)
 	# Slow command-camera drift keeps silhouettes stable long enough to read while
 	# still making the engagement feel live.
-	camera.position = Vector3(35.0 + sin(elapsed * 0.055) * 68.0, 145.0 + sin(elapsed * 0.09) * 22.0, 980.0 + cos(elapsed * 0.05) * 42.0)
-	camera.look_at(Vector3(sin(elapsed * 0.04) * 35.0, -25.0, -710.0))
-	for ship_data in ships:
+	camera.position = Vector3(35.0 + sin(elapsed * 0.055) * 74.0, 165.0 + sin(elapsed * 0.09) * 24.0, 1120.0 + cos(elapsed * 0.05) * 48.0)
+	camera.look_at(Vector3(sin(elapsed * 0.04) * 42.0, -25.0, -920.0))
+	_update_warp_effects(cycle_time)
+	_update_launch_flares(cycle_time)
+	for ship_index in ships.size():
+		var ship_data: Dictionary = ships[ship_index]
 		var ship: Node3D = ship_data.node
 		var base: Vector3 = ship_data.base
 		var phase := float(ship_data.phase)
 		if bool(ship_data.fighter):
 			var friendly := bool(ship_data.friendly)
-			var attack_progress := fposmod(elapsed * (0.046 if friendly else 0.052) + phase, 1.0)
+			var launch_time := (FRIENDLY_LAUNCH_START_SECONDS if friendly else HOSTILE_LAUNCH_START_SECONDS) + float(ship_data.formation_slot) * (0.1 if friendly else 0.12)
+			var flight_elapsed := cycle_time - launch_time
+			ship.visible = flight_elapsed >= 0.0
+			if not ship.visible:
+				continue
+			ship.scale = Vector3(ship_data.base_scale)
+			var flight_duration := 10.6 if friendly else 11.5
+			var attack_progress := clampf(flight_elapsed / flight_duration, 0.0, 0.999)
 			var next_progress := fposmod(attack_progress + 0.0025, 1.0)
 			ship.position = _fighter_path_position(ship_data, attack_progress)
 			var next_position := _fighter_path_position(ship_data, next_progress)
@@ -402,11 +476,25 @@ func _update_battle(_delta: float) -> void:
 				ship.look_at(next_position, Vector3.UP)
 				ship.rotate_object_local(Vector3.FORWARD, sin(attack_progress * TAU) * 0.16)
 		else:
+			var friendly_capital := bool(ship_data.friendly)
+			ship.visible = true
+			if not friendly_capital:
+				var arrival_time := HOSTILE_WARP_START_SECONDS + float(ship_index - 4) * 0.24
+				if cycle_time < arrival_time:
+					ship.visible = false
+					continue
+				var warp_progress := clampf((cycle_time - arrival_time) / 0.9, 0.0, 1.0)
+				if warp_progress < 1.0:
+					var resolved_progress := ease(warp_progress, 2.4)
+					ship.position = base + Vector3(0.0, 0.0, -1050.0 * (1.0 - resolved_progress))
+					ship.scale = Vector3(ship_data.base_scale) * Vector3(0.28 + resolved_progress * 0.72, 0.28 + resolved_progress * 0.72, 2.8 - resolved_progress * 1.8)
+					continue
+			ship.scale = Vector3(ship_data.base_scale)
 			# Capital ships share slow formation drift instead of bobbing independently.
-			var formation_direction := -1.0 if bool(ship_data.friendly) else 1.0
+			var formation_direction := -1.0 if friendly_capital else 1.0
 			var formation_drift := Vector3(sin(elapsed * 0.028) * 58.0, sin(elapsed * 0.019) * 10.0, cos(elapsed * 0.024) * 42.0) * formation_direction
 			ship.position = base + formation_drift
-			var broadside_yaw := -0.58 if bool(ship_data.friendly) else 0.58
+			var broadside_yaw := -0.58 if friendly_capital else 0.58
 			ship.rotation.y = broadside_yaw + sin(elapsed * 0.035 + phase) * 0.035
 	var flak_center := _flak_intercept_center()
 	for tracer_data in tracers:
@@ -415,13 +503,24 @@ func _update_battle(_delta: float) -> void:
 		var is_missile := bool(tracer_data.missile)
 		var lane := int(tracer_data.lane)
 		var salvo := int(tracer_data.salvo)
-		var cycle_speed := 0.105 if is_missile else 0.36
-		var cycle := fposmod(elapsed * cycle_speed + float(tracer_data.phase), 1.0)
+		var launch_time: float
+		var travel_duration: float
+		if is_missile:
+			launch_time = (FRIENDLY_SALVO_START_SECONDS if friendly else 2.85) + float(tracer_data.phase)
+			travel_duration = 3.25
+		elif friendly:
+			launch_time = AUTO_FLAK_START_SECONDS + float(salvo) * 0.92 + float(tracer_data.phase)
+			travel_duration = 0.82
+		else:
+			launch_time = 6.55 + float(tracer_data.phase)
+			travel_duration = 1.05
+		var local_flight := cycle_time - launch_time
+		var cycle := clampf(local_flight / travel_duration, 0.0, 1.0)
 		var origin: Vector3
 		var target: Vector3
 		if is_missile:
-			var source_index := (1 + lane % 3) if friendly else (4 + lane % 3)
-			var target_index := (4 + lane % 3) if friendly else (0 if lane < 2 else 1)
+			var source_index := (1 if lane % 2 == 0 else 3) if friendly else (5 + lane % 2)
+			var target_index := (4 + lane % 3) if friendly else (lane % 4)
 			origin = (ships[source_index].node as Node3D).position + Vector3(0.0, 28.0, -34.0)
 			target = (ships[target_index].node as Node3D).position + Vector3(0.0, 5.0, -45.0)
 		else:
@@ -438,23 +537,26 @@ func _update_battle(_delta: float) -> void:
 		tracer.position = current_position
 		if not current_position.is_equal_approx(next_position):
 			tracer.look_at(next_position, Vector3.UP)
-		tracer.visible = cycle > 0.035 and cycle < (0.96 if is_missile else 0.84)
+		tracer.visible = local_flight > 0.035 and local_flight < travel_duration * (0.96 if is_missile else 0.84)
 	for burst_data in flak_airbursts:
 		var flak_burst := burst_data.node as Node3D
-		var wall_pulse := fposmod(elapsed * 0.82 + float(burst_data.phase), 2.4)
-		var lane_offset := (float(burst_data.lane) - 3.0) * 29.0
-		var row_offset := (float(burst_data.row) - 0.5) * 52.0
+		var wall_elapsed := cycle_time - AUTO_FLAK_START_SECONDS - float(burst_data.phase)
+		var wall_pulse := fposmod(maxf(0.0, wall_elapsed), 1.46)
+		var lane_offset := (float(burst_data.lane) - 3.0) * 36.0
+		var row_offset := (float(burst_data.row) - 0.5) * 72.0
 		flak_burst.position = flak_center + Vector3(row_offset, lane_offset, sin(float(burst_data.lane) * 1.7) * 22.0)
-		flak_burst.visible = wall_pulse < 0.52
+		flak_burst.visible = wall_elapsed >= 0.0 and cycle_time < 13.8
 		if flak_burst.visible:
-			var burst_fade := clampf(1.0 - wall_pulse / 0.52, 0.0, 1.0)
-			(burst_data.core as MeshInstance3D).scale = Vector3.ONE * (0.25 + wall_pulse * 4.2)
-			(burst_data.ring as MeshInstance3D).scale = Vector3.ONE * (0.35 + wall_pulse * 5.8)
+			var pulse_age := minf(wall_pulse, 0.76)
+			var burst_fade := clampf(1.0 - wall_pulse / 0.76, 0.0, 1.0)
+			(burst_data.core as MeshInstance3D).scale = Vector3.ONE * (0.3 + pulse_age * 3.6)
+			(burst_data.ring as MeshInstance3D).scale = Vector3.ONE * (0.4 + pulse_age * 4.8)
 			_set_mesh_alpha(burst_data.core, burst_fade * (0.68 if reduced_flashes else 1.0))
-			_set_mesh_alpha(burst_data.ring, burst_fade * 0.62)
+			_set_mesh_alpha(burst_data.ring, maxf(0.1, burst_fade * 0.62))
 	for explosion_data in explosions:
 		var burst := explosion_data.node as Node3D
-		var pulse := fposmod(elapsed - float(explosion_data.phase), 8.6)
+		var impact_start := 5.35 + float(explosion_data.phase)
+		var pulse := cycle_time - impact_start
 		var impact_index := int(explosion_data.impact_index)
 		if impact_index < 2:
 			burst.position = flak_center + Vector3(-58.0 + impact_index * 116.0, -42.0 + impact_index * 76.0, -20.0)
@@ -462,7 +564,7 @@ func _update_battle(_delta: float) -> void:
 			burst.position = (ships[4].node as Node3D).position + Vector3(-76.0, 34.0, 22.0)
 		else:
 			burst.position = (ships[1].node as Node3D).position + Vector3(58.0, -28.0, -16.0)
-		burst.visible = pulse < 1.15
+		burst.visible = pulse >= 0.0 and pulse < 1.15
 		if burst.visible:
 			var flash_limit := 0.76 if reduced_flashes else 1.0
 			var core_fade := clampf(1.0 - pulse / 0.34, 0.0, 1.0)
@@ -478,6 +580,46 @@ func _update_battle(_delta: float) -> void:
 			_set_mesh_alpha(explosion_data.smoke, smoke_fade * 0.4)
 			_set_mesh_alpha(explosion_data.shockwave, fire_fade * 0.68 * flash_limit)
 			(explosion_data.light as OmniLight3D).light_energy = core_fade * (2.2 if reduced_flashes else 6.2)
+
+func _update_warp_effects(cycle_time: float) -> void:
+	for warp_data in warp_effects:
+		var warp := warp_data.node as Node3D
+		var ship_data: Dictionary = ships[int(warp_data.ship_index)]
+		var trigger_time := HOSTILE_WARP_START_SECONDS + float(warp_data.delay)
+		var warp_elapsed := cycle_time - trigger_time
+		warp.position = Vector3(ship_data.base)
+		warp.visible = warp_elapsed >= -0.12 and warp_elapsed < 1.35
+		if not warp.visible:
+			continue
+		var pulse := clampf(warp_elapsed + 0.12, 0.0, 1.0)
+		var fade := clampf(1.0 - maxf(0.0, warp_elapsed - 0.48) / 0.87, 0.0, 1.0)
+		var authored := bool(warp_data.get("authored", false))
+		(warp_data.ring as MeshInstance3D).scale = Vector3.ONE * (0.35 + pulse * 4.8) * (62.0 if authored else 1.0)
+		(warp_data.core as MeshInstance3D).scale = Vector3.ONE * (0.3 + pulse * 3.2) * (34.0 if authored else 1.0)
+		(warp_data.wake as MeshInstance3D).scale = Vector3(0.25 + pulse * 0.75, 0.25 + pulse * 0.75, 0.35 + pulse * 0.9) * (Vector3(8.0, 8.0, 180.0) if authored else Vector3.ONE)
+		_set_mesh_alpha(warp_data.ring, fade * (0.72 if reduced_flashes else 1.0))
+		_set_mesh_alpha(warp_data.core, fade * (0.68 if reduced_flashes else 0.94))
+		_set_mesh_alpha(warp_data.wake, fade * 0.42)
+
+func _update_launch_flares(cycle_time: float) -> void:
+	for flare_data in launch_flares:
+		var flare := flare_data.node as Node3D
+		var friendly := bool(flare_data.friendly)
+		var trigger_time := (FRIENDLY_LAUNCH_START_SECONDS if friendly else HOSTILE_LAUNCH_START_SECONDS) + float(flare_data.delay)
+		var flare_elapsed := cycle_time - trigger_time
+		if friendly:
+			var active_slot := clampi(int(maxf(0.0, flare_elapsed) * 7.0), 0, 6)
+			flare.position = _friendly_launch_position(active_slot)
+		else:
+			var source_ship := ships[int(flare_data.ship_index)].node as Node3D
+			flare.position = source_ship.position + Vector3(0.0, 26.0, 72.0)
+		flare.visible = flare_elapsed >= 0.0 and flare_elapsed < 0.78
+		if not flare.visible:
+			continue
+		var fade := clampf(1.0 - flare_elapsed / 0.78, 0.0, 1.0)
+		(flare_data.core as MeshInstance3D).scale = Vector3.ONE * (0.4 + flare_elapsed * 4.2)
+		_set_mesh_alpha(flare_data.core, fade * (0.7 if reduced_flashes else 1.0))
+		(flare_data.light as OmniLight3D).light_energy = fade * (1.8 if reduced_flashes else 4.8)
 
 func _fighter_path_position(ship_data: Dictionary, progress: float) -> Vector3:
 	var friendly := bool(ship_data.friendly)
@@ -511,8 +653,8 @@ func _friendly_launch_position(slot: int) -> Vector3:
 
 func _flak_intercept_center() -> Vector3:
 	var carrier := ships[0].node as Node3D
-	var locked_track := ships[14].node as Node3D
-	return carrier.position.lerp(locked_track.position, 0.54)
+	var hostile_flagship := ships[4].node as Node3D
+	return carrier.position.lerp(hostile_flagship.position, 0.52)
 
 func _set_mesh_alpha(mesh_instance: MeshInstance3D, alpha: float) -> void:
 	var material := mesh_instance.material_override as StandardMaterial3D
@@ -537,7 +679,7 @@ func _build_interface(can_continue: bool) -> void:
 	top_line.size = Vector2(1280, 3)
 	interface.add_child(top_line)
 	var telemetry := _label(interface, Vector2(26, 22), Vector2(350, 56), 13)
-	telemetry.text = "LIVE COMBAT FEED // HELIOS REACH\nFLAK WALL ACTIVE // AIR GROUP 6+1"
+	telemetry.text = "LIVE COMBAT FEED // HELIOS REACH\nAUTO FLAK SCREEN ACTIVE // AIR GROUP 6+1"
 	var build := _label(interface, Vector2(990, 22), Vector2(260, 52), 13)
 	build.text = "COMMAND INTERFACE // ONLINE\nSINGLE-PLAYER // PC + WEB"
 	build.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT

@@ -10,6 +10,7 @@ authored_dimensions_m = Vector3(1, 1, 1)
 model_scale = Vector3(1, 1, 1)
 model_rotation_degrees = Vector3(0, 0, 0)
 replace_imported_materials = false
+interior_material = null
 required_sockets = Array[StringName]([])
 maximum_lod0_triangles = 100000
 maximum_material_slots = 4

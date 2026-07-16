@@ -85,18 +85,18 @@ func _select_layout_id() -> StringName:
 
 func _apply_layout() -> void:
 	var layouts := {
-		&"picket_line": [Vector3(1050, 280, -5200), Vector3(-1300, -170, -4050), Vector3(100, 420, -3550)],
-		&"crossfire_gap": [Vector3(-1550, 360, -4700), Vector3(1450, -260, -3900), Vector3(-880, 620, -3300)],
-		&"relay_ambush": [Vector3(0, 650, -5450), Vector3(250, -320, -3300), Vector3(1350, 180, -3900)],
-		&"high_low_pincer": [Vector3(-1650, 620, -5050), Vector3(1750, -420, -3700), Vector3(-620, 760, -3200)],
-		&"ion_veil": [Vector3(1250, -540, -4800), Vector3(-1450, 680, -3500), Vector3(850, -720, -3000)],
-		&"needle_trap": [Vector3(0, 900, -5600), Vector3(-300, -650, -3350), Vector3(1500, 120, -4100)],
-		&"breach_corridor": [Vector3(150, -120, -6100), Vector3(-420, 520, -4400), Vector3(1180, -260, -3900)],
-		&"carapace_screen": [Vector3(-1100, 700, -5700), Vector3(1250, -620, -4300), Vector3(-1450, -120, -3700)],
-		&"fortress_approach": [Vector3(0, 0, -6400), Vector3(0, 760, -4300), Vector3(0, -780, -3650)],
-		&"acheron_command_net": [Vector3(0, 350, -5550), Vector3(-1250, -120, -4100), Vector3(1100, 520, -3600)],
-		&"vesper_hunt": [Vector3(-1200, 780, -5600), Vector3(1550, -520, -3900), Vector3(-950, -700, -3300)],
-		&"crucible_citadel": [Vector3(0, 0, -6500), Vector3(-950, 620, -4550), Vector3(1200, -480, -4050)]
+		&"picket_line": [Vector3(1050, 280, -6800), Vector3(-1300, -170, -5350), Vector3(100, 420, -4800)],
+		&"crossfire_gap": [Vector3(-1550, 360, -6300), Vector3(1450, -260, -5150), Vector3(-880, 620, -4550)],
+		&"relay_ambush": [Vector3(0, 650, -6950), Vector3(250, -320, -4900), Vector3(1350, 180, -5250)],
+		&"high_low_pincer": [Vector3(-1650, 620, -6650), Vector3(1750, -420, -5100), Vector3(-620, 760, -4650)],
+		&"ion_veil": [Vector3(1250, -540, -6400), Vector3(-1450, 680, -5000), Vector3(850, -720, -4450)],
+		&"needle_trap": [Vector3(0, 900, -7100), Vector3(-300, -650, -5000), Vector3(1500, 120, -5350)],
+		&"breach_corridor": [Vector3(150, -120, -7600), Vector3(-420, 520, -5800), Vector3(1180, -260, -5200)],
+		&"carapace_screen": [Vector3(-1100, 700, -7200), Vector3(1250, -620, -5700), Vector3(-1450, -120, -5050)],
+		&"fortress_approach": [Vector3(0, 0, -7900), Vector3(0, 760, -5700), Vector3(0, -780, -5000)],
+		&"acheron_command_net": [Vector3(0, 350, -7050), Vector3(-1250, -120, -5400), Vector3(1100, 520, -4900)],
+		&"vesper_hunt": [Vector3(-1200, 780, -7100), Vector3(1550, -520, -5300), Vector3(-950, -700, -4750)],
+		&"crucible_citadel": [Vector3(0, 0, -8000), Vector3(-950, 620, -5950), Vector3(1200, -480, -5400)]
 	}
 	if not layouts.has(layout_id):
 		return

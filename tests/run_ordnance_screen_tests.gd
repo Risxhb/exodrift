@@ -16,7 +16,8 @@ func _run() -> void:
 			ship.ai_enabled = false
 
 	_assert_true(ExodriftInputSettings.action_key("flak_screen") == KEY_1 and ExodriftInputSettings.action_key("missile_salvo") == KEY_2 and ExodriftInputSettings.action_key("nuclear_torpedo") == KEY_3, "ordnance actions use the requested remappable 1/2/3 defaults")
-	_assert_true(ExodriftInputSettings.ACTION_LABELS.get("flak_screen") == "Fire Flak Wall" and not ExodriftInputSettings.ACTION_LABELS.has("flak_range_decrease"), "1 is a direct flak-wall command with no placement-range bindings")
+	_assert_true(ExodriftInputSettings.ACTION_LABELS.get("flak_screen") == "Toggle Auto Flak" and not ExodriftInputSettings.ACTION_LABELS.has("flak_range_decrease"), "1 toggles the automatic flak screen instead of requiring repeated fire commands")
+	_assert_true(carrier.automatic_flak_enabled and carrier.automatic_flak_interval_seconds >= 1.0, "automatic flak begins online with a paced curtain interval")
 	_assert_true(ExodriftInputSettings.action_key("toggle_all_wings") == KEY_B, "B provides the remappable aggregate hangar-wing deployment and retraction control")
 	_assert_true(carrier.definition.acceleration_mps2 <= 18.0 and carrier.definition.rotation_speed_radians <= 0.38, "carrier uses capital-ship acceleration and turn-rate limits")
 	_assert_true(not carrier.engine_trails.is_empty() and carrier.engine_trails[0].has("outer") and carrier.engine_trails[0].has("inner") and carrier.engine_trails[0].has("core"), "carrier engine banks expose layered propulsion-demand plumes")
@@ -78,6 +79,17 @@ func _run() -> void:
 					active_roles.append(String(slot.role))
 		_assert_true(active_roles.has("flak_flash") and active_roles.has("flak_smoke") and active_roles.has("flak_pressure"), "airburst layers a flash, dark smoke, and pressure ring from the pooled VFX system")
 
+	carrier.flak_cooldown = 0.0
+	carrier.automatic_flak_cycle_seconds = 0.0
+	lock_target.global_position = carrier.global_position + lock_direction * 6400.0
+	game.target_lock = lock_target
+	game._process_automatic_flak()
+	carrier._process_flak_salvo_queue(1.0)
+	var automatic_rounds := _source_projectiles(carrier.stable_entity_id).filter(func(projectile: SidebayProjectile) -> bool: return projectile.projectile_role == "flak" and not projectile.friendly_fire and not projectile.airburst_intercepts_friendlies)
+	_assert_true(carrier.automatic_flak_cycle_seconds > 0.0 and automatic_rounds.size() >= carrier.flak_burst_count, "automatic director refreshes a full deconflicted curtain without a fire-button press")
+	if not automatic_rounds.is_empty():
+		_assert_true(is_equal_approx(automatic_rounds[0].airburst_distance_m, carrier.flak_weapon.range_m) and automatic_rounds[0].airburst_distance_m < carrier.global_position.distance_to(lock_target.global_position), "distant hostile tracks place the automatic flak screen between the fleets at the battery envelope")
+
 	_clear_source_projectiles(carrier.stable_entity_id)
 	await process_frame
 	_assert_true(carrier.fire_nuclear(game.hostile_command), "3 launches the battle's single nuclear torpedo against a valid lock")
@@ -113,14 +125,14 @@ func _run() -> void:
 	if vfx != null:
 		for slot in vfx.impact_slots:
 			var effect_node: MeshInstance3D = slot.node
-			volume_mesh_found = volume_mesh_found or effect_node.mesh is SphereMesh
-			ring_mesh_found = ring_mesh_found or effect_node.mesh is TorusMesh
-	_assert_true(volume_mesh_found and ring_mesh_found, "nuclear core and shockwave use pooled volumetric geometry instead of oversized impact cards")
+			volume_mesh_found = volume_mesh_found or effect_node.mesh == vfx.blast_volume_mesh
+			ring_mesh_found = ring_mesh_found or effect_node.mesh == vfx.blast_ring_mesh
+	_assert_true(volume_mesh_found and ring_mesh_found, "nuclear core and shockwave use the Blender-authored pooled geometry instead of oversized impact cards")
 	game.queue_free()
 	await process_frame
 	await process_frame
 	if failures.is_empty():
-		print("PASS: lock-directed hazardous flak wall, guided ordnance, nuclear risk, trails, and wing redeploy")
+		print("PASS: automatic deconflicted flak screen, guided ordnance, nuclear risk, trails, and wing redeploy")
 		quit(0)
 	else:
 		for failure in failures:

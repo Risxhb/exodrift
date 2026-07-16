@@ -42,7 +42,11 @@ func _run() -> void:
 	var navy_visual: Node3D = vfx.create_projectile_visual("missile", true, &"friendly", &"cvn_sidebay")
 	var vesper_visual: Node3D = vfx.create_projectile_visual("missile", true, &"hostile", &"vesper_lance_cruiser")
 	var crucible_visual: Node3D = vfx.create_projectile_visual("missile", true, &"hostile", &"crucible_war_regent")
-	_assert_true((navy_visual.get_child(0) as MeshInstance3D).material_override != (vesper_visual.get_child(0) as MeshInstance3D).material_override and (vesper_visual.get_child(0) as MeshInstance3D).material_override != (crucible_visual.get_child(0) as MeshInstance3D).material_override, "navy, Vesper, and Crucible projectiles use distinct shared palettes")
+	var navy_core := navy_visual.get_child(0) as MeshInstance3D
+	var vesper_core := vesper_visual.get_child(0) as MeshInstance3D
+	var crucible_core := crucible_visual.get_child(0) as MeshInstance3D
+	_assert_true(navy_core.get_meta("palette_key") == "navy" and vesper_core.get_meta("palette_key") == "vesper" and crucible_core.get_meta("palette_key") == "crucible", "navy, Vesper, and Crucible projectiles retain distinct shared palettes")
+	_assert_true(navy_core.material_override == null and navy_core.get_surface_override_material(0) != null, "authored projectile surfaces keep separate hull, refractory, and emissive treatments")
 	navy_visual.free()
 	vesper_visual.free()
 	crucible_visual.free()

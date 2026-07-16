@@ -38,11 +38,30 @@ func _run() -> void:
 	var sidebay_material := authored_hull.get_surface_override_material(0) as StandardMaterial3D if authored_hull != null else null
 	_assert_true(sidebay_material != null and sidebay_material.albedo_texture != null, "menu flagship renders the current textured hull surface")
 	var sidebay_metrics := sidebay.visual_asset.model_metrics(sidebay.authored_visual_root) if sidebay.visual_asset != null else {}
-	_assert_true(int(sidebay_metrics.get("triangles", 0)) >= 99016 and sidebay.find_child("CarrierEngineCorePlume", true, false) != null, "menu flagship uses the dense reference-sheet armor model and layered engine plume")
+	_assert_true(int(sidebay_metrics.get("triangles", 0)) >= 61000 and sidebay.find_child("CarrierEngineCorePlume", true, false) != null, "menu flagship uses the runtime-refined reference-sheet armor model and layered engine plume")
 	var friendly_air_group := fighter_models.filter(func(ship_data: Dictionary) -> bool: return bool(ship_data.friendly))
 	_assert_true(friendly_air_group.size() == 7 and friendly_air_group.filter(func(ship_data: Dictionary) -> bool: return ship_data.model_id == &"raptor_interceptor").size() == 6 and friendly_air_group.filter(func(ship_data: Dictionary) -> bool: return ship_data.model_id == &"watcher_drone").size() == 1, "menu air group presents six Raptor squadron leaders and the dedicated Watcher EW wing")
-	_assert_true(get_nodes_in_group("menu_missile_trail").size() == 6 and get_nodes_in_group("menu_flak_tracer").size() == 28 and get_nodes_in_group("menu_flak_airburst").size() == 14, "menu battle layers guided salvos, three seven-round friendly flak curtains, reciprocal fire, and a dense airburst wall")
-	_assert_true(menu.tracers.filter(func(tracer_data: Dictionary) -> bool: return not bool(tracer_data.missile) and bool(tracer_data.friendly)).size() == 21, "title-screen flak uses three lock-directed seven-round friendly curtains")
+	_assert_true(get_nodes_in_group("menu_missile_trail").size() == 12 and get_nodes_in_group("menu_flak_tracer").size() == 28 and get_nodes_in_group("menu_flak_airburst").size() == 14, "menu battle layers reciprocal six-weapon salvos, three seven-round friendly flak curtains, return fire, and a dense airburst wall")
+	_assert_true(menu.tracers.filter(func(tracer_data: Dictionary) -> bool: return bool(tracer_data.missile) and bool(tracer_data.friendly)).size() == 6 and menu.tracers.filter(func(tracer_data: Dictionary) -> bool: return bool(tracer_data.missile) and not bool(tracer_data.friendly)).size() == 6, "friendly frigates and hostile secondary ships each contribute a readable missile salvo")
+	_assert_true(menu.tracers.filter(func(tracer_data: Dictionary) -> bool: return not bool(tracer_data.missile) and bool(tracer_data.friendly)).size() == 21, "title-screen flak uses three automatic seven-round friendly curtains")
+	var hostile_capitals := capital_models.filter(func(ship_data: Dictionary) -> bool: return not bool(ship_data.friendly))
+	_assert_true(hostile_capitals.all(func(ship_data: Dictionary) -> bool: return Vector3(ship_data.base).distance_to(Vector3(capital_models[0].base)) > 1200.0), "hostile menu formation arrives on a distinctly deeper plane than the friendly carrier")
+	_assert_true(get_nodes_in_group("menu_warp_effect").size() == 3 and get_nodes_in_group("menu_launch_flare").size() == 4, "title battle authors three hostile warp rifts plus friendly and hostile launch flashes")
+	menu.elapsed = 0.2
+	menu._update_battle(0.0)
+	_assert_true(hostile_capitals.all(func(ship_data: Dictionary) -> bool: return not (ship_data.node as Node3D).visible), "enemy capital ships remain absent before the warp arrival")
+	menu.elapsed = 1.15
+	menu._update_battle(0.0)
+	_assert_true(menu.warp_effects.any(func(effect_data: Dictionary) -> bool: return (effect_data.node as Node3D).visible), "enemy warp rifts open before the hostile formation resolves")
+	menu.elapsed = 2.6
+	menu._update_battle(0.0)
+	_assert_true(fighter_models.any(func(ship_data: Dictionary) -> bool: return not bool(ship_data.friendly) and (ship_data.node as Node3D).visible) and fighter_models.all(func(ship_data: Dictionary) -> bool: return not bool(ship_data.friendly) or not (ship_data.node as Node3D).visible), "hostile strike craft launch before Sidebay commits its air group")
+	menu.elapsed = 4.0
+	menu._update_battle(0.0)
+	_assert_true(menu.tracers.any(func(tracer_data: Dictionary) -> bool: return not bool(tracer_data.missile) and bool(tracer_data.friendly) and (tracer_data.node as Node3D).visible) and fighter_models.any(func(ship_data: Dictionary) -> bool: return bool(ship_data.friendly) and (ship_data.node as Node3D).visible), "Sidebay raises the automatic flak screen while launching friendly strike craft")
+	menu.elapsed = 5.1
+	menu._update_battle(0.0)
+	_assert_true(menu.tracers.any(func(tracer_data: Dictionary) -> bool: return bool(tracer_data.missile) and bool(tracer_data.friendly) and (tracer_data.node as Node3D).visible), "friendly frigates answer with their salvos after the carrier screen and air-group launch")
 	var layered_impacts := get_nodes_in_group("menu_layered_explosion")
 	_assert_true(layered_impacts.size() == 4 and layered_impacts.all(func(effect: Node) -> bool: return effect.find_child("WhiteHotCore", true, false) != null and effect.find_child("ShockwaveRing", true, false) != null and effect.find_child("DirectionalDebris", true, false) != null), "menu ship hits use layered core, shockwave, and debris effects")
 	_assert_true(menu.camera.fov <= 51.0 and menu.camera.far >= 30000.0, "battle camera holds the full readable command-view backdrop")

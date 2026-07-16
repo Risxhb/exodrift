@@ -12,12 +12,12 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 
 ## Current playable
 
-- Heavy carrier flight with persistent throttle and inertia, lock-directed flak walls, four-missile guided salvos, one nuclear torpedo per battle, visible automated defense, and shields → armor → hull damage.
+- Heavy carrier flight with persistent throttle and inertia, an automatic IFF-deconflicted flak screen, four-missile guided salvos, one nuclear torpedo per battle, visible point defense, and shields → armor → hull damage.
 - A unified command-interface style groups carrier telemetry, air-group state, fire control, target data, radar, notifications, and controls into compact scalable panels. The four primary command panels and tactical overview are collapsible.
 - Six independently deployable Raptor fighter squadrons (four craft each), one three-craft Watcher EW/scout wing, and the commandable missile frigate `ISS Resolute`.
 - Visible launch, engagement, recall, side-bay recovery, servicing, relaunch, and armored bay-retraction cycles with a closed-bay jump interlock.
 - A seam-feathered galaxy-arm panorama blended into the shader-driven deep-space sky, retaining sector palettes, procedural stars, foreground parallax, and a pulsing tactical radar.
-- Refit capital ships with faction-specific hull atlases, layered plating, modeled hardpoints, recognition lighting and wear; low-node fighter geometry, pooled combat flashes, missile exhaust, shield/hull feedback, and saved Low/Medium/High graphics profiles remain shared by Windows and Web.
+- Refit capital ships with faction-specific hull atlases, layered plating, modeled hardpoints, recognition lighting and wear; a Blender-authored Raptor strike craft and pooled shield, missile, nuclear, shockwave, armor-debris, bidirectional-warp, and skybox assets remain shared by Windows and Web through saved Low/Medium/High graphics profiles.
 - Strict sensor fog with uncertain contacts, active emissions, identification requirements, stale tracks, and command-link loss.
 - Live 3D fleet command with a click/flick context wheel, fixed F1–F4 groups, persistent numbered/ETA paths, delayed-link lifecycle feedback, contextual objectives, doctrine, formations, spacing, and queued orders.
 - An 18-node, three-sector run map with fuel, supplies, intel, forecasts, combat transitions, and manual versioned saves.
@@ -27,7 +27,7 @@ The public title is provisional. `Project Sidebay` remains the internal codename
 - Persistent salvage stock with fixed supply, fuel, and requisition conversions plus three route logistics postures with explicit travel tradeoffs.
 - Six objective types: command strike, interception, extraction, defense, escort, and capture.
 - Withdrawal pursuit, jump-range stragglers, recoverable escape pods, and an after-action rescue/salvage/departure choice with persistent consequences.
-- A compact bottom command row over a continuously simulated battle built from the current textured runtime ships and fighters, with New Operation, Continue, a nine-part animated communications briefing that launches a safe playable combat trial, persistent settings, credits, and return-to-title navigation.
+- A compact bottom command row over a staged runtime-model battle: the distant hostile fleet warps in, launches strike craft and secondary-ship missiles, Sidebay raises its automatic flak screen and launches its air group, and friendly frigates answer with salvos. New Operation, Continue, a nine-part animated communications briefing that launches a safe playable combat trial, persistent settings, credits, and return-to-title navigation remain available.
 - A repeatable six-step training range teaches direct carrier movement, live tactical command, escort movement, active identification, wing launch, and target-dummy engagement without campaign or supply consequences.
 - A seven-step first-operation orientation that teaches helm translation, active sensors, flight operations, carrier engineering, the live tactical map, and intent-level orders without pausing combat.
 - Three sector-specific hostile fleets—Acheron, Vesper, and Crucible—with different capital roles, fighter complements, opening formations, weapons, pursuit identities, and battlefield palettes.
@@ -55,7 +55,7 @@ All listed keyboard actions can be remapped from **Settings → Remap Controls**
 
 - `W/S`: increase/decrease persistent throttle; `Ctrl`: full stop; `Shift`: boost
 - Mouse: visible unified command cursor; double-click empty space for a full-cruise heading, middle-drag to orbit, and use the wheel for signed zoom. The authored carrier framing is 0%; the camera can zoom farther out to -100% or in to +100%.
-- `1`: fire a staggered seven-round “wall of flak” toward the current identified target lock. The 250 m saturation sector destroys missiles and nuclear torpedoes, heavily damages strikecraft, and lightly damages capital ships. It has no friendly-fire immunity: allied craft, ships, and ordnance must stay out of the firing solution. Base range is 3.2 km; the flak-director upgrade extends it to 4 km.
+- `1`: toggle the automatic flak screen, which begins each battle online. The director selects an identified hostile track and repeatedly places a staggered seven-round, 250 m IFF-deconflicted curtain between the fleets. It destroys hostile missiles and nuclear torpedoes, heavily damages hostile strikecraft, and lightly damages hostile capital ships. Base curtain range is 3.2 km; the flak-director upgrade extends it to 4 km.
 - `2`: fire a four-weapon guided missile salvo at the identified lock. Right mouse remains a compatibility shortcut.
 - `3`: fire the single 10 km nuclear torpedo. It arms after 1.2 km, has a 650 m falloff blast, can be intercepted, and damages friendlies.
 - `P`: active sensor ping
@@ -64,7 +64,7 @@ All listed keyboard actions can be remapped from **Settings → Remap Controls**
 - `X`: launch/recall the Watcher EW/scout wing; pressing during servicing queues an automatic physical redeploy when turnaround completes
 - `B`: deploy/open both hangar wings, or recall both air groups and retract the galleries once recovery is complete
 - `Tab`: live tactical map
-- Tactical map: `F1–F4` groups, `Home` center/follow carrier, `Shift`+middle-drag pan, middle-drag orbit, `1` fire the flak wall toward the current lock, left-click select, right-click command wheel/cancel, `I` intercept, `E` escort carrier, Shift queue, `Q` stance, `F` formation, `R` recall, `H` hold, `X` withdraw, wheel zoom
+- Tactical map: `F1–F4` groups, `Home` center/follow carrier, `Shift`+middle-drag pan, middle-drag orbit, `1` toggle the automatic flak screen, left-click select, right-click command wheel/cancel, `I` intercept, `E` escort carrier, Shift queue, `Q` stance, `F` formation, `R` recall, `H` hold, `X` withdraw, wheel zoom
 - Tactical overview: select the carrier, then right-click an identified contact marker or overview row for Lock, Approach 500 m, Orbit, Keep at Distance, or Clear Relative Navigation. Orbit and Keep offer 500 m, 5 km, 10 km, and 25 km distances; empty-space and wing/escort right-click orders retain their existing behavior.
 - `V`: begin jump preparation and wing recall; press again to emergency-seal the bays and risk stragglers
 - `Esc`: pause/settings; `Enter`: restart or return to the campaign

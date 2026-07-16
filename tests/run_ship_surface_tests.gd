@@ -6,7 +6,7 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	var sidebay := _spawn_ship(&"cvn_sidebay", "carrier", &"friendly", Vector3(76.0, 32.0, 220.0), Color(0.35, 0.55, 0.7))
+	var sidebay := _spawn_ship(&"cvn_sidebay", "carrier", &"friendly", Vector3(96.0, 40.0, 360.0), Color(0.35, 0.55, 0.7))
 	var resolute := _spawn_ship(&"iss_resolute", "frigate", &"friendly", Vector3(24.0, 12.0, 65.0), Color(0.34, 0.56, 0.7))
 	var harrier := _spawn_ship(&"iss_harrier", "corvette", &"friendly", Vector3(16.0, 8.0, 42.0), Color(0.32, 0.54, 0.68))
 	var bulwark := _spawn_ship(&"iss_bulwark", "frigate", &"friendly", Vector3(28.0, 15.0, 70.0), Color(0.38, 0.55, 0.66))

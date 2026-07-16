@@ -3,12 +3,14 @@ extends Node
 const LogisticsScreen := preload("res://scripts/ui/logistics_screen.gd")
 const PlaytestReport := preload("res://scripts/ui/playtest_report.gd")
 const SaveManager := preload("res://scripts/systems/save_manager.gd")
+const SectorTravelScreen := preload("res://scripts/ui/sector_travel_screen.gd")
 
 var run_state: SidebayRunState
 var generator := SidebayCampaignGenerator.new()
 var campaign_map: SidebayCampaignMap
 var active_battle: Node
 var active_node: SidebayCampaignNode
+var travel_screen: Node
 var fleet_loadout: ExodriftFleetLoadout
 var logistics_screen
 var personnel_screen: ExodriftPersonnelScreen
@@ -44,6 +46,9 @@ func _show_main_menu() -> void:
 	if is_instance_valid(playtest_report):
 		playtest_report.queue_free()
 		playtest_report = null
+	if is_instance_valid(travel_screen):
+		travel_screen.queue_free()
+		travel_screen = null
 	if is_instance_valid(main_menu):
 		main_menu.queue_free()
 	main_menu = ExodriftMainMenu.new()
@@ -183,7 +188,27 @@ func _apply_repair_node_support(node: SidebayCampaignNode) -> String:
 
 func _launch_battle(node: SidebayCampaignNode) -> void:
 	campaign_map.visible = false
-	active_battle = (load("res://scenes/main.tscn") as PackedScene).instantiate()
+	if DisplayServer.get_name() == "headless":
+		_instantiate_campaign_battle(node, load("res://scenes/main.tscn") as PackedScene)
+		return
+	travel_screen = SectorTravelScreen.new()
+	add_child(travel_screen)
+	travel_screen.battle_scene_ready.connect(_on_travel_battle_scene_ready.bind(node))
+	travel_screen.configure(node, run_state.fleet_snapshot(), run_state.sector_index)
+
+func _on_travel_battle_scene_ready(scene: PackedScene, node: SidebayCampaignNode) -> void:
+	var completed_travel := travel_screen
+	_instantiate_campaign_battle(node, scene)
+	for _frame in 3:
+		await get_tree().process_frame
+	if is_instance_valid(completed_travel):
+		completed_travel.complete_handoff()
+	travel_screen = null
+
+func _instantiate_campaign_battle(node: SidebayCampaignNode, scene: PackedScene) -> void:
+	if scene == null or is_instance_valid(active_battle):
+		return
+	active_battle = scene.instantiate()
 	active_battle.hosted_campaign = true
 	active_battle.campaign_node_id = node.node_id
 	active_battle.campaign_sector_index = node.sector

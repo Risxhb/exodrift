@@ -3,7 +3,7 @@ extends RefCounted
 
 const ACTION_LABELS := {
 	"accelerate": "Increase Throttle", "decelerate": "Decrease Throttle", "boost": "Boost", "brake": "Full Stop",
-	"flak_screen": "Fire Flak Wall", "missile_salvo": "Missile Salvo", "nuclear_torpedo": "Nuclear Torpedo",
+	"flak_screen": "Toggle Auto Flak", "missile_salvo": "Missile Salvo", "nuclear_torpedo": "Nuclear Torpedo",
 	"toggle_tactical": "Tactical Map", "sensor_ping": "Active Ping", "interceptor_wing": "Interceptor Wing",
 	"scout_wing": "Scout Wing", "toggle_all_wings": "All Wings / Hangars", "jump_prep": "Jump Preparation",
 	"carrier_operations": "Carrier Operations",

@@ -31,9 +31,16 @@ func _capture() -> void:
 	carrier.configure(_carrier_definition(), &"preview_carrier", &"friendly", Color(0.18, 0.38, 0.58))
 	carrier.set_physics_process(false)
 	carrier.rotation_degrees = Vector3(-4.0, -28.0, 0.0)
+	var gallery_lights := carrier.find_children("*GalleryLight", "OmniLight3D", true, false)
+	print("CARRIER REVIEW: %d runtime gallery lights" % gallery_lights.size())
+	for light_node in gallery_lights:
+		var gallery_light := light_node as OmniLight3D
+		print("  %s local=%s global=%s energy=%.1f range=%.1f" % [gallery_light.name, gallery_light.position, gallery_light.global_position, gallery_light.light_energy, gallery_light.omni_range])
 	var camera := Camera3D.new()
 	camera.fov = 38.0
-	camera.position = Vector3(190.0, 82.0, 265.0)
+	# Match the close three-quarter gameplay view where armor depth and gallery
+	# readability actually matter instead of reviewing a distant beauty shot.
+	camera.position = Vector3(235.0, 85.0, 330.0)
 	stage.add_child(camera)
 	camera.look_at(Vector3(0.0, 4.0, 0.0), Vector3.UP)
 	camera.current = true
@@ -53,7 +60,7 @@ func _carrier_definition() -> ShipDefinition:
 	definition.ship_id = &"cvn_sidebay"
 	definition.display_name = "CVN Sidebay"
 	definition.role = "carrier"
-	definition.dimensions_m = Vector3(76.0, 32.0, 220.0)
+	definition.dimensions_m = Vector3(96.0, 40.0, 360.0)
 	definition.maximum_speed_mps = 260.0
 	definition.acceleration_mps2 = 14.0
 	definition.rotation_speed_radians = 0.3

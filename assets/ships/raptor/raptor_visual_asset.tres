@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ShipVisualAsset" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ship_visual_asset.gd" id="1_asset"]
+[ext_resource type="PackedScene" path="res://assets/ships/raptor/raptor.glb" id="2_model"]
+
+[resource]
+script = ExtResource("1_asset")
+enabled = true
+ship_id = &"raptor"
+authored_dimensions_m = Vector3(6, 2.2, 8)
+source_file = "res://assets/ships/raptor/source/raptor.blend"
+model_scene = ExtResource("2_model")
+model_scale = Vector3(1, 1, 1)
+model_rotation_degrees = Vector3(0, 0, 0)
+replace_imported_materials = false
+required_sockets = Array[StringName]([&"socket_engine_01"])
+maximum_lod0_triangles = 12000
+maximum_material_slots = 16
+authoring_notes = "Blender-authored Raptor strike craft with an exact 6 x 2.2 x 8 meter envelope, swept wings, low sensor canopy, ventral keel, recognition strips, and a gameplay-aligned aft engine socket."

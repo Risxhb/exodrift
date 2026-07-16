@@ -233,6 +233,10 @@ func _test_application_flow() -> void:
 		await process_frame
 	_assert_true(is_instance_valid(app.main_menu) and app.run_state == null, "application starts on the presentation shell before creating a run")
 	_assert_true(is_instance_valid(app.main_menu.world_root) and app.main_menu.ships.size() >= 8 and app.main_menu.tracers.size() >= 12, "main menu contains a continuously simulated fleet battle")
+	# Sample after the staged friendly launch; the opening warp/launch hold is
+	# intentionally motionless while the hostile formation resolves.
+	app.main_menu.elapsed = 4.2
+	app.main_menu._update_battle(0.0)
 	var menu_ship_position: Vector3 = app.main_menu.ships[8].node.position
 	for _frame in 6:
 		await process_frame
