@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ShipVisualAsset" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/ship_visual_asset.gd" id="1_asset"]
+[ext_resource type="PackedScene" path="res://assets/ships/iss_resolute/iss_resolute.glb" id="2_model"]
+
+[resource]
+script = ExtResource("1_asset")
+enabled = true
+ship_id = &"iss_resolute"
+authored_dimensions_m = Vector3(24, 12, 65)
+source_file = "res://assets/ships/iss_resolute/source/iss_resolute.blend"
+model_scene = ExtResource("2_model")
+model_scale = Vector3(1, 1, 1)
+model_rotation_degrees = Vector3(0, 0, 0)
+replace_imported_materials = false
+required_sockets = Array[StringName]([&"socket_missile_01", &"socket_missile_02", &"socket_missile_03", &"socket_missile_04", &"socket_missile_05", &"socket_missile_06", &"socket_flak_01", &"socket_flak_02", &"socket_flak_03", &"socket_engine_01", &"socket_engine_02", &"socket_engine_03", &"socket_engine_04", &"socket_damage_01", &"socket_damage_02", &"socket_damage_03", &"socket_damage_04"])
+maximum_lod0_triangles = 60000
+maximum_material_slots = 128
+authoring_notes = "ISS Resolute production missile frigate: 24 × 12 × 65 m spearhead hull, broadside sacrificial armor, four-drive stern, three independent twin-barrel flak zones, command sensor crown, and six animated split-door VLS cells. The Blender timeline provides an 8.5-second ripple launch: each hatch opens before ignition, the missile cold-clears vertically, pitches toward the bow, and the doors reseal after clearance."
