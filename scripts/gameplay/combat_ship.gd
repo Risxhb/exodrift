@@ -810,12 +810,12 @@ func _face_velocity(delta: float) -> void:
 	var desired_yaw := atan2(-velocity.x, -velocity.z)
 	rotation.y = lerp_angle(rotation.y, desired_yaw, clampf(definition.rotation_speed_radians * delta, 0.0, 1.0))
 
-func _separation_velocity() -> Vector3:
+func _separation_velocity(excluded_entity: CombatShip = null) -> Vector3:
 	var separation := Vector3.ZERO
 	var registry := _combat_registry()
 	var candidates: Array = registry.active_combat_entities() if registry != null else get_tree().get_nodes_in_group("combat_entities")
 	for candidate in candidates:
-		if candidate == self or not candidate is CombatShip or candidate.is_destroyed:
+		if candidate == self or candidate == excluded_entity or not candidate is CombatShip or candidate.is_destroyed:
 			continue
 		var safe_distance: float = (collision_radius_m + candidate.collision_radius_m) * 2.2
 		var distance := global_position.distance_to(candidate.global_position)

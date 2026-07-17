@@ -96,6 +96,18 @@ func _test_squadron_leadership_and_passes(wing: SidebaySquadron, target: CombatS
 			var offset := wing._formation_offset(1)
 			_assert_true(offset.is_finite(), "%s/%s formation produces a finite leader-local slot" % [String(formation), String(spacing)])
 	var craft: FighterCraft = wing.crafts[1]
+	var carrier_position := wing.home_carrier.global_position
+	var craft_position := craft.global_position
+	wing.home_carrier.global_position = Vector3(14000.0, 0.0, 14000.0)
+	craft.global_position = wing.home_carrier.global_position + Vector3(10.0, 0.0, 0.0)
+	var standard_avoidance := craft._separation_velocity()
+	craft.command_recovery(wing.home_carrier.global_position, wing.home_carrier)
+	var recovery_avoidance := craft._separation_velocity(craft.recovery_carrier)
+	_assert_true(standard_avoidance.length_squared() > 0.0 and recovery_avoidance.is_zero_approx(), "recovery craft ignore only their home carrier while crossing the docking clearance envelope")
+	craft.command_move(craft.global_position)
+	_assert_true(craft.recovery_carrier == null, "normal maneuver commands restore home-carrier collision avoidance after recovery")
+	wing.home_carrier.global_position = carrier_position
+	craft.global_position = craft_position
 	craft.global_position = target.global_position + Vector3(0.0, 0.0, 80.0)
 	craft.velocity = Vector3(0.0, 0.0, -300.0)
 	craft.command_attack(target)
