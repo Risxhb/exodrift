@@ -1,0 +1,91 @@
+{
+  "ship_id": "iss_resolute",
+  "display_name": "ISS Resolute",
+  "role": "missile frigate",
+  "blender_version": "5.2.0 LTS",
+  "blend": "assets\\ships\\iss_resolute\\source\\iss_resolute.blend",
+  "glb": "assets\\ships\\iss_resolute\\iss_resolute.glb",
+  "dimensions_contract_godot_xyz": [
+    24.0,
+    12.0,
+    65.0
+  ],
+  "bounds_frame_1": {
+    "min_blender_xyz": [
+      -12.15,
+      -32.5,
+      -5.99
+    ],
+    "max_blender_xyz": [
+      12.15,
+      32.5,
+      6.02
+    ],
+    "size_blender_xyz": [
+      24.3,
+      65.0,
+      12.01
+    ]
+  },
+  "mesh_objects": 102,
+  "vertices": 8000,
+  "polygons": 7426,
+  "triangles": 15172,
+  "materials": [
+    "Accent",
+    "Emission",
+    "Hull",
+    "Marking"
+  ],
+  "animation": {
+    "fps": 24,
+    "frame_start": 1,
+    "frame_end": 205,
+    "duration_seconds": 8.542,
+    "vls_cells": 6,
+    "door_type": "independent split armored hatch",
+    "launch_order": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "door_open_frames": [
+      12,
+      38,
+      64,
+      90,
+      116,
+      142
+    ],
+    "missile_ignition_frames": [
+      25,
+      51,
+      77,
+      103,
+      129,
+      155
+    ]
+  },
+  "sockets": [
+    "socket_damage_01",
+    "socket_damage_02",
+    "socket_damage_03",
+    "socket_damage_04",
+    "socket_engine_01",
+    "socket_engine_02",
+    "socket_engine_03",
+    "socket_engine_04",
+    "socket_flak_01",
+    "socket_flak_02",
+    "socket_flak_03",
+    "socket_missile_01",
+    "socket_missile_02",
+    "socket_missile_03",
+    "socket_missile_04",
+    "socket_missile_05",
+    "socket_missile_06"
+  ]
+}

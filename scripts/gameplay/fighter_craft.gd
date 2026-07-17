@@ -30,6 +30,7 @@ var breakaway_position: Vector3 = Vector3.ZERO
 var reform_offset: Vector3 = Vector3.ZERO
 var anchor_velocity: Vector3 = Vector3.ZERO
 var desired_facing: Vector3 = Vector3.ZERO
+var recovery_carrier: CombatShip
 
 func _build_visual() -> void:
 	var identity := String(definition.ship_id)
@@ -212,6 +213,7 @@ func deploy(at_position: Vector3, initial_velocity: Vector3) -> void:
 	desired_position = at_position - global_transform.basis.z * 250.0
 	maneuver_mode = ManeuverMode.MOVE
 	attack_phase = AttackPhase.APPROACH
+	recovery_carrier = null
 
 func dock() -> void:
 	deployed = false
@@ -219,6 +221,7 @@ func dock() -> void:
 	velocity = Vector3.ZERO
 	assigned_target = null
 	maneuver_mode = ManeuverMode.MOVE
+	recovery_carrier = null
 	process_mode = Node.PROCESS_MODE_DISABLED
 
 func service(maximum_ammunition_value: int, maximum_endurance: float) -> void:
@@ -251,6 +254,15 @@ func command_move(position_value: Vector3) -> void:
 	anchor_velocity = Vector3.ZERO
 	desired_facing = Vector3.ZERO
 	maneuver_mode = ManeuverMode.MOVE
+	recovery_carrier = null
+
+func command_recovery(position_value: Vector3, carrier: CombatShip) -> void:
+	desired_position = position_value
+	assigned_target = null
+	anchor_velocity = Vector3.ZERO
+	desired_facing = Vector3.ZERO
+	maneuver_mode = ManeuverMode.MOVE
+	recovery_carrier = carrier
 
 func command_hold(position_value: Vector3, facing: Vector3 = Vector3.ZERO) -> void:
 	desired_position = position_value
@@ -258,6 +270,7 @@ func command_hold(position_value: Vector3, facing: Vector3 = Vector3.ZERO) -> vo
 	anchor_velocity = Vector3.ZERO
 	desired_facing = facing
 	maneuver_mode = ManeuverMode.HOLD
+	recovery_carrier = null
 
 func command_escort(position_value: Vector3, velocity_value: Vector3) -> void:
 	desired_position = position_value
@@ -265,6 +278,7 @@ func command_escort(position_value: Vector3, velocity_value: Vector3) -> void:
 	anchor_velocity = velocity_value
 	desired_facing = velocity_value.normalized()
 	maneuver_mode = ManeuverMode.ESCORT
+	recovery_carrier = null
 
 func command_attack(target_ship: CombatShip, intercept_mode: bool = false) -> void:
 	var next_mode := ManeuverMode.INTERCEPT if intercept_mode else ManeuverMode.ATTACK
@@ -273,6 +287,7 @@ func command_attack(target_ship: CombatShip, intercept_mode: bool = false) -> vo
 		attack_phase_elapsed = 0.0
 	assigned_target = target_ship
 	maneuver_mode = next_mode
+	recovery_carrier = null
 
 func _physics_process(delta: float) -> void:
 	if not deployed or is_destroyed:
@@ -369,7 +384,7 @@ func _move_fighter(delta: float) -> void:
 		var desired_velocity := offset.normalized() * definition.maximum_speed_mps * speed_ratio
 		if maneuver_mode == ManeuverMode.ESCORT:
 			desired_velocity += anchor_velocity * (1.0 - speed_ratio) * 0.8
-		desired_velocity += _separation_velocity() * definition.maximum_speed_mps * 0.42
+		desired_velocity += _separation_velocity(recovery_carrier) * definition.maximum_speed_mps * 0.42
 		desired_velocity = desired_velocity.limit_length(definition.maximum_speed_mps)
 		velocity = velocity.move_toward(desired_velocity, definition.acceleration_mps2 * delta)
 		var forward := velocity.normalized()

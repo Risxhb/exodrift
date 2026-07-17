@@ -17,6 +17,7 @@ func _run() -> void:
 	target.set_physics_process(false)
 
 	_test_modeled_complement(frigate)
+	await _test_authored_hatch_motion(frigate)
 	_test_vertical_missile_salvo(frigate, target)
 	_clear_projectiles()
 	_test_flak_coverage(frigate)
@@ -37,9 +38,22 @@ func _run() -> void:
 func _test_modeled_complement(frigate: CombatShip) -> void:
 	_assert_true(frigate.missile_launch_points.size() == 6, "Resolute exposes six functional missile compartment launch points")
 	_assert_true(frigate.flak_battery_mounts.size() == 3, "Resolute exposes exactly three functional flak battery mounts")
+	_assert_true(frigate.resolute_vls_hatches.size() == 6, "authored Resolute binds six independent split-door VLS hatches")
 	_assert_true(frigate.definition.weapons.size() == 2 and frigate.resolute_flak_weapon != null, "Resolute configures missiles as its main weapon and flak as its secondary battery")
 	_assert_true(frigate.find_child("ResoluteDorsalFlakBattery00", true, false) != null and frigate.find_child("ResoluteDorsalFlakBattery01", true, false) != null, "two flak batteries are modeled on the dorsal hull")
 	_assert_true(frigate.find_child("ResoluteVentralFlakBattery", true, false) != null, "one flak battery is modeled on the ventral hull")
+
+func _test_authored_hatch_motion(frigate: CombatShip) -> void:
+	var hatch: Dictionary = frigate.resolute_vls_hatches[0]
+	var port := hatch.get("port") as Node3D
+	var starboard := hatch.get("starboard") as Node3D
+	var port_closed := port.rotation
+	var starboard_closed := starboard.rotation
+	frigate._animate_resolute_vls_hatch(0)
+	await create_timer(0.12).timeout
+	_assert_true(port.rotation.distance_to(port_closed) > 1.0 and starboard.rotation.distance_to(starboard_closed) > 1.0, "the fired VLS cell opens both armored hatch leaves")
+	await create_timer(0.5).timeout
+	_assert_true(port.rotation.is_equal_approx(port_closed) and starboard.rotation.is_equal_approx(starboard_closed), "the fired VLS cell reseals after missile clearance")
 
 func _test_vertical_missile_salvo(frigate: CombatShip, target: CombatShip) -> void:
 	frigate.weapon_cooldown = 0.0

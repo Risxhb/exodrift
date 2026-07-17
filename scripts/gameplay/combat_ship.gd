@@ -79,6 +79,7 @@ var flak_battery_fire_counts: Array[int] = []
 var pending_missile_salvo: Array[Dictionary] = []
 var missile_salvo_timer: float = 0.0
 var resolute_flak_weapon: WeaponDefinition
+var resolute_vls_hatches: Array[Dictionary] = []
 
 func _init() -> void:
 	fleet_command.order_status_changed.connect(_on_fleet_order_status_changed)
@@ -221,6 +222,47 @@ func _bind_authored_combat_sockets() -> void:
 	flak_battery_fire_counts.resize(flak_battery_mounts.size())
 	flak_battery_cooldowns.fill(0.0)
 	flak_battery_fire_counts.fill(0)
+	_bind_resolute_vls_hatches()
+
+func _bind_resolute_vls_hatches() -> void:
+	resolute_vls_hatches.clear()
+	if not _is_resolute() or authored_visual_root == null:
+		return
+	for cell_index in RESOLUTE_VLS_COMPARTMENT_COUNT:
+		var cell_number := cell_index + 1
+		var port := authored_visual_root.find_child("VLS_%02d_DoorPort_Hinge" % cell_number, true, false) as Node3D
+		var starboard := authored_visual_root.find_child("VLS_%02d_DoorStarboard_Hinge" % cell_number, true, false) as Node3D
+		if port == null or starboard == null:
+			continue
+		resolute_vls_hatches.append({
+			"port": port,
+			"starboard": starboard,
+			"port_closed_rotation": port.rotation,
+			"starboard_closed_rotation": starboard.rotation,
+		})
+
+func _animate_resolute_vls_hatch(cell_index: int) -> void:
+	if cell_index < 0 or cell_index >= resolute_vls_hatches.size():
+		return
+	var hatch: Dictionary = resolute_vls_hatches[cell_index]
+	var port := hatch.get("port") as Node3D
+	var starboard := hatch.get("starboard") as Node3D
+	if not is_instance_valid(port) or not is_instance_valid(starboard):
+		return
+	var port_closed := hatch.get("port_closed_rotation", port.rotation) as Vector3
+	var starboard_closed := hatch.get("starboard_closed_rotation", starboard.rotation) as Vector3
+	var port_open := port_closed + Vector3(0.0, 0.0, deg_to_rad(108.0))
+	var starboard_open := starboard_closed + Vector3(0.0, 0.0, -deg_to_rad(108.0))
+	port.rotation = port_open
+	starboard.rotation = starboard_open
+	_reseal_resolute_vls_hatch(port, starboard, port_closed, starboard_closed)
+
+func _reseal_resolute_vls_hatch(port: Node3D, starboard: Node3D, port_closed: Vector3, starboard_closed: Vector3) -> void:
+	await get_tree().create_timer(0.48).timeout
+	if is_instance_valid(port):
+		port.rotation = port_closed
+	if is_instance_valid(starboard):
+		starboard.rotation = starboard_closed
 
 func _add_default_collision() -> void:
 	var collision := CollisionShape3D.new()
@@ -768,12 +810,12 @@ func _face_velocity(delta: float) -> void:
 	var desired_yaw := atan2(-velocity.x, -velocity.z)
 	rotation.y = lerp_angle(rotation.y, desired_yaw, clampf(definition.rotation_speed_radians * delta, 0.0, 1.0))
 
-func _separation_velocity() -> Vector3:
+func _separation_velocity(excluded_entity: CombatShip = null) -> Vector3:
 	var separation := Vector3.ZERO
 	var registry := _combat_registry()
 	var candidates: Array = registry.active_combat_entities() if registry != null else get_tree().get_nodes_in_group("combat_entities")
 	for candidate in candidates:
-		if candidate == self or not candidate is CombatShip or candidate.is_destroyed:
+		if candidate == self or candidate == excluded_entity or not candidate is CombatShip or candidate.is_destroyed:
 			continue
 		var safe_distance: float = (collision_radius_m + candidate.collision_radius_m) * 2.2
 		var distance := global_position.distance_to(candidate.global_position)
@@ -961,6 +1003,7 @@ func _launch_next_resolute_missile() -> void:
 	if cell_index < 0 or cell_index >= missile_launch_points.size():
 		return
 	var launch_point := missile_launch_points[cell_index]
+	_animate_resolute_vls_hatch(cell_index)
 	var local_direction := Vector3(-0.055 if launch_point.position.x < 0.0 else 0.055, 1.0, -0.02 + 0.02 * float(cell_index / 2)).normalized()
 	var launch_direction := (global_transform.basis * local_direction).normalized()
 	var weapon := launch_data.get("weapon") as WeaponDefinition

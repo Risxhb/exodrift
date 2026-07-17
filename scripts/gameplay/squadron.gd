@@ -492,7 +492,7 @@ func _process_approach() -> void:
 		var craft := crafts[index]
 		if not is_instance_valid(craft) or not craft.deployed:
 			continue
-		craft.command_move(approach_point + _formation_offset(index) * 0.3)
+		craft.command_recovery(approach_point + _formation_offset(index) * 0.3, home_carrier)
 		if craft.global_position.distance_to(approach_point) > 120.0:
 			all_in_approach = false
 	if all_in_approach and not home_carrier.are_bays_open():
@@ -511,7 +511,7 @@ func _process_docking() -> void:
 	for craft in crafts:
 		if not is_instance_valid(craft) or not craft.deployed:
 			continue
-		craft.command_move(marker.global_position)
+		craft.command_recovery(marker.global_position, home_carrier)
 		if craft.global_position.distance_to(marker.global_position) <= 35.0:
 			craft.dock()
 			docking_count += 1
